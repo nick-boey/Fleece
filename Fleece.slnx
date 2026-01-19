@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Fleece.Core/Fleece.Core.csproj" />
+    <Project Path="src/Fleece.Cli/Fleece.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Fleece.Core.Tests/Fleece.Core.Tests.csproj" />
+    <Project Path="tests/Fleece.Cli.Tests/Fleece.Cli.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,49 @@
+using Fleece.Cli.Output;
+using Fleece.Cli.Settings;
+using Fleece.Core.Models;
+using Fleece.Core.Services.Interfaces;
+using Spectre.Console;
+using Spectre.Console.Cli;
+
+namespace Fleece.Cli.Commands;
+
+public sealed class ListCommand(IIssueService issueService) : AsyncCommand<ListSettings>
+{
+    public override async Task<int> ExecuteAsync(CommandContext context, ListSettings settings)
+    {
+        IssueStatus? status = null;
+        if (!string.IsNullOrWhiteSpace(settings.Status))
+        {
+            if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out var parsedStatus))
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, complete, closed, archived");
+                return 1;
+            }
+            status = parsedStatus;
+        }
+
+        IssueType? type = null;
+        if (!string.IsNullOrWhiteSpace(settings.Type))
+        {
+            if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var parsedType))
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, idea, feature");
+                return 1;
+            }
+            type = parsedType;
+        }
+
+        var issues = await issueService.FilterAsync(status, type, settings.Priority);
+
+        if (settings.Json)
+        {
+            JsonFormatter.RenderIssues(issues);
+        }
+        else
+        {
+            TableFormatter.RenderIssues(issues);
+        }
+
+        return 0;
+    }
+}

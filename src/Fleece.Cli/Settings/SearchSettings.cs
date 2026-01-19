@@ -1,0 +1,15 @@
+using System.ComponentModel;
+using Spectre.Console.Cli;
+
+namespace Fleece.Cli.Settings;
+
+public sealed class SearchSettings : CommandSettings
+{
+    [CommandArgument(0, "<QUERY>")]
+    [Description("Text to search for")]
+    public string Query { get; init; } = null!;
+
+    [CommandOption("--json")]
+    [Description("Output as JSON")]
+    public bool Json { get; init; }
+}
