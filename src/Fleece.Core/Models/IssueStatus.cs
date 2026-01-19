@@ -5,5 +5,6 @@ public enum IssueStatus
     Open,
     Complete,
     Closed,
-    Archived
+    Archived,
+    Deleted
 }

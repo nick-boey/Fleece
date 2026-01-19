@@ -94,13 +94,21 @@ public sealed class IssueService(IStorageService storage, IIdGenerator idGenerat
     public async Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
         var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
-        var removed = issues.RemoveAll(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        var existingIndex = issues.FindIndex(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
-        if (removed == 0)
+        if (existingIndex < 0)
         {
             return false;
         }
 
+        var existing = issues[existingIndex];
+        var deleted = existing with
+        {
+            Status = IssueStatus.Deleted,
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        issues[existingIndex] = deleted;
         await storage.SaveIssuesAsync(issues, cancellationToken);
         return true;
     }
