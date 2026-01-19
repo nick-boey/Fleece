@@ -6,5 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <RepositoryUrl>https://github.com/nick-boey/Fleece</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/nick-boey/Fleece</PackageProjectUrl>
   </PropertyGroup>
 </Project>
