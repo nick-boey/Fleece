@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIssueService, IssueService>();
         services.AddSingleton<IConflictService, ConflictService>();
         services.AddSingleton<IMergeService, MergeService>();
+        services.AddSingleton<IMigrationService, MigrationService>();
 
         return services;
     }

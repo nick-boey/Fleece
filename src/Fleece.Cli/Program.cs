@@ -48,6 +48,11 @@ app.Configure(config =>
         .WithDescription("Clear conflict records for an issue")
         .WithExample("clear-conflicts", "abc123");
 
+    config.AddCommand<MigrateCommand>("migrate")
+        .WithDescription("Migrate issues to property-level timestamps format")
+        .WithExample("migrate")
+        .WithExample("migrate", "--dry-run");
+
     config.AddCommand<InstallCommand>("install")
         .WithDescription("Install Claude Code hooks");
 

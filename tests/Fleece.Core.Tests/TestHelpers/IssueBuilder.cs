@@ -14,6 +14,7 @@ public class IssueBuilder
     private IReadOnlyList<string> _parentIssues = [];
     private int? _priority;
     private DateTimeOffset _lastUpdate = DateTimeOffset.UtcNow;
+    private DateTimeOffset _createdAt = DateTimeOffset.UtcNow;
 
     public IssueBuilder WithId(string id)
     {
@@ -75,17 +76,32 @@ public class IssueBuilder
         return this;
     }
 
+    public IssueBuilder WithCreatedAt(DateTimeOffset createdAt)
+    {
+        _createdAt = createdAt;
+        return this;
+    }
+
     public Issue Build() => new()
     {
         Id = _id,
         Title = _title,
+        TitleLastUpdate = _lastUpdate,
         Description = _description,
+        DescriptionLastUpdate = _description is not null ? _lastUpdate : null,
         Status = _status,
+        StatusLastUpdate = _lastUpdate,
         Type = _type,
+        TypeLastUpdate = _lastUpdate,
         LinkedPR = _linkedPr,
+        LinkedPRLastUpdate = _linkedPr is not null ? _lastUpdate : null,
         LinkedIssues = _linkedIssues,
+        LinkedIssuesLastUpdate = _lastUpdate,
         ParentIssues = _parentIssues,
+        ParentIssuesLastUpdate = _lastUpdate,
         Priority = _priority,
-        LastUpdate = _lastUpdate
+        PriorityLastUpdate = _priority is not null ? _lastUpdate : null,
+        LastUpdate = _lastUpdate,
+        CreatedAt = _createdAt
     };
 }

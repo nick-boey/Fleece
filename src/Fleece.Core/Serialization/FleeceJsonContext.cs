@@ -11,8 +11,11 @@ namespace Fleece.Core.Serialization;
     UseStringEnumConverter = true)]
 [JsonSerializable(typeof(Issue))]
 [JsonSerializable(typeof(ConflictRecord))]
+[JsonSerializable(typeof(PropertyConflict))]
+[JsonSerializable(typeof(MergeResult))]
 [JsonSerializable(typeof(IReadOnlyList<Issue>))]
 [JsonSerializable(typeof(IReadOnlyList<ConflictRecord>))]
+[JsonSerializable(typeof(IReadOnlyList<PropertyConflict>))]
 public partial class FleeceJsonContext : JsonSerializerContext
 {
 }
