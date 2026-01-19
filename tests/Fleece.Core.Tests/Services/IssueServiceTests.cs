@@ -180,7 +180,7 @@ public class IssueServiceTests
 
         result.Should().BeTrue();
         await _storage.Received(1).SaveIssuesAsync(
-            Arg.Is<IReadOnlyList<Issue>>(list => list.Count == 0),
+            Arg.Is<IReadOnlyList<Issue>>(list => list.Count == 1 && list[0].Status == IssueStatus.Deleted),
             Arg.Any<CancellationToken>());
     }
 
