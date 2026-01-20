@@ -21,6 +21,8 @@ public static class TableFormatter
         table.AddColumn(new TableColumn("Type").Centered());
         table.AddColumn(new TableColumn("Status").Centered());
         table.AddColumn(new TableColumn("Pri").Centered());
+        table.AddColumn(new TableColumn("Group").Centered());
+        table.AddColumn(new TableColumn("Assigned").Centered());
         table.AddColumn(new TableColumn("Updated").Centered());
 
         foreach (var issue in issues)
@@ -45,6 +47,8 @@ public static class TableFormatter
             };
 
             var priDisplay = issue.Priority?.ToString() ?? "-";
+            var groupDisplay = issue.Group ?? "-";
+            var assignedDisplay = issue.AssignedTo ?? "-";
 
             table.AddRow(
                 $"[bold]{issue.Id}[/]",
@@ -52,6 +56,8 @@ public static class TableFormatter
                 $"[{typeColor}]{issue.Type}[/]",
                 $"[{statusColor}]{issue.Status}[/]",
                 priDisplay,
+                Markup.Escape(groupDisplay),
+                Markup.Escape(assignedDisplay),
                 issue.LastUpdate.ToString("yyyy-MM-dd")
             );
         }
@@ -104,34 +110,116 @@ public static class TableFormatter
             lines.Add($"[bold]Parent Issues:[/] {string.Join(", ", issue.ParentIssues)}");
         }
 
+        if (!string.IsNullOrEmpty(issue.Group))
+        {
+            lines.Add($"[bold]Group:[/] {Markup.Escape(issue.Group)}");
+        }
+
+        if (!string.IsNullOrEmpty(issue.AssignedTo))
+        {
+            lines.Add($"[bold]Assigned To:[/] {Markup.Escape(issue.AssignedTo)}");
+        }
+
+        if (!string.IsNullOrEmpty(issue.CreatedBy))
+        {
+            lines.Add($"[bold]Created By:[/] {Markup.Escape(issue.CreatedBy)}");
+        }
+
         lines.Add($"[bold]Last Update:[/] {issue.LastUpdate:yyyy-MM-dd HH:mm:ss}");
 
         return string.Join("\n", lines);
     }
 
-    public static void RenderConflicts(IReadOnlyList<ConflictRecord> conflicts)
+    public static void RenderChanges(IReadOnlyList<ChangeRecord> changes)
     {
-        if (conflicts.Count == 0)
+        if (changes.Count == 0)
         {
-            AnsiConsole.MarkupLine("[dim]No conflicts found.[/]");
+            AnsiConsole.MarkupLine("[dim]No changes found.[/]");
             return;
         }
 
-        foreach (var conflict in conflicts)
+        foreach (var change in changes.OrderByDescending(c => c.ChangedAt))
         {
-            var panel = new Panel(
-                $"[bold]Issue ID:[/] {conflict.IssueId}\n" +
-                $"[bold]Older:[/] {Markup.Escape(conflict.OlderVersion.Title)} (Updated: {conflict.OlderVersion.LastUpdate:yyyy-MM-dd HH:mm})\n" +
-                $"[bold]Newer:[/] {Markup.Escape(conflict.NewerVersion.Title)} (Updated: {conflict.NewerVersion.LastUpdate:yyyy-MM-dd HH:mm})\n" +
-                $"[bold]Detected:[/] {conflict.DetectedAt:yyyy-MM-dd HH:mm:ss}")
+            var typeColor = change.Type switch
             {
-                Header = new PanelHeader($"[red]Conflict[/] {conflict.ConflictId:N}".Substring(0, 40)),
+                ChangeType.Created => "green",
+                ChangeType.Updated => "yellow",
+                ChangeType.Deleted => "red",
+                ChangeType.Merged => "cyan",
+                _ => "white"
+            };
+
+            var header = $"[{typeColor}]{change.Type}[/] {change.IssueId} by {Markup.Escape(change.ChangedBy)}";
+            var content = BuildChangeContent(change);
+
+            var panel = new Panel(content)
+            {
+                Header = new PanelHeader(header),
                 Border = BoxBorder.Rounded
             };
 
             AnsiConsole.Write(panel);
+
+            // Show property changes if available
+            if (change.PropertyChanges.Count > 0)
+            {
+                RenderPropertyChanges(change.PropertyChanges);
+            }
+
+            AnsiConsole.WriteLine();
         }
 
-        AnsiConsole.MarkupLine($"[dim]{conflicts.Count} conflict(s)[/]");
+        AnsiConsole.MarkupLine($"[dim]{changes.Count} change(s)[/]");
+    }
+
+    private static string BuildChangeContent(ChangeRecord change)
+    {
+        var lines = new List<string>
+        {
+            $"[bold]Change ID:[/] {change.ChangeId}",
+            $"[bold]Issue ID:[/] {change.IssueId}",
+            $"[bold]Type:[/] {change.Type}",
+            $"[bold]Changed By:[/] {Markup.Escape(change.ChangedBy)}",
+            $"[bold]Changed At:[/] {change.ChangedAt:yyyy-MM-dd HH:mm:ss}"
+        };
+
+        return string.Join("\n", lines);
+    }
+
+    public static void RenderPropertyChanges(IReadOnlyList<PropertyChange> propertyChanges)
+    {
+        if (propertyChanges.Count == 0)
+        {
+            return;
+        }
+
+        var table = new Table();
+        table.Border(TableBorder.Simple);
+        table.AddColumn(new TableColumn("Property").Centered());
+        table.AddColumn(new TableColumn("Old Value"));
+        table.AddColumn(new TableColumn("New Value"));
+        table.AddColumn(new TableColumn("Resolution").Centered());
+
+        foreach (var pc in propertyChanges)
+        {
+            var resolutionColor = pc.MergeResolution switch
+            {
+                "A" => "cyan",
+                "B" => "magenta",
+                "Union" => "green",
+                _ => "dim"
+            };
+
+            var resolutionDisplay = pc.MergeResolution ?? "-";
+
+            table.AddRow(
+                $"[bold]{pc.PropertyName}[/]",
+                Markup.Escape(pc.OldValue ?? "(null)"),
+                Markup.Escape(pc.NewValue ?? "(null)"),
+                $"[{resolutionColor}]{resolutionDisplay}[/]"
+            );
+        }
+
+        AnsiConsole.Write(table);
     }
 }

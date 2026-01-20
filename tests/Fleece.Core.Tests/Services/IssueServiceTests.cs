@@ -13,6 +13,8 @@ public class IssueServiceTests
 {
     private IStorageService _storage = null!;
     private IIdGenerator _idGenerator = null!;
+    private IGitConfigService _gitConfigService = null!;
+    private IChangeService _changeService = null!;
     private IssueService _sut = null!;
 
     [SetUp]
@@ -20,7 +22,10 @@ public class IssueServiceTests
     {
         _storage = Substitute.For<IStorageService>();
         _idGenerator = Substitute.For<IIdGenerator>();
-        _sut = new IssueService(_storage, _idGenerator);
+        _gitConfigService = Substitute.For<IGitConfigService>();
+        _changeService = Substitute.For<IChangeService>();
+        _gitConfigService.GetUserName().Returns("Test User");
+        _sut = new IssueService(_storage, _idGenerator, _gitConfigService, _changeService);
     }
 
     [Test]
@@ -85,6 +90,18 @@ public class IssueServiceTests
         var act = async () => await _sut.CreateAsync(null!, IssueType.Task);
 
         act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Test]
+    public async Task CreateAsync_RecordsChangeRecord()
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        await _sut.CreateAsync("Test Issue", IssueType.Task);
+
+        await _changeService.Received(1).AddAsync(
+            Arg.Is<ChangeRecord>(c => c.IssueId == "abc123" && c.Type == ChangeType.Created),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -168,6 +185,22 @@ public class IssueServiceTests
     }
 
     [Test]
+    public async Task UpdateAsync_RecordsChangeRecord()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        await _sut.UpdateAsync("abc123", status: IssueStatus.Complete);
+
+        await _changeService.Received(1).AddAsync(
+            Arg.Is<ChangeRecord>(c => c.IssueId == "abc123" && c.Type == ChangeType.Updated),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task DeleteAsync_ReturnsTrue_WhenDeleted()
     {
         var issues = new List<Issue>
@@ -192,6 +225,22 @@ public class IssueServiceTests
         var result = await _sut.DeleteAsync("nonexistent");
 
         result.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task DeleteAsync_RecordsChangeRecord()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        await _sut.DeleteAsync("abc123");
+
+        await _changeService.Received(1).AddAsync(
+            Arg.Is<ChangeRecord>(c => c.IssueId == "abc123" && c.Type == ChangeType.Deleted),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]

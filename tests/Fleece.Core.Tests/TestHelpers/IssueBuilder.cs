@@ -13,7 +13,11 @@ public class IssueBuilder
     private IReadOnlyList<string> _linkedIssues = [];
     private IReadOnlyList<string> _parentIssues = [];
     private int? _priority;
+    private string? _group;
+    private string? _assignedTo;
+    private string? _createdBy;
     private DateTimeOffset _lastUpdate = DateTimeOffset.UtcNow;
+    private DateTimeOffset _createdAt = DateTimeOffset.UtcNow;
 
     public IssueBuilder WithId(string id)
     {
@@ -69,9 +73,33 @@ public class IssueBuilder
         return this;
     }
 
+    public IssueBuilder WithGroup(string? group)
+    {
+        _group = group;
+        return this;
+    }
+
+    public IssueBuilder WithAssignedTo(string? assignedTo)
+    {
+        _assignedTo = assignedTo;
+        return this;
+    }
+
+    public IssueBuilder WithCreatedBy(string? createdBy)
+    {
+        _createdBy = createdBy;
+        return this;
+    }
+
     public IssueBuilder WithLastUpdate(DateTimeOffset lastUpdate)
     {
         _lastUpdate = lastUpdate;
+        return this;
+    }
+
+    public IssueBuilder WithCreatedAt(DateTimeOffset createdAt)
+    {
+        _createdAt = createdAt;
         return this;
     }
 
@@ -79,13 +107,28 @@ public class IssueBuilder
     {
         Id = _id,
         Title = _title,
+        TitleLastUpdate = _lastUpdate,
         Description = _description,
+        DescriptionLastUpdate = _description is not null ? _lastUpdate : null,
         Status = _status,
+        StatusLastUpdate = _lastUpdate,
         Type = _type,
+        TypeLastUpdate = _lastUpdate,
         LinkedPR = _linkedPr,
+        LinkedPRLastUpdate = _linkedPr is not null ? _lastUpdate : null,
         LinkedIssues = _linkedIssues,
+        LinkedIssuesLastUpdate = _lastUpdate,
         ParentIssues = _parentIssues,
+        ParentIssuesLastUpdate = _lastUpdate,
         Priority = _priority,
-        LastUpdate = _lastUpdate
+        PriorityLastUpdate = _priority is not null ? _lastUpdate : null,
+        Group = _group,
+        GroupLastUpdate = _group is not null ? _lastUpdate : null,
+        AssignedTo = _assignedTo,
+        AssignedToLastUpdate = _assignedTo is not null ? _lastUpdate : null,
+        CreatedBy = _createdBy,
+        CreatedByLastUpdate = _createdBy is not null ? _lastUpdate : null,
+        LastUpdate = _lastUpdate,
+        CreatedAt = _createdAt
     };
 }

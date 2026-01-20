@@ -59,9 +59,10 @@ public class JsonlStorageServiceTests
 
         await _sut.SaveIssuesAsync(issues);
 
-        var filePath = Path.Combine(_testDirectory, ".fleece", "issues.jsonl");
-        File.Exists(filePath).Should().BeTrue();
-        var lines = await File.ReadAllLinesAsync(filePath);
+        var fleeceDir = Path.Combine(_testDirectory, ".fleece");
+        var issueFiles = Directory.GetFiles(fleeceDir, "issues_*.jsonl");
+        issueFiles.Should().HaveCount(1);
+        var lines = await File.ReadAllLinesAsync(issueFiles[0]);
         lines.Should().HaveCount(2);
     }
 
@@ -96,74 +97,71 @@ public class JsonlStorageServiceTests
     }
 
     [Test]
-    public async Task LoadConflictsAsync_ReturnsEmptyList_WhenFileDoesNotExist()
+    public async Task LoadChangesAsync_ReturnsEmptyList_WhenFileDoesNotExist()
     {
-        var result = await _sut.LoadConflictsAsync();
+        var result = await _sut.LoadChangesAsync();
 
         result.Should().BeEmpty();
     }
 
     [Test]
-    public async Task SaveConflictsAsync_CreatesFileWithConflicts()
+    public async Task SaveChangesAsync_CreatesFileWithChanges()
     {
-        var older = new IssueBuilder().WithId("abc123").WithTitle("Old").Build();
-        var newer = new IssueBuilder().WithId("abc123").WithTitle("New").Build();
-        var conflicts = new[]
+        var changes = new[]
         {
-            new ConflictRecord
+            new ChangeRecord
             {
-                ConflictId = Guid.NewGuid(),
+                ChangeId = Guid.NewGuid(),
                 IssueId = "abc123",
-                OlderVersion = older,
-                NewerVersion = newer,
-                DetectedAt = DateTimeOffset.UtcNow
+                Type = ChangeType.Created,
+                ChangedBy = "Test User",
+                ChangedAt = DateTimeOffset.UtcNow,
+                PropertyChanges = []
             }
         };
 
-        await _sut.SaveConflictsAsync(conflicts);
+        await _sut.SaveChangesAsync(changes);
 
-        var filePath = Path.Combine(_testDirectory, ".fleece", "conflicts.jsonl");
+        var filePath = Path.Combine(_testDirectory, ".fleece", "changes.jsonl");
         File.Exists(filePath).Should().BeTrue();
     }
 
     [Test]
-    public async Task LoadConflictsAsync_ReturnsConflicts_AfterSave()
+    public async Task LoadChangesAsync_ReturnsChanges_AfterSave()
     {
-        var older = new IssueBuilder().WithId("abc123").WithTitle("Old").Build();
-        var newer = new IssueBuilder().WithId("abc123").WithTitle("New").Build();
-        var conflict = new ConflictRecord
+        var change = new ChangeRecord
         {
-            ConflictId = Guid.NewGuid(),
+            ChangeId = Guid.NewGuid(),
             IssueId = "abc123",
-            OlderVersion = older,
-            NewerVersion = newer,
-            DetectedAt = DateTimeOffset.UtcNow
+            Type = ChangeType.Created,
+            ChangedBy = "Test User",
+            ChangedAt = DateTimeOffset.UtcNow,
+            PropertyChanges = []
         };
-        await _sut.SaveConflictsAsync([conflict]);
+        await _sut.SaveChangesAsync([change]);
 
-        var result = await _sut.LoadConflictsAsync();
+        var result = await _sut.LoadChangesAsync();
 
         result.Should().HaveCount(1);
         result[0].IssueId.Should().Be("abc123");
     }
 
     [Test]
-    public async Task AppendConflictAsync_AddsConflictToFile()
+    public async Task AppendChangeAsync_AddsChangeToFile()
     {
-        var older = new IssueBuilder().WithId("abc123").WithTitle("Old").Build();
-        var newer = new IssueBuilder().WithId("abc123").WithTitle("New").Build();
-        var conflict = new ConflictRecord
+        var change = new ChangeRecord
         {
-            ConflictId = Guid.NewGuid(),
+            ChangeId = Guid.NewGuid(),
             IssueId = "abc123",
-            OlderVersion = older,
-            NewerVersion = newer,
-            DetectedAt = DateTimeOffset.UtcNow
+            Type = ChangeType.Created,
+            ChangedBy = "Test User",
+            ChangedAt = DateTimeOffset.UtcNow,
+            PropertyChanges = []
         };
 
-        await _sut.AppendConflictAsync(conflict);
+        await _sut.AppendChangeAsync(change);
 
-        var result = await _sut.LoadConflictsAsync();
+        var result = await _sut.LoadChangesAsync();
         result.Should().HaveCount(1);
     }
 

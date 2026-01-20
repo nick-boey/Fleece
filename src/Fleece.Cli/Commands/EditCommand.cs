@@ -56,7 +56,9 @@ public sealed class EditCommand(IIssueService issueService) : AsyncCommand<EditS
                 priority: settings.Priority,
                 linkedPr: settings.LinkedPr,
                 linkedIssues: linkedIssues,
-                parentIssues: parentIssues);
+                parentIssues: parentIssues,
+                group: settings.Group,
+                assignedTo: settings.AssignedTo);
 
             if (settings.Json)
             {

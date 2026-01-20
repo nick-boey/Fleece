@@ -35,18 +35,25 @@ app.Configure(config =>
         .WithExample("search", "login");
 
     config.AddCommand<DiffCommand>("diff")
-        .WithDescription("Compare files or show conflicts")
+        .WithDescription("Compare files or show change history")
         .WithExample("diff")
         .WithExample("diff", "file1.jsonl", "file2.jsonl");
 
     config.AddCommand<MergeCommand>("merge")
-        .WithDescription("Find duplicates and move older versions to conflicts")
+        .WithDescription("Find and merge duplicate issues")
         .WithExample("merge")
         .WithExample("merge", "--dry-run");
 
-    config.AddCommand<ClearConflictsCommand>("clear-conflicts")
-        .WithDescription("Clear conflict records for an issue")
-        .WithExample("clear-conflicts", "abc123");
+    config.AddCommand<HistoryCommand>("history")
+        .WithDescription("Show change history for issues")
+        .WithExample("history")
+        .WithExample("history", "abc123")
+        .WithExample("history", "--user", "john");
+
+    config.AddCommand<MigrateCommand>("migrate")
+        .WithDescription("Migrate issues to property-level timestamps format")
+        .WithExample("migrate")
+        .WithExample("migrate", "--dry-run");
 
     config.AddCommand<InstallCommand>("install")
         .WithDescription("Install Claude Code hooks");

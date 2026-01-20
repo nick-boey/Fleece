@@ -61,7 +61,9 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
             priority: settings.Priority,
             linkedPr: settings.LinkedPr,
             linkedIssues: linkedIssues,
-            parentIssues: parentIssues);
+            parentIssues: parentIssues,
+            group: settings.Group,
+            assignedTo: settings.AssignedTo);
 
         if (settings.Json)
         {
