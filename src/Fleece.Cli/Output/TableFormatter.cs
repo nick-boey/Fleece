@@ -130,56 +130,65 @@ public static class TableFormatter
         return string.Join("\n", lines);
     }
 
-    public static void RenderConflicts(IReadOnlyList<ConflictRecord> conflicts)
+    public static void RenderChanges(IReadOnlyList<ChangeRecord> changes)
     {
-        if (conflicts.Count == 0)
+        if (changes.Count == 0)
         {
-            AnsiConsole.MarkupLine("[dim]No conflicts found.[/]");
+            AnsiConsole.MarkupLine("[dim]No changes found.[/]");
             return;
         }
 
-        foreach (var conflict in conflicts)
+        foreach (var change in changes.OrderByDescending(c => c.ChangedAt))
         {
-            var content = BuildConflictContent(conflict);
+            var typeColor = change.Type switch
+            {
+                ChangeType.Created => "green",
+                ChangeType.Updated => "yellow",
+                ChangeType.Deleted => "red",
+                ChangeType.Merged => "cyan",
+                _ => "white"
+            };
+
+            var header = $"[{typeColor}]{change.Type}[/] {change.IssueId} by {Markup.Escape(change.ChangedBy)}";
+            var content = BuildChangeContent(change);
+
             var panel = new Panel(content)
             {
-                Header = new PanelHeader($"[yellow]Merged[/] {conflict.IssueId}"),
+                Header = new PanelHeader(header),
                 Border = BoxBorder.Rounded
             };
 
             AnsiConsole.Write(panel);
 
-            // Show property-level resolution table if available
-            if (conflict.PropertyConflicts is { Count: > 0 })
+            // Show property changes if available
+            if (change.PropertyChanges.Count > 0)
             {
-                RenderPropertyConflicts(conflict.PropertyConflicts);
+                RenderPropertyChanges(change.PropertyChanges);
             }
+
+            AnsiConsole.WriteLine();
         }
 
-        AnsiConsole.MarkupLine($"[dim]{conflicts.Count} merge(s) performed[/]");
+        AnsiConsole.MarkupLine($"[dim]{changes.Count} change(s)[/]");
     }
 
-    private static string BuildConflictContent(ConflictRecord conflict)
+    private static string BuildChangeContent(ChangeRecord change)
     {
         var lines = new List<string>
         {
-            $"[bold]Issue ID:[/] {conflict.IssueId}",
-            $"[bold]Version A:[/] {Markup.Escape(conflict.OlderVersion.Title)} (Updated: {conflict.OlderVersion.LastUpdate:yyyy-MM-dd HH:mm})",
-            $"[bold]Version B:[/] {Markup.Escape(conflict.NewerVersion.Title)} (Updated: {conflict.NewerVersion.LastUpdate:yyyy-MM-dd HH:mm})",
-            $"[bold]Detected:[/] {conflict.DetectedAt:yyyy-MM-dd HH:mm:ss}"
+            $"[bold]Change ID:[/] {change.ChangeId}",
+            $"[bold]Issue ID:[/] {change.IssueId}",
+            $"[bold]Type:[/] {change.Type}",
+            $"[bold]Changed By:[/] {Markup.Escape(change.ChangedBy)}",
+            $"[bold]Changed At:[/] {change.ChangedAt:yyyy-MM-dd HH:mm:ss}"
         };
-
-        if (conflict.MergedResult is not null)
-        {
-            lines.Add($"[bold]Merged Title:[/] {Markup.Escape(conflict.MergedResult.Title)}");
-        }
 
         return string.Join("\n", lines);
     }
 
-    public static void RenderPropertyConflicts(IReadOnlyList<PropertyConflict> propertyConflicts)
+    public static void RenderPropertyChanges(IReadOnlyList<PropertyChange> propertyChanges)
     {
-        if (propertyConflicts.Count == 0)
+        if (propertyChanges.Count == 0)
         {
             return;
         }
@@ -187,27 +196,27 @@ public static class TableFormatter
         var table = new Table();
         table.Border(TableBorder.Simple);
         table.AddColumn(new TableColumn("Property").Centered());
-        table.AddColumn(new TableColumn("Value A"));
-        table.AddColumn(new TableColumn("Value B"));
-        table.AddColumn(new TableColumn("Winner").Centered());
-        table.AddColumn(new TableColumn("Resolved Value"));
+        table.AddColumn(new TableColumn("Old Value"));
+        table.AddColumn(new TableColumn("New Value"));
+        table.AddColumn(new TableColumn("Resolution").Centered());
 
-        foreach (var pc in propertyConflicts)
+        foreach (var pc in propertyChanges)
         {
-            var winnerColor = pc.Resolution switch
+            var resolutionColor = pc.MergeResolution switch
             {
                 "A" => "cyan",
                 "B" => "magenta",
                 "Union" => "green",
-                _ => "white"
+                _ => "dim"
             };
+
+            var resolutionDisplay = pc.MergeResolution ?? "-";
 
             table.AddRow(
                 $"[bold]{pc.PropertyName}[/]",
-                Markup.Escape(pc.ValueA ?? "(null)"),
-                Markup.Escape(pc.ValueB ?? "(null)"),
-                $"[{winnerColor}]{pc.Resolution}[/]",
-                Markup.Escape(pc.ResolvedValue ?? "(null)")
+                Markup.Escape(pc.OldValue ?? "(null)"),
+                Markup.Escape(pc.NewValue ?? "(null)"),
+                $"[{resolutionColor}]{resolutionDisplay}[/]"
             );
         }
 

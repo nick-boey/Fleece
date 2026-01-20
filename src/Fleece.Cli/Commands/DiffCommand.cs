@@ -6,22 +6,22 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class DiffCommand(IConflictService conflictService, IMergeService mergeService) : AsyncCommand<DiffSettings>
+public sealed class DiffCommand(IChangeService changeService, IMergeService mergeService) : AsyncCommand<DiffSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, DiffSettings settings)
     {
-        // If no files specified, show current conflicts
+        // If no files specified, show change history
         if (string.IsNullOrWhiteSpace(settings.File1))
         {
-            var conflicts = await conflictService.GetAllAsync();
+            var changes = await changeService.GetAllAsync();
 
             if (settings.Json)
             {
-                JsonFormatter.RenderConflicts(conflicts);
+                JsonFormatter.RenderChanges(changes);
             }
             else
             {
-                TableFormatter.RenderConflicts(conflicts);
+                TableFormatter.RenderChanges(changes);
             }
 
             return 0;

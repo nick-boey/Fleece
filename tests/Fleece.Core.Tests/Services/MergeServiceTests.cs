@@ -13,7 +13,8 @@ namespace Fleece.Core.Tests.Services;
 public class MergeServiceTests
 {
     private IStorageService _storage = null!;
-    private IConflictService _conflictService = null!;
+    private IChangeService _changeService = null!;
+    private IGitConfigService _gitConfigService = null!;
     private IJsonlSerializer _serializer = null!;
     private MergeService _sut = null!;
 
@@ -21,9 +22,11 @@ public class MergeServiceTests
     public void SetUp()
     {
         _storage = Substitute.For<IStorageService>();
-        _conflictService = Substitute.For<IConflictService>();
+        _changeService = Substitute.For<IChangeService>();
+        _gitConfigService = Substitute.For<IGitConfigService>();
+        _gitConfigService.GetUserName().Returns("Test User");
         _serializer = new JsonlSerializer();
-        _sut = new MergeService(_storage, _conflictService, _serializer);
+        _sut = new MergeService(_storage, _changeService, _gitConfigService, _serializer);
     }
 
     private void SetupStorageMock(IReadOnlyList<Issue> issues)
@@ -65,8 +68,7 @@ public class MergeServiceTests
 
         result.Should().HaveCount(1);
         result[0].IssueId.Should().Be("abc123");
-        result[0].OlderVersion.Title.Should().Be("Old");
-        result[0].NewerVersion.Title.Should().Be("New");
+        result[0].Type.Should().Be(ChangeType.Merged);
     }
 
     [Test]
@@ -92,7 +94,7 @@ public class MergeServiceTests
     }
 
     [Test]
-    public async Task FindAndResolveDuplicatesAsync_AddsConflict()
+    public async Task FindAndResolveDuplicatesAsync_AddsChangeRecord()
     {
         var older = DateTimeOffset.UtcNow.AddHours(-1);
         var newer = DateTimeOffset.UtcNow;
@@ -106,8 +108,8 @@ public class MergeServiceTests
 
         await _sut.FindAndResolveDuplicatesAsync();
 
-        await _conflictService.Received(1).AddAsync(
-            Arg.Is<ConflictRecord>(c => c.IssueId == "abc123"),
+        await _changeService.Received(1).AddAsync(
+            Arg.Is<ChangeRecord>(c => c.IssueId == "abc123" && c.Type == ChangeType.Merged),
             Arg.Any<CancellationToken>());
     }
 
@@ -128,9 +130,9 @@ public class MergeServiceTests
 
         var result = await _sut.FindAndResolveDuplicatesAsync();
 
-        // Property-level merge combines all into one merged result, so only 1 conflict record
+        // Property-level merge combines all into one merged result, so only 1 change record
         result.Should().HaveCount(1);
-        await _conflictService.Received(1).AddAsync(Arg.Any<ConflictRecord>(), Arg.Any<CancellationToken>());
+        await _changeService.Received(1).AddAsync(Arg.Any<ChangeRecord>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

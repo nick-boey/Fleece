@@ -15,9 +15,9 @@ public sealed class MergeCommand(IMergeService mergeService) : AsyncCommand<Merg
             AnsiConsole.MarkupLine("[yellow]Dry run mode - no changes will be made[/]");
         }
 
-        var conflicts = await mergeService.FindAndResolveDuplicatesAsync();
+        var changes = await mergeService.FindAndResolveDuplicatesAsync();
 
-        if (conflicts.Count == 0)
+        if (changes.Count == 0)
         {
             AnsiConsole.MarkupLine("[green]No duplicates found. Issues are already consolidated.[/]");
             return 0;
@@ -25,19 +25,19 @@ public sealed class MergeCommand(IMergeService mergeService) : AsyncCommand<Merg
 
         if (settings.Json)
         {
-            JsonFormatter.RenderConflicts(conflicts);
+            JsonFormatter.RenderChanges(changes);
         }
         else
         {
-            AnsiConsole.MarkupLine($"[yellow]Merged {conflicts.Count} issue(s) with property-level resolution[/]");
+            AnsiConsole.MarkupLine($"[yellow]Merged {changes.Count} issue(s) with property-level resolution[/]");
             AnsiConsole.WriteLine();
-            TableFormatter.RenderConflicts(conflicts);
+            TableFormatter.RenderChanges(changes);
 
             if (!settings.DryRun)
             {
                 AnsiConsole.WriteLine();
                 AnsiConsole.MarkupLine("[green]Merge complete! Issues consolidated into single file.[/]");
-                AnsiConsole.MarkupLine("[dim]Conflict details logged to conflicts.jsonl[/]");
+                AnsiConsole.MarkupLine("[dim]Change details logged to changes.jsonl[/]");
             }
         }
 

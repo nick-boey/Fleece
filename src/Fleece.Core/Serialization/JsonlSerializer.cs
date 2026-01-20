@@ -7,10 +7,10 @@ public interface IJsonlSerializer
 {
     string SerializeIssue(Issue issue);
     Issue? DeserializeIssue(string line);
-    string SerializeConflict(ConflictRecord conflict);
-    ConflictRecord? DeserializeConflict(string line);
+    string SerializeChange(ChangeRecord change);
+    ChangeRecord? DeserializeChange(string line);
     IReadOnlyList<Issue> DeserializeIssues(string content);
-    IReadOnlyList<ConflictRecord> DeserializeConflicts(string content);
+    IReadOnlyList<ChangeRecord> DeserializeChanges(string content);
 }
 
 public sealed class JsonlSerializer : IJsonlSerializer
@@ -37,12 +37,12 @@ public sealed class JsonlSerializer : IJsonlSerializer
         }
     }
 
-    public string SerializeConflict(ConflictRecord conflict)
+    public string SerializeChange(ChangeRecord change)
     {
-        return JsonSerializer.Serialize(conflict, FleeceJsonContext.Default.ConflictRecord);
+        return JsonSerializer.Serialize(change, FleeceJsonContext.Default.ChangeRecord);
     }
 
-    public ConflictRecord? DeserializeConflict(string line)
+    public ChangeRecord? DeserializeChange(string line)
     {
         if (string.IsNullOrWhiteSpace(line))
         {
@@ -51,7 +51,7 @@ public sealed class JsonlSerializer : IJsonlSerializer
 
         try
         {
-            return JsonSerializer.Deserialize(line, FleeceJsonContext.Default.ConflictRecord);
+            return JsonSerializer.Deserialize(line, FleeceJsonContext.Default.ChangeRecord);
         }
         catch (JsonException)
         {
@@ -79,23 +79,23 @@ public sealed class JsonlSerializer : IJsonlSerializer
         return issues;
     }
 
-    public IReadOnlyList<ConflictRecord> DeserializeConflicts(string content)
+    public IReadOnlyList<ChangeRecord> DeserializeChanges(string content)
     {
         if (string.IsNullOrWhiteSpace(content))
         {
             return [];
         }
 
-        var conflicts = new List<ConflictRecord>();
+        var changes = new List<ChangeRecord>();
         foreach (var line in content.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
-            var conflict = DeserializeConflict(line.Trim());
-            if (conflict is not null)
+            var change = DeserializeChange(line.Trim());
+            if (change is not null)
             {
-                conflicts.Add(conflict);
+                changes.Add(change);
             }
         }
 
-        return conflicts;
+        return changes;
     }
 }

@@ -6,6 +6,6 @@ namespace Fleece.Core.Models;
 public sealed record MergeResult
 {
     public required Issue MergedIssue { get; init; }
-    public required IReadOnlyList<PropertyConflict> PropertyConflicts { get; init; }
-    public bool HadConflicts => PropertyConflicts.Count > 0;
+    public required IReadOnlyList<PropertyChange> PropertyChanges { get; init; }
+    public bool HadConflicts => PropertyChanges.Count > 0;
 }

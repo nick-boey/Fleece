@@ -3,7 +3,11 @@ using Fleece.Core.Services.Interfaces;
 
 namespace Fleece.Core.Services;
 
-public sealed class IssueService(IStorageService storage, IIdGenerator idGenerator, IGitConfigService gitConfigService) : IIssueService
+public sealed class IssueService(
+    IStorageService storage,
+    IIdGenerator idGenerator,
+    IGitConfigService gitConfigService,
+    IChangeService changeService) : IIssueService
 {
     public async Task<Issue> CreateAsync(
         string title,
@@ -28,24 +32,34 @@ public sealed class IssueService(IStorageService storage, IIdGenerator idGenerat
             Id = id,
             Title = title,
             TitleLastUpdate = now,
+            TitleModifiedBy = createdBy,
             Description = description,
             DescriptionLastUpdate = description is not null ? now : null,
+            DescriptionModifiedBy = description is not null ? createdBy : null,
             Status = status,
             StatusLastUpdate = now,
+            StatusModifiedBy = createdBy,
             Type = type,
             TypeLastUpdate = now,
+            TypeModifiedBy = createdBy,
             Priority = priority,
             PriorityLastUpdate = priority is not null ? now : null,
+            PriorityModifiedBy = priority is not null ? createdBy : null,
             LinkedPR = linkedPr,
             LinkedPRLastUpdate = linkedPr is not null ? now : null,
+            LinkedPRModifiedBy = linkedPr is not null ? createdBy : null,
             LinkedIssues = linkedIssues ?? [],
             LinkedIssuesLastUpdate = now,
+            LinkedIssuesModifiedBy = createdBy,
             ParentIssues = parentIssues ?? [],
             ParentIssuesLastUpdate = now,
+            ParentIssuesModifiedBy = createdBy,
             Group = group,
             GroupLastUpdate = group is not null ? now : null,
+            GroupModifiedBy = group is not null ? createdBy : null,
             AssignedTo = assignedTo,
             AssignedToLastUpdate = assignedTo is not null ? now : null,
+            AssignedToModifiedBy = assignedTo is not null ? createdBy : null,
             CreatedBy = createdBy,
             CreatedByLastUpdate = createdBy is not null ? now : null,
             LastUpdate = now,
@@ -53,6 +67,62 @@ public sealed class IssueService(IStorageService storage, IIdGenerator idGenerat
         };
 
         await storage.AppendIssueAsync(issue, cancellationToken);
+
+        // Record creation change
+        var propertyChanges = new List<PropertyChange>
+        {
+            new() { PropertyName = "Title", OldValue = null, NewValue = title, Timestamp = now },
+            new() { PropertyName = "Status", OldValue = null, NewValue = status.ToString(), Timestamp = now },
+            new() { PropertyName = "Type", OldValue = null, NewValue = type.ToString(), Timestamp = now }
+        };
+
+        if (description is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "Description", OldValue = null, NewValue = description, Timestamp = now });
+        }
+
+        if (priority is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "Priority", OldValue = null, NewValue = priority.ToString(), Timestamp = now });
+        }
+
+        if (linkedPr is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "LinkedPR", OldValue = null, NewValue = linkedPr.ToString(), Timestamp = now });
+        }
+
+        if (linkedIssues is not null && linkedIssues.Count > 0)
+        {
+            propertyChanges.Add(new() { PropertyName = "LinkedIssues", OldValue = null, NewValue = string.Join(",", linkedIssues), Timestamp = now });
+        }
+
+        if (parentIssues is not null && parentIssues.Count > 0)
+        {
+            propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = null, NewValue = string.Join(",", parentIssues), Timestamp = now });
+        }
+
+        if (group is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "Group", OldValue = null, NewValue = group, Timestamp = now });
+        }
+
+        if (assignedTo is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "AssignedTo", OldValue = null, NewValue = assignedTo, Timestamp = now });
+        }
+
+        var changeRecord = new ChangeRecord
+        {
+            ChangeId = Guid.NewGuid(),
+            IssueId = id,
+            Type = ChangeType.Created,
+            ChangedBy = createdBy ?? "unknown",
+            ChangedAt = now,
+            PropertyChanges = propertyChanges
+        };
+
+        await changeService.AddAsync(changeRecord, cancellationToken);
+
         return issue;
     }
 
@@ -91,39 +161,119 @@ public sealed class IssueService(IStorageService storage, IIdGenerator idGenerat
 
         var existing = issues[existingIndex];
         var now = DateTimeOffset.UtcNow;
+        var modifiedBy = gitConfigService.GetUserName();
         var newId = title is not null ? idGenerator.Generate(title) : existing.Id;
+
+        var propertyChanges = new List<PropertyChange>();
 
         var updated = new Issue
         {
             Id = newId,
             Title = title ?? existing.Title,
             TitleLastUpdate = title is not null ? now : existing.TitleLastUpdate,
+            TitleModifiedBy = title is not null ? modifiedBy : existing.TitleModifiedBy,
             Description = description ?? existing.Description,
             DescriptionLastUpdate = description is not null ? now : existing.DescriptionLastUpdate,
+            DescriptionModifiedBy = description is not null ? modifiedBy : existing.DescriptionModifiedBy,
             Status = status ?? existing.Status,
             StatusLastUpdate = status is not null ? now : existing.StatusLastUpdate,
+            StatusModifiedBy = status is not null ? modifiedBy : existing.StatusModifiedBy,
             Type = type ?? existing.Type,
             TypeLastUpdate = type is not null ? now : existing.TypeLastUpdate,
+            TypeModifiedBy = type is not null ? modifiedBy : existing.TypeModifiedBy,
             Priority = priority ?? existing.Priority,
             PriorityLastUpdate = priority is not null ? now : existing.PriorityLastUpdate,
+            PriorityModifiedBy = priority is not null ? modifiedBy : existing.PriorityModifiedBy,
             LinkedPR = linkedPr ?? existing.LinkedPR,
             LinkedPRLastUpdate = linkedPr is not null ? now : existing.LinkedPRLastUpdate,
+            LinkedPRModifiedBy = linkedPr is not null ? modifiedBy : existing.LinkedPRModifiedBy,
             LinkedIssues = linkedIssues ?? existing.LinkedIssues,
             LinkedIssuesLastUpdate = linkedIssues is not null ? now : existing.LinkedIssuesLastUpdate,
+            LinkedIssuesModifiedBy = linkedIssues is not null ? modifiedBy : existing.LinkedIssuesModifiedBy,
             ParentIssues = parentIssues ?? existing.ParentIssues,
             ParentIssuesLastUpdate = parentIssues is not null ? now : existing.ParentIssuesLastUpdate,
+            ParentIssuesModifiedBy = parentIssues is not null ? modifiedBy : existing.ParentIssuesModifiedBy,
             Group = group ?? existing.Group,
             GroupLastUpdate = group is not null ? now : existing.GroupLastUpdate,
+            GroupModifiedBy = group is not null ? modifiedBy : existing.GroupModifiedBy,
             AssignedTo = assignedTo ?? existing.AssignedTo,
             AssignedToLastUpdate = assignedTo is not null ? now : existing.AssignedToLastUpdate,
+            AssignedToModifiedBy = assignedTo is not null ? modifiedBy : existing.AssignedToModifiedBy,
             CreatedBy = existing.CreatedBy,
             CreatedByLastUpdate = existing.CreatedByLastUpdate,
             LastUpdate = now,
             CreatedAt = existing.CreatedAt
         };
 
+        // Record property changes
+        if (title is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "Title", OldValue = existing.Title, NewValue = title, Timestamp = now });
+        }
+
+        if (description is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "Description", OldValue = existing.Description, NewValue = description, Timestamp = now });
+        }
+
+        if (status is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "Status", OldValue = existing.Status.ToString(), NewValue = status.ToString(), Timestamp = now });
+        }
+
+        if (type is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "Type", OldValue = existing.Type.ToString(), NewValue = type.ToString(), Timestamp = now });
+        }
+
+        if (priority is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "Priority", OldValue = existing.Priority?.ToString(), NewValue = priority.ToString(), Timestamp = now });
+        }
+
+        if (linkedPr is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "LinkedPR", OldValue = existing.LinkedPR?.ToString(), NewValue = linkedPr.ToString(), Timestamp = now });
+        }
+
+        if (linkedIssues is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "LinkedIssues", OldValue = string.Join(",", existing.LinkedIssues), NewValue = string.Join(",", linkedIssues), Timestamp = now });
+        }
+
+        if (parentIssues is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = string.Join(",", existing.ParentIssues), NewValue = string.Join(",", parentIssues), Timestamp = now });
+        }
+
+        if (group is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "Group", OldValue = existing.Group, NewValue = group, Timestamp = now });
+        }
+
+        if (assignedTo is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "AssignedTo", OldValue = existing.AssignedTo, NewValue = assignedTo, Timestamp = now });
+        }
+
         issues[existingIndex] = updated;
         await storage.SaveIssuesAsync(issues, cancellationToken);
+
+        // Record update change if there were any property changes
+        if (propertyChanges.Count > 0)
+        {
+            var changeRecord = new ChangeRecord
+            {
+                ChangeId = Guid.NewGuid(),
+                IssueId = newId,
+                Type = ChangeType.Updated,
+                ChangedBy = modifiedBy ?? "unknown",
+                ChangedAt = now,
+                PropertyChanges = propertyChanges
+            };
+
+            await changeService.AddAsync(changeRecord, cancellationToken);
+        }
 
         return updated;
     }
@@ -140,15 +290,40 @@ public sealed class IssueService(IStorageService storage, IIdGenerator idGenerat
 
         var existing = issues[existingIndex];
         var now = DateTimeOffset.UtcNow;
+        var modifiedBy = gitConfigService.GetUserName();
         var deleted = existing with
         {
             Status = IssueStatus.Deleted,
             StatusLastUpdate = now,
+            StatusModifiedBy = modifiedBy,
             LastUpdate = now
         };
 
         issues[existingIndex] = deleted;
         await storage.SaveIssuesAsync(issues, cancellationToken);
+
+        // Record deletion change
+        var changeRecord = new ChangeRecord
+        {
+            ChangeId = Guid.NewGuid(),
+            IssueId = id,
+            Type = ChangeType.Deleted,
+            ChangedBy = modifiedBy ?? "unknown",
+            ChangedAt = now,
+            PropertyChanges =
+            [
+                new PropertyChange
+                {
+                    PropertyName = "Status",
+                    OldValue = existing.Status.ToString(),
+                    NewValue = IssueStatus.Deleted.ToString(),
+                    Timestamp = now
+                }
+            ]
+        };
+
+        await changeService.AddAsync(changeRecord, cancellationToken);
+
         return true;
     }
 

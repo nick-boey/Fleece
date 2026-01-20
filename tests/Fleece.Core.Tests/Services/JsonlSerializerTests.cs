@@ -164,32 +164,40 @@ public class JsonlSerializerTests
     }
 
     [Test]
-    public void SerializeConflict_ReturnsValidJson()
+    public void SerializeChange_ReturnsValidJson()
     {
-        var older = new IssueBuilder().WithId("abc123").WithTitle("Old").Build();
-        var newer = new IssueBuilder().WithId("abc123").WithTitle("New").Build();
-        var conflict = new ConflictRecord
+        var change = new ChangeRecord
         {
-            ConflictId = Guid.Parse("12345678-1234-1234-1234-123456789012"),
+            ChangeId = Guid.Parse("12345678-1234-1234-1234-123456789012"),
             IssueId = "abc123",
-            OlderVersion = older,
-            NewerVersion = newer,
-            DetectedAt = new DateTimeOffset(2024, 6, 15, 12, 0, 0, TimeSpan.Zero)
+            Type = ChangeType.Created,
+            ChangedBy = "Test User",
+            ChangedAt = new DateTimeOffset(2024, 6, 15, 12, 0, 0, TimeSpan.Zero),
+            PropertyChanges =
+            [
+                new PropertyChange
+                {
+                    PropertyName = "Title",
+                    OldValue = null,
+                    NewValue = "Test Issue",
+                    Timestamp = new DateTimeOffset(2024, 6, 15, 12, 0, 0, TimeSpan.Zero)
+                }
+            ]
         };
 
-        var result = _sut.SerializeConflict(conflict);
+        var result = _sut.SerializeChange(change);
 
-        result.Should().Contain("\"conflictId\"");
+        result.Should().Contain("\"changeId\"");
         result.Should().Contain("\"issueId\":\"abc123\"");
         result.Should().NotContain("\n");
     }
 
     [Test]
-    public void DeserializeConflicts_ParsesMultipleLines()
+    public void DeserializeChanges_ParsesMultipleLines()
     {
-        var content = "{\"conflictId\":\"12345678-1234-1234-1234-123456789012\",\"issueId\":\"abc123\",\"olderVersion\":{\"id\":\"abc123\",\"title\":\"Old\",\"status\":\"Open\",\"type\":\"Task\",\"lastUpdate\":\"2024-01-15T10:00:00+00:00\"},\"newerVersion\":{\"id\":\"abc123\",\"title\":\"New\",\"status\":\"Open\",\"type\":\"Task\",\"lastUpdate\":\"2024-01-15T11:00:00+00:00\"},\"detectedAt\":\"2024-01-15T12:00:00+00:00\"}";
+        var content = "{\"changeId\":\"12345678-1234-1234-1234-123456789012\",\"issueId\":\"abc123\",\"type\":\"Created\",\"changedBy\":\"Test User\",\"changedAt\":\"2024-01-15T12:00:00+00:00\",\"propertyChanges\":[]}";
 
-        var result = _sut.DeserializeConflicts(content);
+        var result = _sut.DeserializeChanges(content);
 
         result.Should().HaveCount(1);
         result[0].IssueId.Should().Be("abc123");

@@ -10,12 +10,13 @@ namespace Fleece.Core.Serialization;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     UseStringEnumConverter = true)]
 [JsonSerializable(typeof(Issue))]
-[JsonSerializable(typeof(ConflictRecord))]
-[JsonSerializable(typeof(PropertyConflict))]
+[JsonSerializable(typeof(ChangeRecord))]
+[JsonSerializable(typeof(PropertyChange))]
+[JsonSerializable(typeof(ChangeType))]
 [JsonSerializable(typeof(MergeResult))]
 [JsonSerializable(typeof(IReadOnlyList<Issue>))]
-[JsonSerializable(typeof(IReadOnlyList<ConflictRecord>))]
-[JsonSerializable(typeof(IReadOnlyList<PropertyConflict>))]
+[JsonSerializable(typeof(IReadOnlyList<ChangeRecord>))]
+[JsonSerializable(typeof(IReadOnlyList<PropertyChange>))]
 public partial class FleeceJsonContext : JsonSerializerContext
 {
 }
