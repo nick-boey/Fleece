@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIdGenerator, Sha256IdGenerator>();
         services.AddSingleton<IStorageService>(sp =>
             new JsonlStorageService(basePath, sp.GetRequiredService<IJsonlSerializer>()));
+        services.AddSingleton<IGitConfigService, GitConfigService>();
         services.AddSingleton<IIssueService, IssueService>();
         services.AddSingleton<IConflictService, ConflictService>();
         services.AddSingleton<IMergeService, MergeService>();

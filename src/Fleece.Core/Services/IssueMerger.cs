@@ -83,6 +83,26 @@ public sealed class IssueMerger
             conflicts.Add(parentIssuesConflict);
         }
 
+        // Merge Group
+        var (group, groupTimestamp, groupConflict) = MergeNullableProperty(
+            "Group", issueA.Group, issueA.GroupLastUpdate, issueB.Group, issueB.GroupLastUpdate);
+        if (groupConflict is not null)
+        {
+            conflicts.Add(groupConflict);
+        }
+
+        // Merge AssignedTo
+        var (assignedTo, assignedToTimestamp, assignedToConflict) = MergeNullableProperty(
+            "AssignedTo", issueA.AssignedTo, issueA.AssignedToLastUpdate, issueB.AssignedTo, issueB.AssignedToLastUpdate);
+        if (assignedToConflict is not null)
+        {
+            conflicts.Add(assignedToConflict);
+        }
+
+        // Merge CreatedBy - keep oldest non-null value (creator never changes)
+        var (createdBy, createdByTimestamp) = MergeCreatedBy(
+            issueA.CreatedBy, issueA.CreatedByLastUpdate, issueB.CreatedBy, issueB.CreatedByLastUpdate);
+
         // Use the older CreatedAt
         var createdAt = issueA.CreatedAt < issueB.CreatedAt ? issueA.CreatedAt : issueB.CreatedAt;
         if (issueA.CreatedAt == default)
@@ -117,6 +137,12 @@ public sealed class IssueMerger
             LinkedIssuesLastUpdate = linkedIssuesTimestamp,
             ParentIssues = parentIssues,
             ParentIssuesLastUpdate = parentIssuesTimestamp,
+            Group = group,
+            GroupLastUpdate = groupTimestamp,
+            AssignedTo = assignedTo,
+            AssignedToLastUpdate = assignedToTimestamp,
+            CreatedBy = createdBy,
+            CreatedByLastUpdate = createdByTimestamp,
             LastUpdate = lastUpdate,
             CreatedAt = createdAt
         };
@@ -232,5 +258,37 @@ public sealed class IssueMerger
         };
 
         return (union, newerTimestamp, conflict);
+    }
+
+    private static (string? Value, DateTimeOffset? Timestamp) MergeCreatedBy(
+        string? valueA, DateTimeOffset? timestampA,
+        string? valueB, DateTimeOffset? timestampB)
+    {
+        // Keep oldest non-null value (creator never changes)
+        if (valueA is null && valueB is null)
+        {
+            return (null, null);
+        }
+
+        if (valueA is null)
+        {
+            return (valueB, timestampB);
+        }
+
+        if (valueB is null)
+        {
+            return (valueA, timestampA);
+        }
+
+        // Both have values - keep the oldest (earliest timestamp)
+        var effectiveTimestampA = timestampA ?? DateTimeOffset.MaxValue;
+        var effectiveTimestampB = timestampB ?? DateTimeOffset.MaxValue;
+
+        if (effectiveTimestampA <= effectiveTimestampB)
+        {
+            return (valueA, timestampA);
+        }
+
+        return (valueB, timestampB);
     }
 }

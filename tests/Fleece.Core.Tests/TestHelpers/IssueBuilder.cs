@@ -13,6 +13,9 @@ public class IssueBuilder
     private IReadOnlyList<string> _linkedIssues = [];
     private IReadOnlyList<string> _parentIssues = [];
     private int? _priority;
+    private string? _group;
+    private string? _assignedTo;
+    private string? _createdBy;
     private DateTimeOffset _lastUpdate = DateTimeOffset.UtcNow;
     private DateTimeOffset _createdAt = DateTimeOffset.UtcNow;
 
@@ -70,6 +73,24 @@ public class IssueBuilder
         return this;
     }
 
+    public IssueBuilder WithGroup(string? group)
+    {
+        _group = group;
+        return this;
+    }
+
+    public IssueBuilder WithAssignedTo(string? assignedTo)
+    {
+        _assignedTo = assignedTo;
+        return this;
+    }
+
+    public IssueBuilder WithCreatedBy(string? createdBy)
+    {
+        _createdBy = createdBy;
+        return this;
+    }
+
     public IssueBuilder WithLastUpdate(DateTimeOffset lastUpdate)
     {
         _lastUpdate = lastUpdate;
@@ -101,6 +122,12 @@ public class IssueBuilder
         ParentIssuesLastUpdate = _lastUpdate,
         Priority = _priority,
         PriorityLastUpdate = _priority is not null ? _lastUpdate : null,
+        Group = _group,
+        GroupLastUpdate = _group is not null ? _lastUpdate : null,
+        AssignedTo = _assignedTo,
+        AssignedToLastUpdate = _assignedTo is not null ? _lastUpdate : null,
+        CreatedBy = _createdBy,
+        CreatedByLastUpdate = _createdBy is not null ? _lastUpdate : null,
         LastUpdate = _lastUpdate,
         CreatedAt = _createdAt
     };

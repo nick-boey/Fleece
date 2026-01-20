@@ -33,7 +33,7 @@ public sealed class ListCommand(IIssueService issueService) : AsyncCommand<ListS
             type = parsedType;
         }
 
-        var issues = await issueService.FilterAsync(status, type, settings.Priority);
+        var issues = await issueService.FilterAsync(status, type, settings.Priority, settings.Group, settings.AssignedTo);
 
         if (settings.Json)
         {

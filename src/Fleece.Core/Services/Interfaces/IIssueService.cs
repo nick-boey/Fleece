@@ -13,6 +13,8 @@ public interface IIssueService
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
         IReadOnlyList<string>? parentIssues = null,
+        string? group = null,
+        string? assignedTo = null,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<Issue>> GetAllAsync(CancellationToken cancellationToken = default);
@@ -29,6 +31,8 @@ public interface IIssueService
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
         IReadOnlyList<string>? parentIssues = null,
+        string? group = null,
+        string? assignedTo = null,
         CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default);
@@ -39,5 +43,7 @@ public interface IIssueService
         IssueStatus? status = null,
         IssueType? type = null,
         int? priority = null,
+        string? group = null,
+        string? assignedTo = null,
         CancellationToken cancellationToken = default);
 }

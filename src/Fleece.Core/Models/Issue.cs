@@ -28,6 +28,15 @@ public sealed record Issue
     public int? Priority { get; init; }
     public DateTimeOffset? PriorityLastUpdate { get; init; }
 
+    public string? Group { get; init; }
+    public DateTimeOffset? GroupLastUpdate { get; init; }
+
+    public string? AssignedTo { get; init; }
+    public DateTimeOffset? AssignedToLastUpdate { get; init; }
+
+    public string? CreatedBy { get; init; }
+    public DateTimeOffset? CreatedByLastUpdate { get; init; }
+
     public required DateTimeOffset LastUpdate { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
 }

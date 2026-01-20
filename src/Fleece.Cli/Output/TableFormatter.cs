@@ -21,6 +21,8 @@ public static class TableFormatter
         table.AddColumn(new TableColumn("Type").Centered());
         table.AddColumn(new TableColumn("Status").Centered());
         table.AddColumn(new TableColumn("Pri").Centered());
+        table.AddColumn(new TableColumn("Group").Centered());
+        table.AddColumn(new TableColumn("Assigned").Centered());
         table.AddColumn(new TableColumn("Updated").Centered());
 
         foreach (var issue in issues)
@@ -45,6 +47,8 @@ public static class TableFormatter
             };
 
             var priDisplay = issue.Priority?.ToString() ?? "-";
+            var groupDisplay = issue.Group ?? "-";
+            var assignedDisplay = issue.AssignedTo ?? "-";
 
             table.AddRow(
                 $"[bold]{issue.Id}[/]",
@@ -52,6 +56,8 @@ public static class TableFormatter
                 $"[{typeColor}]{issue.Type}[/]",
                 $"[{statusColor}]{issue.Status}[/]",
                 priDisplay,
+                Markup.Escape(groupDisplay),
+                Markup.Escape(assignedDisplay),
                 issue.LastUpdate.ToString("yyyy-MM-dd")
             );
         }
@@ -102,6 +108,21 @@ public static class TableFormatter
         if (issue.ParentIssues.Count > 0)
         {
             lines.Add($"[bold]Parent Issues:[/] {string.Join(", ", issue.ParentIssues)}");
+        }
+
+        if (!string.IsNullOrEmpty(issue.Group))
+        {
+            lines.Add($"[bold]Group:[/] {Markup.Escape(issue.Group)}");
+        }
+
+        if (!string.IsNullOrEmpty(issue.AssignedTo))
+        {
+            lines.Add($"[bold]Assigned To:[/] {Markup.Escape(issue.AssignedTo)}");
+        }
+
+        if (!string.IsNullOrEmpty(issue.CreatedBy))
+        {
+            lines.Add($"[bold]Created By:[/] {Markup.Escape(issue.CreatedBy)}");
         }
 
         lines.Add($"[bold]Last Update:[/] {issue.LastUpdate:yyyy-MM-dd HH:mm:ss}");
