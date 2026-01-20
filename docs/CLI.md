@@ -244,6 +244,73 @@ fleece clear-conflicts abc123
 
 ---
 
+### history
+
+Show change history for issues with user attribution.
+
+```bash
+fleece history [issue_id] [options]
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `issue_id` | Optional issue ID to filter history |
+
+**Options:**
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--user` | `-u` | Filter by user name |
+| `--json` | | Output as JSON |
+
+**Examples:**
+```bash
+# Show all change history
+fleece history
+
+# Show history for specific issue
+fleece history abc123
+
+# Show changes by a specific user
+fleece history --user john
+
+# JSON output for scripting
+fleece history --json
+
+# Combine filters
+fleece history abc123 --user john --json
+```
+
+---
+
+### migrate
+
+Migrate issues to property-level timestamps format. This command updates older issue files to use the newer format that tracks timestamps at the property level.
+
+```bash
+fleece migrate [options]
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--dry-run` | Check if migration is needed without making changes |
+| `--json` | Output as JSON |
+
+**Examples:**
+```bash
+# Run migration
+fleece migrate
+
+# Preview migration (no changes made)
+fleece migrate --dry-run
+
+# JSON output
+fleece migrate --json
+```
+
+---
+
 ### install
 
 Install Claude Code hooks for automatic issue management.
