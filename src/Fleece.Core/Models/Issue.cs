@@ -6,33 +6,43 @@ public sealed record Issue
 
     public required string Title { get; init; }
     public DateTimeOffset TitleLastUpdate { get; init; }
+    public string? TitleModifiedBy { get; init; }
 
     public string? Description { get; init; }
     public DateTimeOffset? DescriptionLastUpdate { get; init; }
+    public string? DescriptionModifiedBy { get; init; }
 
     public required IssueStatus Status { get; init; }
     public DateTimeOffset StatusLastUpdate { get; init; }
+    public string? StatusModifiedBy { get; init; }
 
     public required IssueType Type { get; init; }
     public DateTimeOffset TypeLastUpdate { get; init; }
+    public string? TypeModifiedBy { get; init; }
 
     public int? LinkedPR { get; init; }
     public DateTimeOffset? LinkedPRLastUpdate { get; init; }
+    public string? LinkedPRModifiedBy { get; init; }
 
     public IReadOnlyList<string> LinkedIssues { get; init; } = [];
     public DateTimeOffset LinkedIssuesLastUpdate { get; init; }
+    public string? LinkedIssuesModifiedBy { get; init; }
 
     public IReadOnlyList<string> ParentIssues { get; init; } = [];
     public DateTimeOffset ParentIssuesLastUpdate { get; init; }
+    public string? ParentIssuesModifiedBy { get; init; }
 
     public int? Priority { get; init; }
     public DateTimeOffset? PriorityLastUpdate { get; init; }
+    public string? PriorityModifiedBy { get; init; }
 
     public string? Group { get; init; }
     public DateTimeOffset? GroupLastUpdate { get; init; }
+    public string? GroupModifiedBy { get; init; }
 
     public string? AssignedTo { get; init; }
     public DateTimeOffset? AssignedToLastUpdate { get; init; }
+    public string? AssignedToModifiedBy { get; init; }
 
     public string? CreatedBy { get; init; }
     public DateTimeOffset? CreatedByLastUpdate { get; init; }

@@ -11,7 +11,7 @@ public sealed class JsonlStorageService : IStorageService
     private const string FleeceDirectory = ".fleece";
     private const string IssuesFileName = "issues.jsonl";
     private const string IssuesFilePattern = "issues*.jsonl";
-    private const string ConflictsFileName = "conflicts.jsonl";
+    private const string ChangesFileName = "changes.jsonl";
     private const int HashLength = 6;
 
     private readonly string _basePath;
@@ -26,7 +26,7 @@ public sealed class JsonlStorageService : IStorageService
 
     private string FleeceDirectoryPath => Path.Combine(_basePath, FleeceDirectory);
     private string IssuesFilePath => Path.Combine(FleeceDirectoryPath, IssuesFileName);
-    private string ConflictsFilePath => Path.Combine(FleeceDirectoryPath, ConflictsFileName);
+    private string ChangesFilePath => Path.Combine(FleeceDirectoryPath, ChangesFileName);
 
     public async Task EnsureDirectoryExistsAsync(CancellationToken cancellationToken = default)
     {
@@ -128,18 +128,18 @@ public sealed class JsonlStorageService : IStorageService
         }
     }
 
-    public async Task<IReadOnlyList<ConflictRecord>> LoadConflictsAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ChangeRecord>> LoadChangesAsync(CancellationToken cancellationToken = default)
     {
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            if (!File.Exists(ConflictsFilePath))
+            if (!File.Exists(ChangesFilePath))
             {
                 return [];
             }
 
-            var content = await File.ReadAllTextAsync(ConflictsFilePath, cancellationToken);
-            return _serializer.DeserializeConflicts(content);
+            var content = await File.ReadAllTextAsync(ChangesFilePath, cancellationToken);
+            return _serializer.DeserializeChanges(content);
         }
         finally
         {
@@ -147,15 +147,15 @@ public sealed class JsonlStorageService : IStorageService
         }
     }
 
-    public async Task SaveConflictsAsync(IReadOnlyList<ConflictRecord> conflicts, CancellationToken cancellationToken = default)
+    public async Task SaveChangesAsync(IReadOnlyList<ChangeRecord> changes, CancellationToken cancellationToken = default)
     {
         await _lock.WaitAsync(cancellationToken);
         try
         {
             await EnsureDirectoryExistsAsync(cancellationToken);
 
-            var lines = conflicts.Select(_serializer.SerializeConflict);
-            await File.WriteAllLinesAsync(ConflictsFilePath, lines, cancellationToken);
+            var lines = changes.Select(_serializer.SerializeChange);
+            await File.WriteAllLinesAsync(ChangesFilePath, lines, cancellationToken);
         }
         finally
         {
@@ -163,15 +163,15 @@ public sealed class JsonlStorageService : IStorageService
         }
     }
 
-    public async Task AppendConflictAsync(ConflictRecord conflict, CancellationToken cancellationToken = default)
+    public async Task AppendChangeAsync(ChangeRecord change, CancellationToken cancellationToken = default)
     {
         await _lock.WaitAsync(cancellationToken);
         try
         {
             await EnsureDirectoryExistsAsync(cancellationToken);
 
-            var line = _serializer.SerializeConflict(conflict) + Environment.NewLine;
-            await File.AppendAllTextAsync(ConflictsFilePath, line, cancellationToken);
+            var line = _serializer.SerializeChange(change) + Environment.NewLine;
+            await File.AppendAllTextAsync(ChangesFilePath, line, cancellationToken);
         }
         finally
         {

@@ -24,9 +24,9 @@ public static class JsonFormatter
         Console.WriteLine(json);
     }
 
-    public static void RenderConflicts(IReadOnlyList<ConflictRecord> conflicts)
+    public static void RenderChanges(IReadOnlyList<ChangeRecord> changes)
     {
-        var json = JsonSerializer.Serialize(conflicts, FleeceJsonContext.Default.IReadOnlyListConflictRecord);
+        var json = JsonSerializer.Serialize(changes, FleeceJsonContext.Default.IReadOnlyListChangeRecord);
         Console.WriteLine(json);
     }
 }

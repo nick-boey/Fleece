@@ -6,12 +6,13 @@ namespace Fleece.Core.Services;
 
 public sealed class MergeService(
     IStorageService storage,
-    IConflictService conflictService,
+    IChangeService changeService,
+    IGitConfigService gitConfigService,
     IJsonlSerializer serializer) : IMergeService
 {
     private readonly IssueMerger _merger = new();
 
-    public async Task<IReadOnlyList<ConflictRecord>> FindAndResolveDuplicatesAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ChangeRecord>> FindAndResolveDuplicatesAsync(CancellationToken cancellationToken = default)
     {
         // Load all issues from all issue files
         var allIssues = new List<Issue>();
@@ -23,7 +24,8 @@ public sealed class MergeService(
             allIssues.AddRange(issues);
         }
 
-        var conflicts = new List<ConflictRecord>();
+        var changeRecords = new List<ChangeRecord>();
+        var currentUser = gitConfigService.GetUserName();
 
         // Group by ID to find duplicates
         var grouped = allIssues.GroupBy(i => i.Id, StringComparer.OrdinalIgnoreCase);
@@ -37,38 +39,37 @@ public sealed class MergeService(
             {
                 // Merge all versions using property-level merging
                 var merged = versions[0];
-                var allPropertyConflicts = new List<PropertyConflict>();
+                var allPropertyChanges = new List<PropertyChange>();
 
                 for (var i = 1; i < versions.Count; i++)
                 {
-                    var mergeResult = _merger.Merge(merged, versions[i]);
+                    var mergeResult = _merger.Merge(merged, versions[i], currentUser);
                     merged = mergeResult.MergedIssue;
 
                     if (mergeResult.HadConflicts)
                     {
-                        allPropertyConflicts.AddRange(mergeResult.PropertyConflicts);
+                        allPropertyChanges.AddRange(mergeResult.PropertyChanges);
                     }
                 }
 
                 mergedIssues.Add(merged);
 
-                // Record conflict with property-level details
-                var oldest = versions.OrderBy(v => v.LastUpdate).First();
-                var newest = versions.OrderByDescending(v => v.LastUpdate).First();
-
-                var conflict = new ConflictRecord
+                // Record merge change with property-level details
+                if (allPropertyChanges.Count > 0)
                 {
-                    ConflictId = Guid.NewGuid(),
-                    IssueId = group.Key,
-                    OlderVersion = oldest,
-                    NewerVersion = newest,
-                    DetectedAt = DateTimeOffset.UtcNow,
-                    PropertyConflicts = allPropertyConflicts,
-                    MergedResult = merged
-                };
+                    var changeRecord = new ChangeRecord
+                    {
+                        ChangeId = Guid.NewGuid(),
+                        IssueId = group.Key,
+                        Type = ChangeType.Merged,
+                        ChangedBy = currentUser ?? "unknown",
+                        ChangedAt = DateTimeOffset.UtcNow,
+                        PropertyChanges = allPropertyChanges
+                    };
 
-                conflicts.Add(conflict);
-                await conflictService.AddAsync(conflict, cancellationToken);
+                    changeRecords.Add(changeRecord);
+                    await changeService.AddAsync(changeRecord, cancellationToken);
+                }
             }
             else
             {
@@ -89,7 +90,7 @@ public sealed class MergeService(
             await storage.SaveIssuesWithHashAsync(mergedIssues, cancellationToken);
         }
 
-        return conflicts;
+        return changeRecords;
     }
 
     public async Task<IReadOnlyList<(Issue, Issue)>> CompareFilesAsync(

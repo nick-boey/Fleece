@@ -11,92 +11,103 @@ public sealed class IssueMerger
     /// Merges two versions of the same issue, keeping the newer value for each property.
     /// Collections (LinkedIssues, ParentIssues) use union strategy.
     /// </summary>
-    public MergeResult Merge(Issue issueA, Issue issueB)
+    public MergeResult Merge(Issue issueA, Issue issueB, string? mergedBy = null)
     {
         if (!issueA.Id.Equals(issueB.Id, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException($"Cannot merge issues with different IDs: '{issueA.Id}' and '{issueB.Id}'");
         }
 
-        var conflicts = new List<PropertyConflict>();
+        var changes = new List<PropertyChange>();
+        var now = DateTimeOffset.UtcNow;
 
         // Merge Title
-        var (title, titleTimestamp, titleConflict) = MergeProperty(
-            "Title", issueA.Title, issueA.TitleLastUpdate, issueB.Title, issueB.TitleLastUpdate);
-        if (titleConflict is not null)
+        var (title, titleTimestamp, titleModifiedBy, titleChange) = MergeProperty(
+            "Title", issueA.Title, issueA.TitleLastUpdate, issueA.TitleModifiedBy,
+            issueB.Title, issueB.TitleLastUpdate, issueB.TitleModifiedBy, mergedBy, now);
+        if (titleChange is not null)
         {
-            conflicts.Add(titleConflict);
+            changes.Add(titleChange);
         }
 
         // Merge Description
-        var (description, descriptionTimestamp, descriptionConflict) = MergeNullableProperty(
-            "Description", issueA.Description, issueA.DescriptionLastUpdate, issueB.Description, issueB.DescriptionLastUpdate);
-        if (descriptionConflict is not null)
+        var (description, descriptionTimestamp, descriptionModifiedBy, descriptionChange) = MergeNullableProperty(
+            "Description", issueA.Description, issueA.DescriptionLastUpdate, issueA.DescriptionModifiedBy,
+            issueB.Description, issueB.DescriptionLastUpdate, issueB.DescriptionModifiedBy, mergedBy, now);
+        if (descriptionChange is not null)
         {
-            conflicts.Add(descriptionConflict);
+            changes.Add(descriptionChange);
         }
 
         // Merge Status
-        var (status, statusTimestamp, statusConflict) = MergeProperty(
-            "Status", issueA.Status, issueA.StatusLastUpdate, issueB.Status, issueB.StatusLastUpdate);
-        if (statusConflict is not null)
+        var (status, statusTimestamp, statusModifiedBy, statusChange) = MergeProperty(
+            "Status", issueA.Status, issueA.StatusLastUpdate, issueA.StatusModifiedBy,
+            issueB.Status, issueB.StatusLastUpdate, issueB.StatusModifiedBy, mergedBy, now);
+        if (statusChange is not null)
         {
-            conflicts.Add(statusConflict);
+            changes.Add(statusChange);
         }
 
         // Merge Type
-        var (type, typeTimestamp, typeConflict) = MergeProperty(
-            "Type", issueA.Type, issueA.TypeLastUpdate, issueB.Type, issueB.TypeLastUpdate);
-        if (typeConflict is not null)
+        var (type, typeTimestamp, typeModifiedBy, typeChange) = MergeProperty(
+            "Type", issueA.Type, issueA.TypeLastUpdate, issueA.TypeModifiedBy,
+            issueB.Type, issueB.TypeLastUpdate, issueB.TypeModifiedBy, mergedBy, now);
+        if (typeChange is not null)
         {
-            conflicts.Add(typeConflict);
+            changes.Add(typeChange);
         }
 
         // Merge Priority
-        var (priority, priorityTimestamp, priorityConflict) = MergeNullableProperty(
-            "Priority", issueA.Priority, issueA.PriorityLastUpdate, issueB.Priority, issueB.PriorityLastUpdate);
-        if (priorityConflict is not null)
+        var (priority, priorityTimestamp, priorityModifiedBy, priorityChange) = MergeNullableProperty(
+            "Priority", issueA.Priority, issueA.PriorityLastUpdate, issueA.PriorityModifiedBy,
+            issueB.Priority, issueB.PriorityLastUpdate, issueB.PriorityModifiedBy, mergedBy, now);
+        if (priorityChange is not null)
         {
-            conflicts.Add(priorityConflict);
+            changes.Add(priorityChange);
         }
 
         // Merge LinkedPR
-        var (linkedPR, linkedPRTimestamp, linkedPRConflict) = MergeNullableProperty(
-            "LinkedPR", issueA.LinkedPR, issueA.LinkedPRLastUpdate, issueB.LinkedPR, issueB.LinkedPRLastUpdate);
-        if (linkedPRConflict is not null)
+        var (linkedPR, linkedPRTimestamp, linkedPRModifiedBy, linkedPRChange) = MergeNullableProperty(
+            "LinkedPR", issueA.LinkedPR, issueA.LinkedPRLastUpdate, issueA.LinkedPRModifiedBy,
+            issueB.LinkedPR, issueB.LinkedPRLastUpdate, issueB.LinkedPRModifiedBy, mergedBy, now);
+        if (linkedPRChange is not null)
         {
-            conflicts.Add(linkedPRConflict);
+            changes.Add(linkedPRChange);
         }
 
         // Merge collections with union strategy
-        var (linkedIssues, linkedIssuesTimestamp, linkedIssuesConflict) = MergeCollections(
-            "LinkedIssues", issueA.LinkedIssues, issueA.LinkedIssuesLastUpdate, issueB.LinkedIssues, issueB.LinkedIssuesLastUpdate);
-        if (linkedIssuesConflict is not null)
+        var (linkedIssues, linkedIssuesTimestamp, linkedIssuesModifiedBy, linkedIssuesChange) = MergeCollections(
+            "LinkedIssues", issueA.LinkedIssues, issueA.LinkedIssuesLastUpdate, issueA.LinkedIssuesModifiedBy,
+            issueB.LinkedIssues, issueB.LinkedIssuesLastUpdate, issueB.LinkedIssuesModifiedBy, mergedBy, now);
+        if (linkedIssuesChange is not null)
         {
-            conflicts.Add(linkedIssuesConflict);
+            changes.Add(linkedIssuesChange);
         }
 
-        var (parentIssues, parentIssuesTimestamp, parentIssuesConflict) = MergeCollections(
-            "ParentIssues", issueA.ParentIssues, issueA.ParentIssuesLastUpdate, issueB.ParentIssues, issueB.ParentIssuesLastUpdate);
-        if (parentIssuesConflict is not null)
+        var (parentIssues, parentIssuesTimestamp, parentIssuesModifiedBy, parentIssuesChange) = MergeCollections(
+            "ParentIssues", issueA.ParentIssues, issueA.ParentIssuesLastUpdate, issueA.ParentIssuesModifiedBy,
+            issueB.ParentIssues, issueB.ParentIssuesLastUpdate, issueB.ParentIssuesModifiedBy, mergedBy, now);
+        if (parentIssuesChange is not null)
         {
-            conflicts.Add(parentIssuesConflict);
+            changes.Add(parentIssuesChange);
         }
 
         // Merge Group
-        var (group, groupTimestamp, groupConflict) = MergeNullableProperty(
-            "Group", issueA.Group, issueA.GroupLastUpdate, issueB.Group, issueB.GroupLastUpdate);
-        if (groupConflict is not null)
+        var (group, groupTimestamp, groupModifiedBy, groupChange) = MergeNullableProperty(
+            "Group", issueA.Group, issueA.GroupLastUpdate, issueA.GroupModifiedBy,
+            issueB.Group, issueB.GroupLastUpdate, issueB.GroupModifiedBy, mergedBy, now);
+        if (groupChange is not null)
         {
-            conflicts.Add(groupConflict);
+            changes.Add(groupChange);
         }
 
         // Merge AssignedTo
-        var (assignedTo, assignedToTimestamp, assignedToConflict) = MergeNullableProperty(
-            "AssignedTo", issueA.AssignedTo, issueA.AssignedToLastUpdate, issueB.AssignedTo, issueB.AssignedToLastUpdate);
-        if (assignedToConflict is not null)
+        var (assignedTo, assignedToTimestamp, assignedToModifiedBy, assignedToChange) = MergeNullableProperty(
+            "AssignedTo", issueA.AssignedTo, issueA.AssignedToLastUpdate, issueA.AssignedToModifiedBy,
+            issueB.AssignedTo, issueB.AssignedToLastUpdate, issueB.AssignedToModifiedBy, mergedBy, now);
+        if (assignedToChange is not null)
         {
-            conflicts.Add(assignedToConflict);
+            changes.Add(assignedToChange);
         }
 
         // Merge CreatedBy - keep oldest non-null value (creator never changes)
@@ -123,24 +134,34 @@ public sealed class IssueMerger
             Id = issueA.Id,
             Title = title,
             TitleLastUpdate = titleTimestamp,
+            TitleModifiedBy = titleModifiedBy,
             Description = description,
             DescriptionLastUpdate = descriptionTimestamp,
+            DescriptionModifiedBy = descriptionModifiedBy,
             Status = status,
             StatusLastUpdate = statusTimestamp,
+            StatusModifiedBy = statusModifiedBy,
             Type = type,
             TypeLastUpdate = typeTimestamp,
+            TypeModifiedBy = typeModifiedBy,
             Priority = priority,
             PriorityLastUpdate = priorityTimestamp,
+            PriorityModifiedBy = priorityModifiedBy,
             LinkedPR = linkedPR,
             LinkedPRLastUpdate = linkedPRTimestamp,
+            LinkedPRModifiedBy = linkedPRModifiedBy,
             LinkedIssues = linkedIssues,
             LinkedIssuesLastUpdate = linkedIssuesTimestamp,
+            LinkedIssuesModifiedBy = linkedIssuesModifiedBy,
             ParentIssues = parentIssues,
             ParentIssuesLastUpdate = parentIssuesTimestamp,
+            ParentIssuesModifiedBy = parentIssuesModifiedBy,
             Group = group,
             GroupLastUpdate = groupTimestamp,
+            GroupModifiedBy = groupModifiedBy,
             AssignedTo = assignedTo,
             AssignedToLastUpdate = assignedToTimestamp,
+            AssignedToModifiedBy = assignedToModifiedBy,
             CreatedBy = createdBy,
             CreatedByLastUpdate = createdByTimestamp,
             LastUpdate = lastUpdate,
@@ -150,51 +171,53 @@ public sealed class IssueMerger
         return new MergeResult
         {
             MergedIssue = mergedIssue,
-            PropertyConflicts = conflicts
+            PropertyChanges = changes
         };
     }
 
-    private static (T Value, DateTimeOffset Timestamp, PropertyConflict? Conflict) MergeProperty<T>(
+    private static (T Value, DateTimeOffset Timestamp, string? ModifiedBy, PropertyChange? Change) MergeProperty<T>(
         string propertyName,
-        T valueA, DateTimeOffset timestampA,
-        T valueB, DateTimeOffset timestampB)
+        T valueA, DateTimeOffset timestampA, string? modifiedByA,
+        T valueB, DateTimeOffset timestampB, string? modifiedByB,
+        string? mergedBy, DateTimeOffset mergeTime)
         where T : notnull
     {
         // If values are equal, no conflict
         if (EqualityComparer<T>.Default.Equals(valueA, valueB))
         {
             var newerTimestamp = timestampA > timestampB ? timestampA : timestampB;
-            return (valueA, newerTimestamp, null);
+            var newerModifiedBy = timestampA > timestampB ? modifiedByA : modifiedByB;
+            return (valueA, newerTimestamp, newerModifiedBy, null);
         }
 
         // Values differ - use timestamp to decide winner
         var aWins = timestampA >= timestampB;
         var winner = aWins ? valueA : valueB;
         var winnerTimestamp = aWins ? timestampA : timestampB;
+        var winnerModifiedBy = mergedBy ?? (aWins ? modifiedByA : modifiedByB);
 
-        var conflict = new PropertyConflict
+        var change = new PropertyChange
         {
             PropertyName = propertyName,
-            ValueA = valueA?.ToString(),
-            TimestampA = timestampA,
-            ValueB = valueB?.ToString(),
-            TimestampB = timestampB,
-            ResolvedValue = winner?.ToString(),
-            Resolution = aWins ? "A" : "B"
+            OldValue = (aWins ? valueB : valueA)?.ToString(),
+            NewValue = winner?.ToString(),
+            Timestamp = mergeTime,
+            MergeResolution = aWins ? "A" : "B"
         };
 
-        return (winner, winnerTimestamp, conflict);
+        return (winner, winnerTimestamp, winnerModifiedBy, change);
     }
 
-    private static (T? Value, DateTimeOffset? Timestamp, PropertyConflict? Conflict) MergeNullableProperty<T>(
+    private static (T? Value, DateTimeOffset? Timestamp, string? ModifiedBy, PropertyChange? Change) MergeNullableProperty<T>(
         string propertyName,
-        T? valueA, DateTimeOffset? timestampA,
-        T? valueB, DateTimeOffset? timestampB)
+        T? valueA, DateTimeOffset? timestampA, string? modifiedByA,
+        T? valueB, DateTimeOffset? timestampB, string? modifiedByB,
+        string? mergedBy, DateTimeOffset mergeTime)
     {
         // If both are null, no conflict
         if (valueA is null && valueB is null)
         {
-            return (default, null, null);
+            return (default, null, null, null);
         }
 
         // If values are equal, no conflict
@@ -203,7 +226,10 @@ public sealed class IssueMerger
             var newerTimestamp = (timestampA ?? DateTimeOffset.MinValue) > (timestampB ?? DateTimeOffset.MinValue)
                 ? timestampA
                 : timestampB;
-            return (valueA, newerTimestamp, null);
+            var newerModifiedBy = (timestampA ?? DateTimeOffset.MinValue) > (timestampB ?? DateTimeOffset.MinValue)
+                ? modifiedByA
+                : modifiedByB;
+            return (valueA, newerTimestamp, newerModifiedBy, null);
         }
 
         // Values differ - use timestamp to decide winner
@@ -213,25 +239,25 @@ public sealed class IssueMerger
 
         var winner = aWins ? valueA : valueB;
         var winnerTimestamp = aWins ? timestampA : timestampB;
+        var winnerModifiedBy = mergedBy ?? (aWins ? modifiedByA : modifiedByB);
 
-        var conflict = new PropertyConflict
+        var change = new PropertyChange
         {
             PropertyName = propertyName,
-            ValueA = valueA?.ToString(),
-            TimestampA = timestampA,
-            ValueB = valueB?.ToString(),
-            TimestampB = timestampB,
-            ResolvedValue = winner?.ToString(),
-            Resolution = aWins ? "A" : "B"
+            OldValue = (aWins ? valueB : valueA)?.ToString(),
+            NewValue = winner?.ToString(),
+            Timestamp = mergeTime,
+            MergeResolution = aWins ? "A" : "B"
         };
 
-        return (winner, winnerTimestamp, conflict);
+        return (winner, winnerTimestamp, winnerModifiedBy, change);
     }
 
-    private static (IReadOnlyList<string> Value, DateTimeOffset Timestamp, PropertyConflict? Conflict) MergeCollections(
+    private static (IReadOnlyList<string> Value, DateTimeOffset Timestamp, string? ModifiedBy, PropertyChange? Change) MergeCollections(
         string propertyName,
-        IReadOnlyList<string> listA, DateTimeOffset timestampA,
-        IReadOnlyList<string> listB, DateTimeOffset timestampB)
+        IReadOnlyList<string> listA, DateTimeOffset timestampA, string? modifiedByA,
+        IReadOnlyList<string> listB, DateTimeOffset timestampB, string? modifiedByB,
+        string? mergedBy, DateTimeOffset mergeTime)
     {
         // Union strategy: combine both lists
         var union = listA.Union(listB, StringComparer.OrdinalIgnoreCase).ToList();
@@ -243,21 +269,20 @@ public sealed class IssueMerger
 
         if (setA.SetEquals(setB))
         {
-            return (union, newerTimestamp, null);
+            var modifiedBy = timestampA > timestampB ? modifiedByA : modifiedByB;
+            return (union, newerTimestamp, modifiedBy, null);
         }
 
-        var conflict = new PropertyConflict
+        var change = new PropertyChange
         {
             PropertyName = propertyName,
-            ValueA = string.Join(", ", listA),
-            TimestampA = timestampA,
-            ValueB = string.Join(", ", listB),
-            TimestampB = timestampB,
-            ResolvedValue = string.Join(", ", union),
-            Resolution = "Union"
+            OldValue = $"A: [{string.Join(", ", listA)}], B: [{string.Join(", ", listB)}]",
+            NewValue = string.Join(", ", union),
+            Timestamp = mergeTime,
+            MergeResolution = "Union"
         };
 
-        return (union, newerTimestamp, conflict);
+        return (union, newerTimestamp, mergedBy ?? (timestampA > timestampB ? modifiedByA : modifiedByB), change);
     }
 
     private static (string? Value, DateTimeOffset? Timestamp) MergeCreatedBy(

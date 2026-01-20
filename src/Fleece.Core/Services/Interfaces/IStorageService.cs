@@ -7,9 +7,9 @@ public interface IStorageService
     Task<IReadOnlyList<Issue>> LoadIssuesAsync(CancellationToken cancellationToken = default);
     Task SaveIssuesAsync(IReadOnlyList<Issue> issues, CancellationToken cancellationToken = default);
     Task AppendIssueAsync(Issue issue, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<ConflictRecord>> LoadConflictsAsync(CancellationToken cancellationToken = default);
-    Task SaveConflictsAsync(IReadOnlyList<ConflictRecord> conflicts, CancellationToken cancellationToken = default);
-    Task AppendConflictAsync(ConflictRecord conflict, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ChangeRecord>> LoadChangesAsync(CancellationToken cancellationToken = default);
+    Task SaveChangesAsync(IReadOnlyList<ChangeRecord> changes, CancellationToken cancellationToken = default);
+    Task AppendChangeAsync(ChangeRecord change, CancellationToken cancellationToken = default);
     Task EnsureDirectoryExistsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>

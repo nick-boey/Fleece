@@ -4,6 +4,6 @@ namespace Fleece.Core.Services.Interfaces;
 
 public interface IMergeService
 {
-    Task<IReadOnlyList<ConflictRecord>> FindAndResolveDuplicatesAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ChangeRecord>> FindAndResolveDuplicatesAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<(Issue, Issue)>> CompareFilesAsync(string file1Path, string file2Path, CancellationToken cancellationToken = default);
 }
