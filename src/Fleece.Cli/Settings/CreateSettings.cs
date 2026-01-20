@@ -37,6 +37,14 @@ public sealed class CreateSettings : CommandSettings
     [Description("Comma-separated parent issue IDs")]
     public string? ParentIssues { get; init; }
 
+    [CommandOption("-g|--group <GROUP>")]
+    [Description("Issue group for categorization")]
+    public string? Group { get; init; }
+
+    [CommandOption("-a|--assign <USER>")]
+    [Description("Username to assign the issue to")]
+    public string? AssignedTo { get; init; }
+
     [CommandOption("--json")]
     [Description("Output as JSON")]
     public bool Json { get; init; }

@@ -9,50 +9,84 @@ public sealed class MergeService(
     IConflictService conflictService,
     IJsonlSerializer serializer) : IMergeService
 {
+    private readonly IssueMerger _merger = new();
+
     public async Task<IReadOnlyList<ConflictRecord>> FindAndResolveDuplicatesAsync(CancellationToken cancellationToken = default)
     {
-        var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
+        // Load all issues from all issue files
+        var allIssues = new List<Issue>();
+        var issueFiles = await storage.GetAllIssueFilesAsync(cancellationToken);
+
+        foreach (var file in issueFiles)
+        {
+            var issues = await storage.LoadIssuesFromFileAsync(file, cancellationToken);
+            allIssues.AddRange(issues);
+        }
+
         var conflicts = new List<ConflictRecord>();
 
         // Group by ID to find duplicates
-        var grouped = issues.GroupBy(i => i.Id, StringComparer.OrdinalIgnoreCase);
-        var deduped = new List<Issue>();
+        var grouped = allIssues.GroupBy(i => i.Id, StringComparer.OrdinalIgnoreCase);
+        var mergedIssues = new List<Issue>();
 
         foreach (var group in grouped)
         {
-            var sorted = group.OrderByDescending(i => i.LastUpdate).ToList();
+            var versions = group.ToList();
 
-            if (sorted.Count > 1)
+            if (versions.Count > 1)
             {
-                // Keep the newest, move others to conflicts
-                var newest = sorted[0];
-                deduped.Add(newest);
+                // Merge all versions using property-level merging
+                var merged = versions[0];
+                var allPropertyConflicts = new List<PropertyConflict>();
 
-                for (var i = 1; i < sorted.Count; i++)
+                for (var i = 1; i < versions.Count; i++)
                 {
-                    var older = sorted[i];
-                    var conflict = new ConflictRecord
-                    {
-                        ConflictId = Guid.NewGuid(),
-                        IssueId = group.Key,
-                        OlderVersion = older,
-                        NewerVersion = newest,
-                        DetectedAt = DateTimeOffset.UtcNow
-                    };
+                    var mergeResult = _merger.Merge(merged, versions[i]);
+                    merged = mergeResult.MergedIssue;
 
-                    conflicts.Add(conflict);
-                    await conflictService.AddAsync(conflict, cancellationToken);
+                    if (mergeResult.HadConflicts)
+                    {
+                        allPropertyConflicts.AddRange(mergeResult.PropertyConflicts);
+                    }
                 }
+
+                mergedIssues.Add(merged);
+
+                // Record conflict with property-level details
+                var oldest = versions.OrderBy(v => v.LastUpdate).First();
+                var newest = versions.OrderByDescending(v => v.LastUpdate).First();
+
+                var conflict = new ConflictRecord
+                {
+                    ConflictId = Guid.NewGuid(),
+                    IssueId = group.Key,
+                    OlderVersion = oldest,
+                    NewerVersion = newest,
+                    DetectedAt = DateTimeOffset.UtcNow,
+                    PropertyConflicts = allPropertyConflicts,
+                    MergedResult = merged
+                };
+
+                conflicts.Add(conflict);
+                await conflictService.AddAsync(conflict, cancellationToken);
             }
             else
             {
-                deduped.Add(sorted[0]);
+                mergedIssues.Add(versions[0]);
             }
         }
 
-        if (conflicts.Count > 0)
+        // Save merged issues and clean up old files
+        if (issueFiles.Count > 0)
         {
-            await storage.SaveIssuesAsync(deduped, cancellationToken);
+            // Delete all old issue files
+            foreach (var file in issueFiles)
+            {
+                await storage.DeleteIssueFileAsync(file, cancellationToken);
+            }
+
+            // Save consolidated issues with new hash
+            await storage.SaveIssuesWithHashAsync(mergedIssues, cancellationToken);
         }
 
         return conflicts;

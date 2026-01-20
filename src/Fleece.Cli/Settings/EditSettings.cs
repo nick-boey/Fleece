@@ -41,6 +41,14 @@ public sealed class EditSettings : CommandSettings
     [Description("Replace parent issue IDs (comma-separated)")]
     public string? ParentIssues { get; init; }
 
+    [CommandOption("-g|--group <GROUP>")]
+    [Description("New issue group")]
+    public string? Group { get; init; }
+
+    [CommandOption("-a|--assign <USER>")]
+    [Description("New assignee username")]
+    public string? AssignedTo { get; init; }
+
     [CommandOption("--json")]
     [Description("Output as JSON")]
     public bool Json { get; init; }

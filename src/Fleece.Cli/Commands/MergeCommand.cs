@@ -19,7 +19,7 @@ public sealed class MergeCommand(IMergeService mergeService) : AsyncCommand<Merg
 
         if (conflicts.Count == 0)
         {
-            AnsiConsole.MarkupLine("[green]No duplicates found.[/]");
+            AnsiConsole.MarkupLine("[green]No duplicates found. Issues are already consolidated.[/]");
             return 0;
         }
 
@@ -29,12 +29,15 @@ public sealed class MergeCommand(IMergeService mergeService) : AsyncCommand<Merg
         }
         else
         {
-            AnsiConsole.MarkupLine($"[yellow]Found {conflicts.Count} duplicate(s)[/]");
+            AnsiConsole.MarkupLine($"[yellow]Merged {conflicts.Count} issue(s) with property-level resolution[/]");
+            AnsiConsole.WriteLine();
             TableFormatter.RenderConflicts(conflicts);
 
             if (!settings.DryRun)
             {
-                AnsiConsole.MarkupLine("[green]Duplicates resolved. Older versions moved to conflicts.jsonl[/]");
+                AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLine("[green]Merge complete! Issues consolidated into single file.[/]");
+                AnsiConsole.MarkupLine("[dim]Conflict details logged to conflicts.jsonl[/]");
             }
         }
 

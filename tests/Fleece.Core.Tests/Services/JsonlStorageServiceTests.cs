@@ -59,9 +59,10 @@ public class JsonlStorageServiceTests
 
         await _sut.SaveIssuesAsync(issues);
 
-        var filePath = Path.Combine(_testDirectory, ".fleece", "issues.jsonl");
-        File.Exists(filePath).Should().BeTrue();
-        var lines = await File.ReadAllLinesAsync(filePath);
+        var fleeceDir = Path.Combine(_testDirectory, ".fleece");
+        var issueFiles = Directory.GetFiles(fleeceDir, "issues_*.jsonl");
+        issueFiles.Should().HaveCount(1);
+        var lines = await File.ReadAllLinesAsync(issueFiles[0]);
         lines.Should().HaveCount(2);
     }
 

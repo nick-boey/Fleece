@@ -3,7 +3,7 @@ using Fleece.Core.Services.Interfaces;
 
 namespace Fleece.Core.Services;
 
-public sealed class IssueService(IStorageService storage, IIdGenerator idGenerator) : IIssueService
+public sealed class IssueService(IStorageService storage, IIdGenerator idGenerator, IGitConfigService gitConfigService) : IIssueService
 {
     public async Task<Issue> CreateAsync(
         string title,
@@ -14,23 +14,42 @@ public sealed class IssueService(IStorageService storage, IIdGenerator idGenerat
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
         IReadOnlyList<string>? parentIssues = null,
+        string? group = null,
+        string? assignedTo = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
 
         var id = idGenerator.Generate(title);
+        var now = DateTimeOffset.UtcNow;
+        var createdBy = gitConfigService.GetUserName();
         var issue = new Issue
         {
             Id = id,
             Title = title,
+            TitleLastUpdate = now,
             Description = description,
+            DescriptionLastUpdate = description is not null ? now : null,
             Status = status,
+            StatusLastUpdate = now,
             Type = type,
+            TypeLastUpdate = now,
             Priority = priority,
+            PriorityLastUpdate = priority is not null ? now : null,
             LinkedPR = linkedPr,
+            LinkedPRLastUpdate = linkedPr is not null ? now : null,
             LinkedIssues = linkedIssues ?? [],
+            LinkedIssuesLastUpdate = now,
             ParentIssues = parentIssues ?? [],
-            LastUpdate = DateTimeOffset.UtcNow
+            ParentIssuesLastUpdate = now,
+            Group = group,
+            GroupLastUpdate = group is not null ? now : null,
+            AssignedTo = assignedTo,
+            AssignedToLastUpdate = assignedTo is not null ? now : null,
+            CreatedBy = createdBy,
+            CreatedByLastUpdate = createdBy is not null ? now : null,
+            LastUpdate = now,
+            CreatedAt = now
         };
 
         await storage.AppendIssueAsync(issue, cancellationToken);
@@ -58,6 +77,8 @@ public sealed class IssueService(IStorageService storage, IIdGenerator idGenerat
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
         IReadOnlyList<string>? parentIssues = null,
+        string? group = null,
+        string? assignedTo = null,
         CancellationToken cancellationToken = default)
     {
         var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
@@ -69,20 +90,36 @@ public sealed class IssueService(IStorageService storage, IIdGenerator idGenerat
         }
 
         var existing = issues[existingIndex];
+        var now = DateTimeOffset.UtcNow;
         var newId = title is not null ? idGenerator.Generate(title) : existing.Id;
 
         var updated = new Issue
         {
             Id = newId,
             Title = title ?? existing.Title,
+            TitleLastUpdate = title is not null ? now : existing.TitleLastUpdate,
             Description = description ?? existing.Description,
+            DescriptionLastUpdate = description is not null ? now : existing.DescriptionLastUpdate,
             Status = status ?? existing.Status,
+            StatusLastUpdate = status is not null ? now : existing.StatusLastUpdate,
             Type = type ?? existing.Type,
+            TypeLastUpdate = type is not null ? now : existing.TypeLastUpdate,
             Priority = priority ?? existing.Priority,
+            PriorityLastUpdate = priority is not null ? now : existing.PriorityLastUpdate,
             LinkedPR = linkedPr ?? existing.LinkedPR,
+            LinkedPRLastUpdate = linkedPr is not null ? now : existing.LinkedPRLastUpdate,
             LinkedIssues = linkedIssues ?? existing.LinkedIssues,
+            LinkedIssuesLastUpdate = linkedIssues is not null ? now : existing.LinkedIssuesLastUpdate,
             ParentIssues = parentIssues ?? existing.ParentIssues,
-            LastUpdate = DateTimeOffset.UtcNow
+            ParentIssuesLastUpdate = parentIssues is not null ? now : existing.ParentIssuesLastUpdate,
+            Group = group ?? existing.Group,
+            GroupLastUpdate = group is not null ? now : existing.GroupLastUpdate,
+            AssignedTo = assignedTo ?? existing.AssignedTo,
+            AssignedToLastUpdate = assignedTo is not null ? now : existing.AssignedToLastUpdate,
+            CreatedBy = existing.CreatedBy,
+            CreatedByLastUpdate = existing.CreatedByLastUpdate,
+            LastUpdate = now,
+            CreatedAt = existing.CreatedAt
         };
 
         issues[existingIndex] = updated;
@@ -102,10 +139,12 @@ public sealed class IssueService(IStorageService storage, IIdGenerator idGenerat
         }
 
         var existing = issues[existingIndex];
+        var now = DateTimeOffset.UtcNow;
         var deleted = existing with
         {
             Status = IssueStatus.Deleted,
-            LastUpdate = DateTimeOffset.UtcNow
+            StatusLastUpdate = now,
+            LastUpdate = now
         };
 
         issues[existingIndex] = deleted;
@@ -132,6 +171,8 @@ public sealed class IssueService(IStorageService storage, IIdGenerator idGenerat
         IssueStatus? status = null,
         IssueType? type = null,
         int? priority = null,
+        string? group = null,
+        string? assignedTo = null,
         CancellationToken cancellationToken = default)
     {
         var issues = await storage.LoadIssuesAsync(cancellationToken);
@@ -140,6 +181,8 @@ public sealed class IssueService(IStorageService storage, IIdGenerator idGenerat
             .Where(i => status is null || i.Status == status)
             .Where(i => type is null || i.Type == type)
             .Where(i => priority is null || i.Priority == priority)
+            .Where(i => group is null || string.Equals(i.Group, group, StringComparison.OrdinalIgnoreCase))
+            .Where(i => assignedTo is null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
             .ToList();
     }
 }

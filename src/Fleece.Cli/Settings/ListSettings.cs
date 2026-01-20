@@ -17,6 +17,14 @@ public sealed class ListSettings : CommandSettings
     [Description("Filter by priority")]
     public int? Priority { get; init; }
 
+    [CommandOption("-g|--group <GROUP>")]
+    [Description("Filter by group")]
+    public string? Group { get; init; }
+
+    [CommandOption("--assigned <USER>")]
+    [Description("Filter by assignee")]
+    public string? AssignedTo { get; init; }
+
     [CommandOption("--json")]
     [Description("Output as JSON")]
     public bool Json { get; init; }

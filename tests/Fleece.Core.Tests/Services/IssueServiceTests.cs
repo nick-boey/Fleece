@@ -13,6 +13,7 @@ public class IssueServiceTests
 {
     private IStorageService _storage = null!;
     private IIdGenerator _idGenerator = null!;
+    private IGitConfigService _gitConfigService = null!;
     private IssueService _sut = null!;
 
     [SetUp]
@@ -20,7 +21,9 @@ public class IssueServiceTests
     {
         _storage = Substitute.For<IStorageService>();
         _idGenerator = Substitute.For<IIdGenerator>();
-        _sut = new IssueService(_storage, _idGenerator);
+        _gitConfigService = Substitute.For<IGitConfigService>();
+        _gitConfigService.GetUserName().Returns("Test User");
+        _sut = new IssueService(_storage, _idGenerator, _gitConfigService);
     }
 
     [Test]
