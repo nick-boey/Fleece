@@ -33,31 +33,48 @@ public sealed class InstallCommand : Command<InstallSettings>
         // Add or update hooks
         var hooks = root["hooks"]?.AsObject() ?? new JsonObject();
 
-        // Add preToolUse hook for fleece prime
-        var preToolUseHooks = hooks["PreToolUse"]?.AsArray() ?? new JsonArray();
+        // Add SessionStart hook for fleece prime
+        var sessionStartHooks = hooks["SessionStart"]?.AsArray() ?? new JsonArray();
         var primeHook = new JsonObject
         {
-            ["matcher"] = "*",
-            ["hooks"] = new JsonArray { "fleece prime" }
+            ["hooks"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["type"] = "command",
+                    ["command"] = "fleece prime"
+                }
+            }
         };
 
         // Check if hook already exists
         var hasPrimeHook = false;
-        foreach (var hook in preToolUseHooks)
+        foreach (var hook in sessionStartHooks)
         {
-            if (hook?["hooks"]?.AsArray()?.Any(h => h?.ToString() == "fleece prime") == true)
+            var innerHooks = hook?["hooks"]?.AsArray();
+            if (innerHooks != null)
             {
-                hasPrimeHook = true;
+                foreach (var innerHook in innerHooks)
+                {
+                    if (innerHook?["command"]?.ToString() == "fleece prime")
+                    {
+                        hasPrimeHook = true;
+                        break;
+                    }
+                }
+            }
+            if (hasPrimeHook)
+            {
                 break;
             }
         }
 
         if (!hasPrimeHook)
         {
-            preToolUseHooks.Add(primeHook);
+            sessionStartHooks.Add(primeHook);
         }
 
-        hooks["PreToolUse"] = preToolUseHooks;
+        hooks["SessionStart"] = sessionStartHooks;
         root["hooks"] = hooks;
 
         var options = new JsonSerializerOptions { WriteIndented = true };
@@ -67,7 +84,7 @@ public sealed class InstallCommand : Command<InstallSettings>
         AnsiConsole.MarkupLine($"[dim]Settings written to: {settingsPath}[/]");
         AnsiConsole.MarkupLine("");
         AnsiConsole.MarkupLine("The following hooks were configured:");
-        AnsiConsole.MarkupLine("  [bold]PreToolUse:[/] fleece prime (provides issue context)");
+        AnsiConsole.MarkupLine("  [bold]SessionStart:[/] fleece prime (provides issue context)");
 
         return 0;
     }
