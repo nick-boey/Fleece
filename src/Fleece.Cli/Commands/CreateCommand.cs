@@ -58,6 +58,12 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
             parentIssues = settings.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
+        IReadOnlyList<string>? tags = null;
+        if (!string.IsNullOrWhiteSpace(settings.Tags))
+        {
+            tags = settings.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+
         await storageService.EnsureDirectoryExistsAsync();
 
         var issue = await issueService.CreateAsync(
@@ -70,7 +76,8 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
             linkedIssues: linkedIssues,
             parentIssues: parentIssues,
             group: settings.Group,
-            assignedTo: settings.AssignedTo);
+            assignedTo: settings.AssignedTo,
+            tags: tags);
 
         if (settings.Json || settings.JsonVerbose)
         {

@@ -20,6 +20,7 @@ public sealed class IssueService(
         IReadOnlyList<string>? parentIssues = null,
         string? group = null,
         string? assignedTo = null,
+        IReadOnlyList<string>? tags = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
@@ -60,6 +61,9 @@ public sealed class IssueService(
             AssignedTo = assignedTo,
             AssignedToLastUpdate = assignedTo is not null ? now : null,
             AssignedToModifiedBy = assignedTo is not null ? createdBy : null,
+            Tags = tags ?? [],
+            TagsLastUpdate = now,
+            TagsModifiedBy = createdBy,
             CreatedBy = createdBy,
             CreatedByLastUpdate = createdBy is not null ? now : null,
             LastUpdate = now,
@@ -111,6 +115,11 @@ public sealed class IssueService(
             propertyChanges.Add(new() { PropertyName = "AssignedTo", OldValue = null, NewValue = assignedTo, Timestamp = now });
         }
 
+        if (tags is not null && tags.Count > 0)
+        {
+            propertyChanges.Add(new() { PropertyName = "Tags", OldValue = null, NewValue = string.Join(",", tags), Timestamp = now });
+        }
+
         var changeRecord = new ChangeRecord
         {
             ChangeId = Guid.NewGuid(),
@@ -149,6 +158,7 @@ public sealed class IssueService(
         IReadOnlyList<string>? parentIssues = null,
         string? group = null,
         string? assignedTo = null,
+        IReadOnlyList<string>? tags = null,
         CancellationToken cancellationToken = default)
     {
         var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
@@ -199,6 +209,9 @@ public sealed class IssueService(
             AssignedTo = assignedTo ?? existing.AssignedTo,
             AssignedToLastUpdate = assignedTo is not null ? now : existing.AssignedToLastUpdate,
             AssignedToModifiedBy = assignedTo is not null ? modifiedBy : existing.AssignedToModifiedBy,
+            Tags = tags ?? existing.Tags,
+            TagsLastUpdate = tags is not null ? now : existing.TagsLastUpdate,
+            TagsModifiedBy = tags is not null ? modifiedBy : existing.TagsModifiedBy,
             CreatedBy = existing.CreatedBy,
             CreatedByLastUpdate = existing.CreatedByLastUpdate,
             LastUpdate = now,
@@ -254,6 +267,11 @@ public sealed class IssueService(
         if (assignedTo is not null)
         {
             propertyChanges.Add(new() { PropertyName = "AssignedTo", OldValue = existing.AssignedTo, NewValue = assignedTo, Timestamp = now });
+        }
+
+        if (tags is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "Tags", OldValue = string.Join(",", existing.Tags), NewValue = string.Join(",", tags), Timestamp = now });
         }
 
         issues[existingIndex] = updated;

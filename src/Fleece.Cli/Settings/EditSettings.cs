@@ -49,6 +49,10 @@ public sealed class EditSettings : CommandSettings
     [Description("New assignee username")]
     public string? AssignedTo { get; init; }
 
+    [CommandOption("--tags <TAGS>")]
+    [Description("Replace tags (comma-separated, no whitespace allowed in tags)")]
+    public string? Tags { get; init; }
+
     [CommandOption("--json")]
     [Description("Output as JSON")]
     public bool Json { get; init; }
