@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.VERSION_UPDATE_PAT }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -51,12 +53,9 @@ jobs:
           echo "Updated Directory.Build.props to version ${VERSION}"
 
       - name: Commit version update
-        env:
-          GH_TOKEN: ${{ secrets.VERSION_UPDATE_PAT }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           git add Directory.Build.props
           if git diff --staged --quiet; then
             echo "No version changes to commit"
