@@ -45,6 +45,10 @@ public sealed class CreateSettings : CommandSettings
     [Description("Username to assign the issue to")]
     public string? AssignedTo { get; init; }
 
+    [CommandOption("--tags <TAGS>")]
+    [Description("Comma-separated tags (no whitespace allowed in tags)")]
+    public string? Tags { get; init; }
+
     [CommandOption("--json")]
     [Description("Output as JSON")]
     public bool Json { get; init; }

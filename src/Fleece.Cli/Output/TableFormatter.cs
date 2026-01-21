@@ -120,6 +120,11 @@ public static class TableFormatter
             lines.Add($"[bold]Assigned To:[/] {Markup.Escape(issue.AssignedTo)}");
         }
 
+        if (issue.Tags.Count > 0)
+        {
+            lines.Add($"[bold]Tags:[/] {string.Join(", ", issue.Tags.Select(Markup.Escape))}");
+        }
+
         if (!string.IsNullOrEmpty(issue.CreatedBy))
         {
             lines.Add($"[bold]Created By:[/] {Markup.Escape(issue.CreatedBy)}");
