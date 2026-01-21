@@ -28,6 +28,11 @@ public sealed class ListCommand(IIssueService issueService, IStorageService stor
             }
             status = parsedStatus;
         }
+        else if (!settings.All)
+        {
+            // Default to showing only open issues unless --all is specified
+            status = IssueStatus.Open;
+        }
 
         IssueType? type = null;
         if (!string.IsNullOrWhiteSpace(settings.Type))

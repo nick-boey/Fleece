@@ -32,4 +32,8 @@ public sealed class ListSettings : CommandSettings
     [CommandOption("--json-verbose")]
     [Description("Output as JSON with all metadata fields")]
     public bool JsonVerbose { get; init; }
+
+    [CommandOption("-a|--all")]
+    [Description("Show all issues including complete, closed, and archived")]
+    public bool All { get; init; }
 }
