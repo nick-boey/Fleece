@@ -16,6 +16,7 @@ public sealed record IssueDto
     public int? Priority { get; init; }
     public string? Group { get; init; }
     public string? AssignedTo { get; init; }
+    public IReadOnlyList<string> Tags { get; init; } = [];
     public string? CreatedBy { get; init; }
     public required DateTimeOffset LastUpdate { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
@@ -33,6 +34,7 @@ public sealed record IssueDto
         Priority = issue.Priority,
         Group = issue.Group,
         AssignedTo = issue.AssignedTo,
+        Tags = issue.Tags,
         CreatedBy = issue.CreatedBy,
         LastUpdate = issue.LastUpdate,
         CreatedAt = issue.CreatedAt

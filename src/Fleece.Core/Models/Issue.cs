@@ -44,6 +44,10 @@ public sealed record Issue
     public DateTimeOffset? AssignedToLastUpdate { get; init; }
     public string? AssignedToModifiedBy { get; init; }
 
+    public IReadOnlyList<string> Tags { get; init; } = [];
+    public DateTimeOffset TagsLastUpdate { get; init; }
+    public string? TagsModifiedBy { get; init; }
+
     public string? CreatedBy { get; init; }
     public DateTimeOffset? CreatedByLastUpdate { get; init; }
 
