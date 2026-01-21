@@ -15,7 +15,7 @@ public sealed class MergeCommand(IMergeService mergeService) : AsyncCommand<Merg
             AnsiConsole.MarkupLine("[yellow]Dry run mode - no changes will be made[/]");
         }
 
-        var changes = await mergeService.FindAndResolveDuplicatesAsync();
+        var changes = await mergeService.FindAndResolveDuplicatesAsync(settings.DryRun);
 
         if (changes.Count == 0)
         {

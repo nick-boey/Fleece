@@ -1,4 +1,5 @@
 using Fleece.Cli.Output;
+using Fleece.Cli.Services;
 using Fleece.Cli.Settings;
 using Fleece.Core.Models;
 using Fleece.Core.Services.Interfaces;
@@ -16,6 +17,12 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
             return 1;
+        }
+
+        // If no options are provided (only the ID), use editor-based editing
+        if (HasNoOptions(settings))
+        {
+            return await EditWithEditorAsync(settings);
         }
 
         IssueStatus? status = null;
@@ -90,6 +97,149 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
             return 1;
+        }
+    }
+
+    private static bool HasNoOptions(EditSettings settings) =>
+        string.IsNullOrWhiteSpace(settings.Title) &&
+        string.IsNullOrWhiteSpace(settings.Description) &&
+        string.IsNullOrWhiteSpace(settings.Status) &&
+        string.IsNullOrWhiteSpace(settings.Type) &&
+        !settings.Priority.HasValue &&
+        !settings.LinkedPr.HasValue &&
+        string.IsNullOrWhiteSpace(settings.LinkedIssues) &&
+        string.IsNullOrWhiteSpace(settings.ParentIssues) &&
+        string.IsNullOrWhiteSpace(settings.Group) &&
+        string.IsNullOrWhiteSpace(settings.AssignedTo) &&
+        string.IsNullOrWhiteSpace(settings.Tags) &&
+        !settings.Json &&
+        !settings.JsonVerbose;
+
+    private async Task<int> EditWithEditorAsync(EditSettings settings)
+    {
+        // First, get the existing issue
+        Issue existingIssue;
+        try
+        {
+            var issues = await issueService.GetAllAsync();
+            var found = issues.FirstOrDefault(i => i.Id.Equals(settings.Id, StringComparison.OrdinalIgnoreCase));
+            if (found is null)
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
+                return 1;
+            }
+            existingIssue = found;
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] Failed to load issue: {ex.Message}");
+            return 1;
+        }
+
+        var editorService = new EditorService();
+        var templatePath = editorService.CreateEditTemplateFile(existingIssue);
+
+        AnsiConsole.MarkupLine($"[dim]Opening editor... Edit the fields and save to update the issue.[/]");
+        AnsiConsole.MarkupLine($"[dim]Template: {templatePath}[/]");
+
+        try
+        {
+            editorService.OpenEditor(templatePath);
+
+            var template = editorService.ParseTemplate(templatePath);
+
+            if (template is null)
+            {
+                AnsiConsole.MarkupLine("[yellow]Warning:[/] Template was empty or could not be parsed. No changes made.");
+                return 1;
+            }
+
+            if (string.IsNullOrWhiteSpace(template.Title))
+            {
+                AnsiConsole.MarkupLine("[red]Error:[/] Title is required");
+                return 1;
+            }
+
+            if (string.IsNullOrWhiteSpace(template.Type))
+            {
+                AnsiConsole.MarkupLine("[red]Error:[/] Type is required");
+                return 1;
+            }
+
+            if (!Enum.TryParse<IssueType>(template.Type, ignoreCase: true, out var issueType))
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{template.Type}'. Use: task, bug, chore, idea, feature");
+                return 1;
+            }
+
+            IssueStatus? status = null;
+            if (!string.IsNullOrWhiteSpace(template.Status))
+            {
+                if (!Enum.TryParse<IssueStatus>(template.Status, ignoreCase: true, out var parsedStatus))
+                {
+                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: open, complete, closed, archived");
+                    return 1;
+                }
+                status = parsedStatus;
+            }
+
+            IReadOnlyList<string>? linkedIssues = null;
+            if (!string.IsNullOrWhiteSpace(template.LinkedIssues))
+            {
+                linkedIssues = template.LinkedIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            }
+            else
+            {
+                linkedIssues = [];
+            }
+
+            IReadOnlyList<string>? parentIssues = null;
+            if (!string.IsNullOrWhiteSpace(template.ParentIssues))
+            {
+                parentIssues = template.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            }
+            else
+            {
+                parentIssues = [];
+            }
+
+            IReadOnlyList<string>? tags = null;
+            if (!string.IsNullOrWhiteSpace(template.Tags))
+            {
+                tags = template.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            }
+            else
+            {
+                tags = [];
+            }
+
+            var issue = await issueService.UpdateAsync(
+                id: settings.Id,
+                title: template.Title,
+                description: template.Description,
+                status: status,
+                type: issueType,
+                priority: template.Priority,
+                linkedPr: template.LinkedPr,
+                linkedIssues: linkedIssues,
+                parentIssues: parentIssues,
+                group: template.Group,
+                assignedTo: template.AssignedTo,
+                tags: tags);
+
+            AnsiConsole.MarkupLine($"[green]Updated issue[/] [bold]{issue.Id}[/]");
+            TableFormatter.RenderIssue(issue);
+
+            return 0;
+        }
+        catch (KeyNotFoundException)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
+            return 1;
+        }
+        finally
+        {
+            editorService.CleanupTemplateFile(templatePath);
         }
     }
 }

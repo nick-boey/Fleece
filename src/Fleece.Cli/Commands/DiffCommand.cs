@@ -1,5 +1,6 @@
 using Fleece.Cli.Output;
 using Fleece.Cli.Settings;
+using Fleece.Core.Models;
 using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -17,30 +18,50 @@ public sealed class DiffCommand(IChangeService changeService, IMergeService merg
             return 1;
         }
 
-        // If no files specified, show change history
-        if (string.IsNullOrWhiteSpace(settings.File1))
+        // Check if we're comparing two files
+        if (!string.IsNullOrWhiteSpace(settings.File1) && !string.IsNullOrWhiteSpace(settings.File2))
         {
-            var changes = await changeService.GetAllAsync();
-
-            if (settings.Json)
-            {
-                JsonFormatter.RenderChanges(changes);
-            }
-            else
-            {
-                TableFormatter.RenderChanges(changes);
-            }
-
-            return 0;
+            return await CompareFilesAsync(settings);
         }
 
-        // Compare two files
-        if (string.IsNullOrWhiteSpace(settings.File2))
+        // Otherwise, show change history with optional filtering
+        return await ShowHistoryAsync(settings);
+    }
+
+    private async Task<int> ShowHistoryAsync(DiffSettings settings)
+    {
+        var changes = await GetChangesAsync(settings);
+
+        if (settings.Json)
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] Both FILE1 and FILE2 must be specified for comparison");
-            return 1;
+            JsonFormatter.RenderChanges(changes);
+        }
+        else
+        {
+            TableFormatter.RenderChanges(changes);
         }
 
+        return 0;
+    }
+
+    private async Task<IReadOnlyList<ChangeRecord>> GetChangesAsync(DiffSettings settings)
+    {
+        // If File1 is provided but File2 is not, treat File1 as an issue ID filter
+        if (!string.IsNullOrWhiteSpace(settings.File1))
+        {
+            return await changeService.GetByIssueIdAsync(settings.File1);
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.User))
+        {
+            return await changeService.GetByUserAsync(settings.User);
+        }
+
+        return await changeService.GetAllAsync();
+    }
+
+    private async Task<int> CompareFilesAsync(DiffSettings settings)
+    {
         if (!File.Exists(settings.File1))
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] File not found: {settings.File1}");
@@ -53,7 +74,7 @@ public sealed class DiffCommand(IChangeService changeService, IMergeService merg
             return 1;
         }
 
-        var differences = await mergeService.CompareFilesAsync(settings.File1, settings.File2);
+        var differences = await mergeService.CompareFilesAsync(settings.File1!, settings.File2!);
 
         if (differences.Count == 0)
         {

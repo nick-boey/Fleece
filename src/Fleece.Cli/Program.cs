@@ -1,3 +1,4 @@
+using System.Reflection;
 using Fleece.Cli.Commands;
 using Fleece.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,21 +10,34 @@ services.AddFleeceCore();
 var registrar = new TypeRegistrar(services);
 var app = new CommandApp(registrar);
 
+// Get the version from the assembly, which is set during build via -p:Version=
+var version = Assembly.GetExecutingAssembly()
+    .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+    ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+    ?? "1.0.0";
+
 app.Configure(config =>
 {
     config.SetApplicationName("fleece");
-    config.SetApplicationVersion("1.0.0");
+    config.SetApplicationVersion(version);
 
     config.AddCommand<CreateCommand>("create")
-        .WithDescription("Create a new issue")
+        .WithDescription("Create a new issue. Run without options to open an interactive editor with a YAML template.")
+        .WithExample("create")
         .WithExample("create", "--title", "Fix login bug", "--type", "bug", "-p", "1");
 
     config.AddCommand<ListCommand>("list")
         .WithDescription("List issues with optional filters")
         .WithExample("list", "--status", "open", "--type", "bug");
 
+    config.AddCommand<TreeCommand>("tree")
+        .WithDescription("Display issues in a tree view based on parent-child relationships")
+        .WithExample("tree")
+        .WithExample("tree", "--status", "open");
+
     config.AddCommand<EditCommand>("edit")
-        .WithDescription("Edit an existing issue")
+        .WithDescription("Edit an existing issue. Run with only an ID to open an interactive editor with the issue's current values.")
+        .WithExample("edit", "abc123")
         .WithExample("edit", "abc123", "--status", "complete");
 
     config.AddCommand<DeleteCommand>("delete")
@@ -35,20 +49,16 @@ app.Configure(config =>
         .WithExample("search", "login");
 
     config.AddCommand<DiffCommand>("diff")
-        .WithDescription("Compare files or show change history")
+        .WithDescription("Show change history or compare two JSONL files")
         .WithExample("diff")
+        .WithExample("diff", "abc123")
+        .WithExample("diff", "--user", "john")
         .WithExample("diff", "file1.jsonl", "file2.jsonl");
 
     config.AddCommand<MergeCommand>("merge")
         .WithDescription("Find and merge duplicate issues")
         .WithExample("merge")
         .WithExample("merge", "--dry-run");
-
-    config.AddCommand<HistoryCommand>("history")
-        .WithDescription("Show change history for issues")
-        .WithExample("history")
-        .WithExample("history", "abc123")
-        .WithExample("history", "--user", "john");
 
     config.AddCommand<MigrateCommand>("migrate")
         .WithDescription("Migrate issues to property-level timestamps format")

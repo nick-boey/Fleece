@@ -12,7 +12,7 @@ public sealed class MergeService(
 {
     private readonly IssueMerger _merger = new();
 
-    public async Task<IReadOnlyList<ChangeRecord>> FindAndResolveDuplicatesAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ChangeRecord>> FindAndResolveDuplicatesAsync(bool dryRun = false, CancellationToken cancellationToken = default)
     {
         // Load all issues from all issue files
         var allIssues = new List<Issue>();
@@ -68,7 +68,12 @@ public sealed class MergeService(
                     };
 
                     changeRecords.Add(changeRecord);
-                    await changeService.AddAsync(changeRecord, cancellationToken);
+
+                    // Only persist the change record if not in dry-run mode
+                    if (!dryRun)
+                    {
+                        await changeService.AddAsync(changeRecord, cancellationToken);
+                    }
                 }
             }
             else
@@ -77,8 +82,8 @@ public sealed class MergeService(
             }
         }
 
-        // Save merged issues and clean up old files
-        if (issueFiles.Count > 0)
+        // Only save merged issues and clean up old files if not in dry-run mode
+        if (!dryRun && issueFiles.Count > 0)
         {
             // Delete all old issue files
             foreach (var file in issueFiles)

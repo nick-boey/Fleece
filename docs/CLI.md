@@ -110,13 +110,62 @@ fleece list --json-verbose
 
 ---
 
+### tree
+
+Display issues in a tree view based on parent-child relationships.
+
+```bash
+fleece tree [options]
+```
+
+Shows issues hierarchically, with child issues indented under their parents. Uses the same filtering behavior as `fleece list`. By default, only shows open issues.
+
+**Options:**
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--all` | `-a` | Show all issues including complete, closed, archived |
+| `--status` | `-s` | Filter by status |
+| `--type` | `-t` | Filter by type |
+| `--priority` | `-p` | Filter by priority |
+| `--group` | `-g` | Filter by group |
+| `--assigned` | | Filter by assignee |
+| `--json` | | Output as JSON tree structure |
+
+**Tree Display:**
+- Issues with no parents (or parents outside the filtered set) appear at the root level
+- Child issues are indented under their parent
+- If an issue has multiple parents in the set, it appears under the first parent encountered, with a note showing the other parent(s)
+
+**Examples:**
+```bash
+# Show tree of open issues
+fleece tree
+
+# Show tree of all issues
+fleece tree --all
+
+# Show tree filtered by type
+fleece tree --type feature
+
+# Output as JSON
+fleece tree --json
+```
+
+---
+
 ### edit
 
 Edit an existing issue.
 
 ```bash
+# Interactive mode (opens editor with current values)
+fleece edit <id>
+
+# Command-line mode
 fleece edit <id> [options]
 ```
+
+When run with only an ID (no other options), opens your default editor with the issue's current values pre-filled in a YAML template. The editor is determined by the `VISUAL` or `EDITOR` environment variable, or defaults to `notepad` on Windows, `open` on macOS, or `nano`/`vim` on Linux.
 
 **Arguments:**
 | Argument | Description |
@@ -142,6 +191,9 @@ fleece edit <id> [options]
 
 **Examples:**
 ```bash
+# Interactive mode - opens editor with current values
+fleece edit abc123
+
 # Mark as complete
 fleece edit abc123 --status complete
 
@@ -208,24 +260,41 @@ fleece search "authentication" --json
 
 ### diff
 
-Compare two JSONL files or show current conflicts.
+Show change history or compare two JSONL files.
 
 ```bash
-fleece diff [file1] [file2]
+fleece diff [issue_id] [options]
+fleece diff <file1> <file2>
 ```
 
 **Arguments:**
 | Argument | Description |
 |----------|-------------|
-| `file1` | First JSONL file (optional) |
-| `file2` | Second JSONL file (optional) |
+| `issue_id` | Optional issue ID to filter history |
+| `file1` | First JSONL file to compare |
+| `file2` | Second JSONL file to compare |
 
-Without arguments, shows current conflicts from `.fleece/conflicts.jsonl`.
+Without arguments, shows all change history. With one argument, filters history by issue ID. With two arguments, compares the two files.
+
+**Options:**
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--user` | `-u` | Filter history by user name |
+| `--json` | | Output as JSON |
 
 **Examples:**
 ```bash
-# Show current conflicts
+# Show all change history
 fleece diff
+
+# Show history for a specific issue
+fleece diff abc123
+
+# Show changes by a specific user
+fleece diff --user john
+
+# Output as JSON
+fleece diff --json
 
 # Compare two files
 fleece diff main-issues.jsonl feature-issues.jsonl
@@ -273,45 +342,6 @@ fleece clear-conflicts <id>
 **Examples:**
 ```bash
 fleece clear-conflicts abc123
-```
-
----
-
-### history
-
-Show change history for issues with user attribution.
-
-```bash
-fleece history [issue_id] [options]
-```
-
-**Arguments:**
-| Argument | Description |
-|----------|-------------|
-| `issue_id` | Optional issue ID to filter history |
-
-**Options:**
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--user` | `-u` | Filter by user name |
-| `--json` | | Output as JSON |
-
-**Examples:**
-```bash
-# Show all change history
-fleece history
-
-# Show history for specific issue
-fleece history abc123
-
-# Show changes by a specific user
-fleece history --user john
-
-# JSON output for scripting
-fleece history --json
-
-# Combine filters
-fleece history abc123 --user john --json
 ```
 
 ---
