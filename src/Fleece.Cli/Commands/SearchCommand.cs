@@ -19,9 +19,9 @@ public sealed class SearchCommand(IIssueService issueService, IStorageService st
 
         var issues = await issueService.SearchAsync(settings.Query);
 
-        if (settings.Json)
+        if (settings.Json || settings.JsonVerbose)
         {
-            JsonFormatter.RenderIssues(issues);
+            JsonFormatter.RenderIssues(issues, verbose: settings.JsonVerbose);
         }
         else
         {

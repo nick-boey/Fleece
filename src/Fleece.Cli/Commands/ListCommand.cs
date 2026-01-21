@@ -42,9 +42,9 @@ public sealed class ListCommand(IIssueService issueService, IStorageService stor
 
         var issues = await issueService.FilterAsync(status, type, settings.Priority, settings.Group, settings.AssignedTo);
 
-        if (settings.Json)
+        if (settings.Json || settings.JsonVerbose)
         {
-            JsonFormatter.RenderIssues(issues);
+            JsonFormatter.RenderIssues(issues, verbose: settings.JsonVerbose);
         }
         else
         {

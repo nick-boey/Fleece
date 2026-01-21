@@ -52,4 +52,8 @@ public sealed class EditSettings : CommandSettings
     [CommandOption("--json")]
     [Description("Output as JSON")]
     public bool Json { get; init; }
+
+    [CommandOption("--json-verbose")]
+    [Description("Output as JSON with all metadata fields")]
+    public bool JsonVerbose { get; init; }
 }
