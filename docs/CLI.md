@@ -16,10 +16,16 @@ Complete documentation for all Fleece CLI commands.
 Create a new issue.
 
 ```bash
+# Interactive mode (opens editor with YAML template)
+fleece create
+
+# Command-line mode
 fleece create --title <title> --type <type> [options]
 ```
 
-**Required Options:**
+When run with no arguments, opens your default editor with a YAML template for interactive issue creation. The editor is determined by the `VISUAL` or `EDITOR` environment variable, or defaults to `notepad` on Windows, `open` on macOS, or `nano`/`vim` on Linux.
+
+**Required Options (command-line mode):**
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--title` | `-t` | Issue title (used to generate ID) |
@@ -34,9 +40,15 @@ fleece create --title <title> --type <type> [options]
 | `--linked-pr` | | Associated PR number |
 | `--linked-issues` | | Comma-separated issue IDs or #numbers |
 | `--parent-issues` | | Comma-separated parent issue IDs |
+| `--tags` | | Comma-separated tags (no whitespace) |
+| `--json` | | Output as JSON |
+| `--json-verbose` | | Output as JSON with all metadata |
 
 **Examples:**
 ```bash
+# Interactive mode - opens editor
+fleece create
+
 # Create a simple task
 fleece create --title "Update documentation" --type task
 
@@ -46,6 +58,9 @@ fleece create --title "Login fails on Safari" --type bug --priority 1
 # Create a feature with description
 fleece create --title "Add dark mode" --type feature -d "Support system theme preference"
 
+# Create with tags
+fleece create --title "API refactor" --type task --tags "backend,breaking-change"
+
 # Create linked issue
 fleece create --title "Fix tests" --type chore --parent-issues abc123
 ```
@@ -54,7 +69,7 @@ fleece create --title "Fix tests" --type chore --parent-issues abc123
 
 ### list
 
-List issues with optional filters.
+List issues with optional filters. By default, only shows open issues.
 
 ```bash
 fleece list [options]
@@ -63,15 +78,22 @@ fleece list [options]
 **Options:**
 | Option | Short | Description |
 |--------|-------|-------------|
+| `--all` | `-a` | Show all issues (including complete, closed, archived) |
 | `--status` | `-s` | Filter by status |
 | `--type` | `-t` | Filter by type |
 | `--priority` | `-p` | Filter by priority |
-| `--json` | | Output as JSON |
+| `--group` | `-g` | Filter by group |
+| `--assigned` | | Filter by assignee |
+| `--json` | | Output as JSON (simplified format) |
+| `--json-verbose` | | Output as JSON with all metadata fields |
 
 **Examples:**
 ```bash
-# List all issues
+# List open issues (default)
 fleece list
+
+# List all issues including complete/closed
+fleece list --all
 
 # List open bugs
 fleece list --status open --type bug
@@ -81,6 +103,9 @@ fleece list --priority 1
 
 # Output as JSON for scripting
 fleece list --json
+
+# Output with all metadata (timestamps, modifiedBy fields)
+fleece list --json-verbose
 ```
 
 ---
@@ -109,6 +134,11 @@ fleece edit <id> [options]
 | `--linked-pr` | | New PR number |
 | `--linked-issues` | | Replace linked issues |
 | `--parent-issues` | | Replace parent issues |
+| `--group` | `-g` | New issue group |
+| `--assign` | `-a` | New assignee username |
+| `--tags` | | Replace tags (comma-separated) |
+| `--json` | | Output as JSON |
+| `--json-verbose` | | Output as JSON with all metadata |
 
 **Examples:**
 ```bash
@@ -120,6 +150,9 @@ fleece edit abc123 --priority 2
 
 # Link a PR
 fleece edit abc123 --linked-pr 42
+
+# Update tags
+fleece edit abc123 --tags "reviewed,approved"
 ```
 
 ---
@@ -352,12 +385,17 @@ Outputs instructions that can be included in prompts to help LLMs understand how
 | `LinkedIssues` | string[] | No | Related issue IDs |
 | `ParentIssues` | string[] | No | Parent issue IDs |
 | `Priority` | int | No | 1 (highest) to 5 (lowest) |
+| `Group` | string | No | Issue group for categorization |
+| `AssignedTo` | string | No | Username of assignee |
+| `Tags` | string[] | No | Arbitrary string tags |
+| `CreatedBy` | string | No | Username who created issue |
 | `LastUpdate` | DateTimeOffset | Yes | Last modification time |
+| `CreatedAt` | DateTimeOffset | Yes | Creation time |
 
 ### Example JSONL Entry
 
 ```json
-{"Id":"a1b2c3","Title":"Fix login bug","Description":"Users can't log in on Safari","Status":"open","Type":"bug","Priority":1,"LastUpdate":"2024-01-15T10:30:00Z"}
+{"Id":"a1b2c3","Title":"Fix login bug","Description":"Users can't log in on Safari","Status":"open","Type":"bug","Priority":1,"Tags":["urgent","backend"],"LastUpdate":"2024-01-15T10:30:00Z"}
 ```
 
 ---
