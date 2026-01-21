@@ -47,5 +47,7 @@ public interface IIssueService
         int? priority = null,
         string? group = null,
         string? assignedTo = null,
+        IReadOnlyList<string>? tags = null,
+        int? linkedPr = null,
         CancellationToken cancellationToken = default);
 }

@@ -85,6 +85,49 @@ public class IssueServiceTests
     }
 
     [Test]
+    public async Task CreateAsync_SetsGroup()
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var result = await _sut.CreateAsync(
+            title: "Test Issue",
+            type: IssueType.Task,
+            group: "platform-team");
+
+        result.Group.Should().Be("platform-team");
+    }
+
+    [Test]
+    public async Task CreateAsync_SetsTags()
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var result = await _sut.CreateAsync(
+            title: "Test Issue",
+            type: IssueType.Task,
+            tags: ["backend", "api", "urgent"]);
+
+        result.Tags.Should().HaveCount(3);
+        result.Tags.Should().Contain(["backend", "api", "urgent"]);
+    }
+
+    [Test]
+    public async Task CreateAsync_SetsGroupAndTags()
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var result = await _sut.CreateAsync(
+            title: "Test Issue",
+            type: IssueType.Feature,
+            group: "frontend-team",
+            tags: ["ui", "design"]);
+
+        result.Group.Should().Be("frontend-team");
+        result.Tags.Should().HaveCount(2);
+        result.Tags.Should().Contain(["ui", "design"]);
+    }
+
+    [Test]
     public void CreateAsync_ThrowsOnNullTitle()
     {
         var act = async () => await _sut.CreateAsync(null!, IssueType.Task);
@@ -319,6 +362,105 @@ public class IssueServiceTests
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.FilterAsync(status: IssueStatus.Open, type: IssueType.Bug, priority: 1);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task FilterAsync_FiltersBySingleTag()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["backend", "api"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = [], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(tags: ["backend"]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task FilterAsync_FiltersByMultipleTags_OrLogic()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["backend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["docs"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(tags: ["backend", "frontend"]);
+
+        result.Should().HaveCount(2);
+        result.Select(i => i.Id).Should().Contain(["a", "b"]);
+    }
+
+    [Test]
+    public async Task FilterAsync_FiltersByLinkedPr()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LinkedPR = 123, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, LinkedPR = 456, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, LinkedPR = null, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(linkedPr: 123);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task FilterAsync_TagFilterIsCaseInsensitive()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["Backend", "API"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["frontend"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(tags: ["backend"]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task SearchAsync_FindsMatchesInTags()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Fix bug", Tags = ["backend", "api"], Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Add feature", Tags = ["frontend"], Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.SearchAsync("backend");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task SearchAsync_FindsMatchesInGroup()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Fix bug", Group = "platform-team", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Add feature", Group = "frontend-team", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.SearchAsync("platform");
 
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("a");

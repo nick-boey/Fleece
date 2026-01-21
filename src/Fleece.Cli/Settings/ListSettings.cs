@@ -25,6 +25,14 @@ public sealed class ListSettings : CommandSettings
     [Description("Filter by assignee")]
     public string? AssignedTo { get; init; }
 
+    [CommandOption("--tag <TAG>")]
+    [Description("Filter by tag (can specify multiple times)")]
+    public string[]? Tags { get; init; }
+
+    [CommandOption("--linked-pr <PR>")]
+    [Description("Filter by linked PR number")]
+    public int? LinkedPr { get; init; }
+
     [CommandOption("--json")]
     [Description("Output as JSON")]
     public bool Json { get; init; }

@@ -356,7 +356,9 @@ public sealed class IssueService(
         return issues
             .Where(i =>
                 i.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                (i.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                (i.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                i.Tags.Any(t => t.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
+                (i.Group?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
             .ToList();
     }
 
@@ -366,6 +368,8 @@ public sealed class IssueService(
         int? priority = null,
         string? group = null,
         string? assignedTo = null,
+        IReadOnlyList<string>? tags = null,
+        int? linkedPr = null,
         CancellationToken cancellationToken = default)
     {
         var issues = await storage.LoadIssuesAsync(cancellationToken);
@@ -376,6 +380,8 @@ public sealed class IssueService(
             .Where(i => priority is null || i.Priority == priority)
             .Where(i => group is null || string.Equals(i.Group, group, StringComparison.OrdinalIgnoreCase))
             .Where(i => assignedTo is null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
+            .Where(i => tags is null || tags.Count == 0 || tags.Any(t => i.Tags.Contains(t, StringComparer.OrdinalIgnoreCase)))
+            .Where(i => linkedPr is null || i.LinkedPR == linkedPr)
             .ToList();
     }
 }

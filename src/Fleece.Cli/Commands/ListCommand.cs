@@ -45,7 +45,7 @@ public sealed class ListCommand(IIssueService issueService, IStorageService stor
             type = parsedType;
         }
 
-        var issues = await issueService.FilterAsync(status, type, settings.Priority, settings.Group, settings.AssignedTo);
+        var issues = await issueService.FilterAsync(status, type, settings.Priority, settings.Group, settings.AssignedTo, settings.Tags, settings.LinkedPr);
 
         if (settings.Json || settings.JsonVerbose)
         {
