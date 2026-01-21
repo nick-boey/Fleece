@@ -31,4 +31,10 @@ public interface IStorageService
     /// Saves issues and returns the path to the created file (with hashed filename).
     /// </summary>
     Task<string> SaveIssuesWithHashAsync(IReadOnlyList<Issue> issues, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks if there are multiple unmerged issue or changes files.
+    /// </summary>
+    /// <returns>A tuple indicating if multiple files exist and an error message to display.</returns>
+    Task<(bool HasMultiple, string Message)> HasMultipleUnmergedFilesAsync(CancellationToken cancellationToken = default);
 }

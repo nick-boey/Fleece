@@ -11,6 +11,13 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
 {
     public override async Task<int> ExecuteAsync(CommandContext context, CreateSettings settings)
     {
+        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        if (hasMultiple)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            return 1;
+        }
+
         if (string.IsNullOrWhiteSpace(settings.Title))
         {
             AnsiConsole.MarkupLine("[red]Error:[/] --title is required");

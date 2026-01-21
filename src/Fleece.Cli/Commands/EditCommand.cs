@@ -7,10 +7,17 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class EditCommand(IIssueService issueService) : AsyncCommand<EditSettings>
+public sealed class EditCommand(IIssueService issueService, IStorageService storageService) : AsyncCommand<EditSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, EditSettings settings)
     {
+        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        if (hasMultiple)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            return 1;
+        }
+
         IssueStatus? status = null;
         if (!string.IsNullOrWhiteSpace(settings.Status))
         {

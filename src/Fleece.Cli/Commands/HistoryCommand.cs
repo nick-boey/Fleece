@@ -6,10 +6,17 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class HistoryCommand(IChangeService changeService) : AsyncCommand<HistorySettings>
+public sealed class HistoryCommand(IChangeService changeService, IStorageService storageService) : AsyncCommand<HistorySettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, HistorySettings settings)
     {
+        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        if (hasMultiple)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            return 1;
+        }
+
         var changes = await GetChangesAsync(settings);
 
         if (settings.Json)

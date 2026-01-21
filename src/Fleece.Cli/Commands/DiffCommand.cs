@@ -6,10 +6,17 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class DiffCommand(IChangeService changeService, IMergeService mergeService) : AsyncCommand<DiffSettings>
+public sealed class DiffCommand(IChangeService changeService, IMergeService mergeService, IStorageService storageService) : AsyncCommand<DiffSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, DiffSettings settings)
     {
+        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        if (hasMultiple)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            return 1;
+        }
+
         // If no files specified, show change history
         if (string.IsNullOrWhiteSpace(settings.File1))
         {
