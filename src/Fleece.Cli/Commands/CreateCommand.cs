@@ -72,9 +72,9 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
             group: settings.Group,
             assignedTo: settings.AssignedTo);
 
-        if (settings.Json)
+        if (settings.Json || settings.JsonVerbose)
         {
-            JsonFormatter.RenderIssue(issue);
+            JsonFormatter.RenderIssue(issue, verbose: settings.JsonVerbose);
         }
         else
         {

@@ -67,9 +67,9 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 group: settings.Group,
                 assignedTo: settings.AssignedTo);
 
-            if (settings.Json)
+            if (settings.Json || settings.JsonVerbose)
             {
-                JsonFormatter.RenderIssue(issue);
+                JsonFormatter.RenderIssue(issue, verbose: settings.JsonVerbose);
             }
             else
             {
