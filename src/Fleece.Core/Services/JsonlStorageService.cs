@@ -12,6 +12,7 @@ public sealed class JsonlStorageService : IStorageService
     private const string IssuesFileName = "issues.jsonl";
     private const string IssuesFilePattern = "issues*.jsonl";
     private const string ChangesFileName = "changes.jsonl";
+    private const string ChangesFilePattern = "changes*.jsonl";
     private const int HashLength = 6;
 
     private readonly string _basePath;
@@ -133,13 +134,21 @@ public sealed class JsonlStorageService : IStorageService
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            if (!File.Exists(ChangesFilePath))
+            var allChanges = new List<ChangeRecord>();
+            var files = GetAllChangesFilesInternal();
+
+            foreach (var file in files)
             {
-                return [];
+                var content = await File.ReadAllTextAsync(file, cancellationToken);
+                var changes = _serializer.DeserializeChanges(content);
+                allChanges.AddRange(changes);
             }
 
-            var content = await File.ReadAllTextAsync(ChangesFilePath, cancellationToken);
-            return _serializer.DeserializeChanges(content);
+            // Deduplicate by ChangeId, keeping newest
+            return allChanges
+                .GroupBy(c => c.ChangeId)
+                .Select(g => g.OrderByDescending(c => c.ChangedAt).First())
+                .ToList();
         }
         finally
         {
@@ -154,8 +163,19 @@ public sealed class JsonlStorageService : IStorageService
         {
             await EnsureDirectoryExistsAsync(cancellationToken);
 
+            var hash = GetCurrentIssuesHashInternal();
+            var fileName = string.IsNullOrEmpty(hash) ? ChangesFileName : $"changes_{hash}.jsonl";
+            var filePath = Path.Combine(FleeceDirectoryPath, fileName);
+
+            // Delete old changes files before writing new one
+            var existingFiles = GetAllChangesFilesInternal();
+            foreach (var file in existingFiles)
+            {
+                File.Delete(file);
+            }
+
             var lines = changes.Select(_serializer.SerializeChange);
-            await File.WriteAllLinesAsync(ChangesFilePath, lines, cancellationToken);
+            await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
         }
         finally
         {
@@ -170,8 +190,31 @@ public sealed class JsonlStorageService : IStorageService
         {
             await EnsureDirectoryExistsAsync(cancellationToken);
 
-            var line = _serializer.SerializeChange(change) + Environment.NewLine;
-            await File.AppendAllTextAsync(ChangesFilePath, line, cancellationToken);
+            // Load existing changes, add new one, and save with current hash
+            var existingChanges = new List<ChangeRecord>();
+            var existingFiles = GetAllChangesFilesInternal();
+
+            foreach (var file in existingFiles)
+            {
+                var content = await File.ReadAllTextAsync(file, cancellationToken);
+                var changes = _serializer.DeserializeChanges(content);
+                existingChanges.AddRange(changes);
+            }
+
+            existingChanges.Add(change);
+
+            var hash = GetCurrentIssuesHashInternal();
+            var fileName = string.IsNullOrEmpty(hash) ? ChangesFileName : $"changes_{hash}.jsonl";
+            var filePath = Path.Combine(FleeceDirectoryPath, fileName);
+
+            // Delete old changes files before writing new one
+            foreach (var file in existingFiles)
+            {
+                File.Delete(file);
+            }
+
+            var lines = existingChanges.Select(_serializer.SerializeChange);
+            await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
         }
         finally
         {
@@ -251,6 +294,43 @@ public sealed class JsonlStorageService : IStorageService
         }
 
         return files;
+    }
+
+    private IReadOnlyList<string> GetAllChangesFilesInternal()
+    {
+        if (!Directory.Exists(FleeceDirectoryPath))
+        {
+            return [];
+        }
+
+        // Get all files matching changes*.jsonl pattern
+        var files = Directory.GetFiles(FleeceDirectoryPath, ChangesFilePattern);
+
+        // Also check for legacy changes.jsonl (without hash)
+        if (files.Length == 0 && File.Exists(ChangesFilePath))
+        {
+            return [ChangesFilePath];
+        }
+
+        return files;
+    }
+
+    private string? GetCurrentIssuesHashInternal()
+    {
+        var issueFiles = GetAllIssueFilesInternal();
+        if (issueFiles.Count == 0)
+        {
+            return null;
+        }
+
+        // Extract hash from first issues file (e.g., "issues_abc123.jsonl" -> "abc123")
+        var fileName = Path.GetFileNameWithoutExtension(issueFiles[0]);
+        if (fileName.StartsWith("issues_") && fileName.Length > 7)
+        {
+            return fileName[7..];
+        }
+
+        return null;
     }
 
     private static string ComputeContentHash(string content)
