@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Fleece.Core.Models;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -6,10 +7,10 @@ namespace Fleece.Cli.Services;
 
 public sealed class EditorService
 {
-    private static readonly string CreateDirectory = Path.Combine(
+    private static readonly string TemplateDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         ".fleece",
-        "create");
+        "templates");
 
     private static readonly IDeserializer YamlDeserializer = new DeserializerBuilder()
         .WithNamingConvention(CamelCaseNamingConvention.Instance)
@@ -18,9 +19,9 @@ public sealed class EditorService
 
     public string CreateTemplateFile()
     {
-        Directory.CreateDirectory(CreateDirectory);
+        Directory.CreateDirectory(TemplateDirectory);
         var fileName = $"{Guid.NewGuid():N}.yaml";
-        var filePath = Path.Combine(CreateDirectory, fileName);
+        var filePath = Path.Combine(TemplateDirectory, fileName);
 
         var template = """
             # Fleece Issue Template
@@ -45,6 +46,57 @@ public sealed class EditorService
 
         File.WriteAllText(filePath, template);
         return filePath;
+    }
+
+    public string CreateEditTemplateFile(Issue issue)
+    {
+        Directory.CreateDirectory(TemplateDirectory);
+        var fileName = $"{Guid.NewGuid():N}.yaml";
+        var filePath = Path.Combine(TemplateDirectory, fileName);
+
+        var linkedIssuesStr = issue.LinkedIssues.Count > 0 ? string.Join(", ", issue.LinkedIssues) : "";
+        var parentIssuesStr = issue.ParentIssues.Count > 0 ? string.Join(", ", issue.ParentIssues) : "";
+        var tagsStr = issue.Tags.Count > 0 ? string.Join(", ", issue.Tags) : "";
+
+        var template = $"""
+            # Fleece Issue Editor - ID: {issue.Id}
+            # Modify the fields below and save the file.
+            # Lines starting with # are comments and will be ignored.
+
+            # Required fields:
+            title: {EscapeYamlValue(issue.Title)}
+            type: {issue.Type.ToString().ToLowerInvariant()}  # Options: task, bug, chore, idea, feature
+
+            # Optional fields:
+            description: {EscapeYamlValue(issue.Description)}
+            status: {issue.Status.ToString().ToLowerInvariant()}  # Options: open, complete, closed, archived
+            priority: {(issue.Priority.HasValue ? issue.Priority.Value.ToString() : "")}  # 1-5 (1=highest)
+            group: {EscapeYamlValue(issue.Group)}
+            assignedTo: {EscapeYamlValue(issue.AssignedTo)}
+            tags: {tagsStr}  # Comma-separated list, e.g.: urgent,backend,api
+            linkedPr: {(issue.LinkedPR.HasValue ? issue.LinkedPR.Value.ToString() : "")}
+            linkedIssues: {linkedIssuesStr}  # Comma-separated issue IDs
+            parentIssues: {parentIssuesStr}  # Comma-separated issue IDs
+            """;
+
+        File.WriteAllText(filePath, template);
+        return filePath;
+    }
+
+    private static string EscapeYamlValue(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return "";
+        }
+
+        // If the value contains special characters, wrap in quotes
+        if (value.Contains(':') || value.Contains('#') || value.Contains('\n') ||
+            value.StartsWith(' ') || value.EndsWith(' '))
+        {
+            return $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
+        }
+        return value;
     }
 
     public void OpenEditor(string filePath)

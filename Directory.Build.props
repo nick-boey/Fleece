@@ -9,5 +9,7 @@
     <RepositoryUrl>https://github.com/nick-boey/Fleece</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/nick-boey/Fleece</PackageProjectUrl>
+    <!-- Default version for local builds; overridden by -p:Version= during release -->
+    <Version>1.0.0-local</Version>
   </PropertyGroup>
 </Project>
