@@ -333,6 +333,34 @@ public sealed class JsonlStorageService : IStorageService
         return null;
     }
 
+    public Task<(bool HasMultiple, string Message)> HasMultipleUnmergedFilesAsync(CancellationToken cancellationToken = default)
+    {
+        var issueFiles = GetAllIssueFilesInternal();
+        var changesFiles = GetAllChangesFilesInternal();
+
+        var messages = new List<string>();
+
+        if (issueFiles.Count > 1)
+        {
+            var fileNames = issueFiles.Select(Path.GetFileName);
+            messages.Add($"Multiple unmerged issue files found: {string.Join(", ", fileNames)}");
+        }
+
+        if (changesFiles.Count > 1)
+        {
+            var fileNames = changesFiles.Select(Path.GetFileName);
+            messages.Add($"Multiple unmerged changes files found: {string.Join(", ", fileNames)}");
+        }
+
+        if (messages.Count > 0)
+        {
+            var message = string.Join("\n", messages) + "\nRun 'fleece merge' to consolidate before continuing.";
+            return Task.FromResult((true, message));
+        }
+
+        return Task.FromResult((false, string.Empty));
+    }
+
     private static string ComputeContentHash(string content)
     {
         var bytes = Encoding.UTF8.GetBytes(content);

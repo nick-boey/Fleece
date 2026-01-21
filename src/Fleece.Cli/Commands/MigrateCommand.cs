@@ -6,10 +6,17 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class MigrateCommand(IMigrationService migrationService) : AsyncCommand<MigrateSettings>
+public sealed class MigrateCommand(IMigrationService migrationService, IStorageService storageService) : AsyncCommand<MigrateSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, MigrateSettings settings)
     {
+        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        if (hasMultiple)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            return 1;
+        }
+
         if (settings.DryRun)
         {
             var needed = await migrationService.IsMigrationNeededAsync();
