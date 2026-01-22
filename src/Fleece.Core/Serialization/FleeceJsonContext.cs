@@ -15,10 +15,12 @@ namespace Fleece.Core.Serialization;
 [JsonSerializable(typeof(PropertyChange))]
 [JsonSerializable(typeof(ChangeType))]
 [JsonSerializable(typeof(MergeResult))]
+[JsonSerializable(typeof(Question))]
 [JsonSerializable(typeof(IReadOnlyList<Issue>))]
 [JsonSerializable(typeof(IReadOnlyList<IssueDto>))]
 [JsonSerializable(typeof(IReadOnlyList<ChangeRecord>))]
 [JsonSerializable(typeof(IReadOnlyList<PropertyChange>))]
+[JsonSerializable(typeof(IReadOnlyList<Question>))]
 public partial class FleeceJsonContext : JsonSerializerContext
 {
 }

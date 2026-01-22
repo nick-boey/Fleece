@@ -5,6 +5,5 @@ public enum IssueType
     Task,
     Bug,
     Chore,
-    Idea,
     Feature
 }

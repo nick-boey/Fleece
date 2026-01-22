@@ -24,15 +24,10 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out var parsedStatus))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, complete, closed, archived");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
                 return 1;
             }
             status = parsedStatus;
-        }
-        else if (!settings.All)
-        {
-            // Default to showing only open issues unless --all is specified
-            status = IssueStatus.Open;
         }
 
         IssueType? type = null;
@@ -40,7 +35,7 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
         {
             if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var parsedType))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, idea, feature");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature");
                 return 1;
             }
             type = parsedType;
@@ -137,10 +132,14 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
         var connector2 = isRoot ? "" : (isLast ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ");
         var statusColor = issue.Status switch
         {
-            IssueStatus.Open => "yellow",
+            IssueStatus.Idea => "magenta",
+            IssueStatus.Spec => "cyan",
+            IssueStatus.Next => "yellow",
+            IssueStatus.Progress => "blue",
+            IssueStatus.Review => "purple",
             IssueStatus.Complete => "green",
-            IssueStatus.Closed => "blue",
             IssueStatus.Archived => "dim",
+            IssueStatus.Closed => "dim",
             _ => "white"
         };
         var typeIcon = issue.Type switch
@@ -149,7 +148,6 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
             IssueType.Feature => "\u2728",
             IssueType.Task => "\u2611\ufe0f",
             IssueType.Chore => "\ud83e\uddf9",
-            IssueType.Idea => "\ud83d\udca1",
             _ => "\u2022"
         };
 

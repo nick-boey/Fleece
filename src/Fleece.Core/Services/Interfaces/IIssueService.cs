@@ -8,11 +8,12 @@ public interface IIssueService
         string title,
         IssueType type,
         string? description = null,
-        IssueStatus status = IssueStatus.Open,
+        IssueStatus status = IssueStatus.Idea,
         int? priority = null,
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
         IReadOnlyList<string>? parentIssues = null,
+        IReadOnlyList<string>? previousIssues = null,
         string? group = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
@@ -33,6 +34,7 @@ public interface IIssueService
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
         IReadOnlyList<string>? parentIssues = null,
+        IReadOnlyList<string>? previousIssues = null,
         string? group = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
@@ -51,5 +53,10 @@ public interface IIssueService
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
+        CancellationToken cancellationToken = default);
+
+    Task<Issue> UpdateQuestionsAsync(
+        string id,
+        IReadOnlyList<Question> questions,
         CancellationToken cancellationToken = default);
 }

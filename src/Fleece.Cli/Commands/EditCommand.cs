@@ -30,7 +30,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out var parsedStatus))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, complete, closed, archived");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
                 return 1;
             }
             status = parsedStatus;
@@ -41,7 +41,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         {
             if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var parsedType))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, idea, feature");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature");
                 return 1;
             }
             type = parsedType;
@@ -57,6 +57,12 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         if (!string.IsNullOrWhiteSpace(settings.ParentIssues))
         {
             parentIssues = settings.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+
+        IReadOnlyList<string>? previousIssues = null;
+        if (!string.IsNullOrWhiteSpace(settings.PreviousIssues))
+        {
+            previousIssues = settings.PreviousIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
         IReadOnlyList<string>? tags = null;
@@ -77,6 +83,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 linkedPr: settings.LinkedPr,
                 linkedIssues: linkedIssues,
                 parentIssues: parentIssues,
+                previousIssues: previousIssues,
                 group: settings.Group,
                 assignedTo: settings.AssignedTo,
                 tags: tags,
@@ -115,6 +122,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         !settings.LinkedPr.HasValue &&
         string.IsNullOrWhiteSpace(settings.LinkedIssues) &&
         string.IsNullOrWhiteSpace(settings.ParentIssues) &&
+        string.IsNullOrWhiteSpace(settings.PreviousIssues) &&
         string.IsNullOrWhiteSpace(settings.Group) &&
         string.IsNullOrWhiteSpace(settings.AssignedTo) &&
         string.IsNullOrWhiteSpace(settings.Tags) &&
@@ -175,7 +183,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
 
             if (!Enum.TryParse<IssueType>(template.Type, ignoreCase: true, out var issueType))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{template.Type}'. Use: task, bug, chore, idea, feature");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{template.Type}'. Use: task, bug, chore, feature");
                 return 1;
             }
 
@@ -184,7 +192,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
             {
                 if (!Enum.TryParse<IssueStatus>(template.Status, ignoreCase: true, out var parsedStatus))
                 {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: open, complete, closed, archived");
+                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
                     return 1;
                 }
                 status = parsedStatus;
@@ -210,6 +218,16 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 parentIssues = [];
             }
 
+            IReadOnlyList<string>? previousIssues = null;
+            if (!string.IsNullOrWhiteSpace(template.PreviousIssues))
+            {
+                previousIssues = template.PreviousIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            }
+            else
+            {
+                previousIssues = [];
+            }
+
             IReadOnlyList<string>? tags = null;
             if (!string.IsNullOrWhiteSpace(template.Tags))
             {
@@ -230,6 +248,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 linkedPr: template.LinkedPr,
                 linkedIssues: linkedIssues,
                 parentIssues: parentIssues,
+                previousIssues: previousIssues,
                 group: template.Group,
                 assignedTo: template.AssignedTo,
                 tags: tags,

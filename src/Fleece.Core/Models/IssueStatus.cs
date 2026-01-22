@@ -2,9 +2,13 @@ namespace Fleece.Core.Models;
 
 public enum IssueStatus
 {
-    Open,
+    Idea,
+    Spec,
+    Next,
+    Progress,
+    Review,
     Complete,
-    Closed,
     Archived,
+    Closed,
     Deleted
 }

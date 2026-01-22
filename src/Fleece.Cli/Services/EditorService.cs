@@ -30,11 +30,11 @@ public sealed class EditorService
 
             # Required fields:
             title:
-            type: task  # Options: task, bug, chore, idea, feature
+            type: task  # Options: task, bug, chore, feature
 
             # Optional fields:
             description:
-            status: open  # Options: open, complete, closed, archived
+            status: idea  # Options: idea, spec, next, progress, review, complete, archived, closed
             priority:   # 1-5 (1=highest)
             group:
             assignedTo:
@@ -43,6 +43,7 @@ public sealed class EditorService
             linkedPr:
             linkedIssues:   # Comma-separated issue IDs
             parentIssues:   # Comma-separated issue IDs
+            previousIssues:   # Comma-separated issue IDs (issues that should be done before this one)
             """;
 
         File.WriteAllText(filePath, template);
@@ -57,6 +58,7 @@ public sealed class EditorService
 
         var linkedIssuesStr = issue.LinkedIssues.Count > 0 ? string.Join(", ", issue.LinkedIssues) : "";
         var parentIssuesStr = issue.ParentIssues.Count > 0 ? string.Join(", ", issue.ParentIssues) : "";
+        var previousIssuesStr = issue.PreviousIssues.Count > 0 ? string.Join(", ", issue.PreviousIssues) : "";
         var tagsStr = issue.Tags.Count > 0 ? string.Join(", ", issue.Tags) : "";
 
         var template = $"""
@@ -66,11 +68,11 @@ public sealed class EditorService
 
             # Required fields:
             title: {EscapeYamlValue(issue.Title)}
-            type: {issue.Type.ToString().ToLowerInvariant()}  # Options: task, bug, chore, idea, feature
+            type: {issue.Type.ToString().ToLowerInvariant()}  # Options: task, bug, chore, feature
 
             # Optional fields:
             description: {EscapeYamlValue(issue.Description)}
-            status: {issue.Status.ToString().ToLowerInvariant()}  # Options: open, complete, closed, archived
+            status: {issue.Status.ToString().ToLowerInvariant()}  # Options: idea, spec, next, progress, review, complete, archived, closed
             priority: {(issue.Priority.HasValue ? issue.Priority.Value.ToString() : "")}  # 1-5 (1=highest)
             group: {EscapeYamlValue(issue.Group)}
             assignedTo: {EscapeYamlValue(issue.AssignedTo)}
@@ -79,6 +81,7 @@ public sealed class EditorService
             linkedPr: {(issue.LinkedPR.HasValue ? issue.LinkedPR.Value.ToString() : "")}
             linkedIssues: {linkedIssuesStr}  # Comma-separated issue IDs
             parentIssues: {parentIssuesStr}  # Comma-separated issue IDs
+            previousIssues: {previousIssuesStr}  # Comma-separated issue IDs (issues that should be done before this one)
             """;
 
         File.WriteAllText(filePath, template);
@@ -219,5 +222,6 @@ public sealed class IssueTemplate
     public int? LinkedPr { get; set; }
     public string? LinkedIssues { get; set; }
     public string? ParentIssues { get; set; }
+    public string? PreviousIssues { get; set; }
     public string? WorkingBranchId { get; set; }
 }

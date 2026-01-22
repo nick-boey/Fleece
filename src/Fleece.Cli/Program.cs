@@ -70,6 +70,12 @@ app.Configure(config =>
 
     config.AddCommand<PrimeCommand>("prime")
         .WithDescription("Print LLM instructions for issue tracking");
+
+    config.AddCommand<QuestionCommand>("question")
+        .WithDescription("Manage questions on an issue")
+        .WithExample("question", "abc123", "--list")
+        .WithExample("question", "abc123", "--ask", "What is the expected behavior?")
+        .WithExample("question", "abc123", "--answer", "Q12345", "--text", "It should return a 200 status");
 });
 
 return await app.RunAsync(args);
