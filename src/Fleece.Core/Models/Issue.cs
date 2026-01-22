@@ -48,6 +48,10 @@ public sealed record Issue
     public DateTimeOffset TagsLastUpdate { get; init; }
     public string? TagsModifiedBy { get; init; }
 
+    public string? WorkingBranchId { get; init; }
+    public DateTimeOffset? WorkingBranchIdLastUpdate { get; init; }
+    public string? WorkingBranchIdModifiedBy { get; init; }
+
     public string? CreatedBy { get; init; }
     public DateTimeOffset? CreatedByLastUpdate { get; init; }
 

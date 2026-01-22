@@ -1,14 +1,43 @@
+using System.Text.RegularExpressions;
 using Fleece.Core.Models;
 using Fleece.Core.Services.Interfaces;
 
 namespace Fleece.Core.Services;
 
-public sealed class IssueService(
+public sealed partial class IssueService(
     IStorageService storage,
     IIdGenerator idGenerator,
     IGitConfigService gitConfigService,
     IChangeService changeService) : IIssueService
 {
+    // Regex pattern for invalid Git branch name characters
+    // Valid: alphanumeric, hyphen, underscore, forward slash (not at start/end), dot (not at start, not consecutive)
+    [GeneratedRegex(@"^[a-zA-Z0-9][a-zA-Z0-9_\-/.]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$")]
+    private static partial Regex ValidBranchNamePattern();
+
+    [GeneratedRegex(@"[~^:\?\*\[\]@{}\s\\]|\.\.|\.$|^\.|\.lock$|//$|^/|/$")]
+    private static partial Regex InvalidBranchNamePattern();
+
+    /// <summary>
+    /// Validates that a string is a valid Git branch name.
+    /// </summary>
+    internal static bool IsValidGitBranchName(string? branchName)
+    {
+        if (string.IsNullOrWhiteSpace(branchName))
+        {
+            return true; // null/empty is valid (means no branch)
+        }
+
+        // Check for invalid characters and patterns
+        if (InvalidBranchNamePattern().IsMatch(branchName))
+        {
+            return false;
+        }
+
+        // Check for valid pattern
+        return ValidBranchNamePattern().IsMatch(branchName);
+    }
+
     public async Task<Issue> CreateAsync(
         string title,
         IssueType type,
@@ -21,9 +50,15 @@ public sealed class IssueService(
         string? group = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
+        string? workingBranchId = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
+
+        if (!IsValidGitBranchName(workingBranchId))
+        {
+            throw new ArgumentException("Working branch ID contains invalid characters for a Git branch name.", nameof(workingBranchId));
+        }
 
         var id = idGenerator.Generate(title);
         var now = DateTimeOffset.UtcNow;
@@ -64,6 +99,9 @@ public sealed class IssueService(
             Tags = tags ?? [],
             TagsLastUpdate = now,
             TagsModifiedBy = createdBy,
+            WorkingBranchId = workingBranchId,
+            WorkingBranchIdLastUpdate = workingBranchId is not null ? now : null,
+            WorkingBranchIdModifiedBy = workingBranchId is not null ? createdBy : null,
             CreatedBy = createdBy,
             CreatedByLastUpdate = createdBy is not null ? now : null,
             LastUpdate = now,
@@ -120,6 +158,11 @@ public sealed class IssueService(
             propertyChanges.Add(new() { PropertyName = "Tags", OldValue = null, NewValue = string.Join(",", tags), Timestamp = now });
         }
 
+        if (workingBranchId is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "WorkingBranchId", OldValue = null, NewValue = workingBranchId, Timestamp = now });
+        }
+
         var changeRecord = new ChangeRecord
         {
             ChangeId = Guid.NewGuid(),
@@ -159,8 +202,14 @@ public sealed class IssueService(
         string? group = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
+        string? workingBranchId = null,
         CancellationToken cancellationToken = default)
     {
+        if (!IsValidGitBranchName(workingBranchId))
+        {
+            throw new ArgumentException("Working branch ID contains invalid characters for a Git branch name.", nameof(workingBranchId));
+        }
+
         var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
         var existingIndex = issues.FindIndex(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
@@ -212,6 +261,9 @@ public sealed class IssueService(
             Tags = tags ?? existing.Tags,
             TagsLastUpdate = tags is not null ? now : existing.TagsLastUpdate,
             TagsModifiedBy = tags is not null ? modifiedBy : existing.TagsModifiedBy,
+            WorkingBranchId = workingBranchId ?? existing.WorkingBranchId,
+            WorkingBranchIdLastUpdate = workingBranchId is not null ? now : existing.WorkingBranchIdLastUpdate,
+            WorkingBranchIdModifiedBy = workingBranchId is not null ? modifiedBy : existing.WorkingBranchIdModifiedBy,
             CreatedBy = existing.CreatedBy,
             CreatedByLastUpdate = existing.CreatedByLastUpdate,
             LastUpdate = now,
@@ -272,6 +324,11 @@ public sealed class IssueService(
         if (tags is not null)
         {
             propertyChanges.Add(new() { PropertyName = "Tags", OldValue = string.Join(",", existing.Tags), NewValue = string.Join(",", tags), Timestamp = now });
+        }
+
+        if (workingBranchId is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "WorkingBranchId", OldValue = existing.WorkingBranchId, NewValue = workingBranchId, Timestamp = now });
         }
 
         issues[existingIndex] = updated;
