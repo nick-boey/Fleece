@@ -32,6 +32,10 @@ public sealed record Issue
     public DateTimeOffset ParentIssuesLastUpdate { get; init; }
     public string? ParentIssuesModifiedBy { get; init; }
 
+    public IReadOnlyList<string> PreviousIssues { get; init; } = [];
+    public DateTimeOffset PreviousIssuesLastUpdate { get; init; }
+    public string? PreviousIssuesModifiedBy { get; init; }
+
     public int? Priority { get; init; }
     public DateTimeOffset? PriorityLastUpdate { get; init; }
     public string? PriorityModifiedBy { get; init; }
@@ -47,6 +51,10 @@ public sealed record Issue
     public IReadOnlyList<string> Tags { get; init; } = [];
     public DateTimeOffset TagsLastUpdate { get; init; }
     public string? TagsModifiedBy { get; init; }
+
+    public IReadOnlyList<Question> Questions { get; init; } = [];
+    public DateTimeOffset QuestionsLastUpdate { get; init; }
+    public string? QuestionsModifiedBy { get; init; }
 
     public string? WorkingBranchId { get; init; }
     public DateTimeOffset? WorkingBranchIdLastUpdate { get; init; }

@@ -23,7 +23,7 @@ public class JsonlSerializerTests
         var issue = new IssueBuilder()
             .WithId("abc123")
             .WithTitle("Test Issue")
-            .WithStatus(IssueStatus.Open)
+            .WithStatus(IssueStatus.Idea)
             .WithType(IssueType.Task)
             .Build();
 
@@ -63,14 +63,14 @@ public class JsonlSerializerTests
     [Test]
     public void DeserializeIssue_ReturnsIssue()
     {
-        var json = "{\"id\":\"abc123\",\"title\":\"Test\",\"status\":\"Open\",\"type\":\"Bug\",\"lastUpdate\":\"2024-01-15T10:30:00+00:00\"}";
+        var json = "{\"id\":\"abc123\",\"title\":\"Test\",\"status\":\"Idea\",\"type\":\"Bug\",\"lastUpdate\":\"2024-01-15T10:30:00+00:00\"}";
 
         var result = _sut.DeserializeIssue(json);
 
         result.Should().NotBeNull();
         result!.Id.Should().Be("abc123");
         result.Title.Should().Be("Test");
-        result.Status.Should().Be(IssueStatus.Open);
+        result.Status.Should().Be(IssueStatus.Idea);
         result.Type.Should().Be(IssueType.Bug);
     }
 
@@ -109,7 +109,7 @@ public class JsonlSerializerTests
     [Test]
     public void DeserializeIssues_ParsesMultipleLines()
     {
-        var content = "{\"id\":\"abc123\",\"title\":\"Issue 1\",\"status\":\"Open\",\"type\":\"Task\",\"lastUpdate\":\"2024-01-15T10:30:00+00:00\"}\n" +
+        var content = "{\"id\":\"abc123\",\"title\":\"Issue 1\",\"status\":\"Idea\",\"type\":\"Task\",\"lastUpdate\":\"2024-01-15T10:30:00+00:00\"}\n" +
                       "{\"id\":\"def456\",\"title\":\"Issue 2\",\"status\":\"Complete\",\"type\":\"Bug\",\"lastUpdate\":\"2024-01-15T11:00:00+00:00\"}";
 
         var result = _sut.DeserializeIssues(content);
@@ -122,7 +122,7 @@ public class JsonlSerializerTests
     [Test]
     public void DeserializeIssues_SkipsInvalidLines()
     {
-        var content = "{\"id\":\"abc123\",\"title\":\"Issue 1\",\"status\":\"Open\",\"type\":\"Task\",\"lastUpdate\":\"2024-01-15T10:30:00+00:00\"}\n" +
+        var content = "{\"id\":\"abc123\",\"title\":\"Issue 1\",\"status\":\"Idea\",\"type\":\"Task\",\"lastUpdate\":\"2024-01-15T10:30:00+00:00\"}\n" +
                       "invalid line\n" +
                       "{\"id\":\"def456\",\"title\":\"Issue 2\",\"status\":\"Complete\",\"type\":\"Bug\",\"lastUpdate\":\"2024-01-15T11:00:00+00:00\"}";
 

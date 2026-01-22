@@ -18,11 +18,11 @@ public sealed class EditSettings : CommandSettings
     public string? Description { get; init; }
 
     [CommandOption("-s|--status <STATUS>")]
-    [Description("New status: open, complete, closed, archived")]
+    [Description("New status: idea, spec, next, progress, review, complete, archived, closed")]
     public string? Status { get; init; }
 
     [CommandOption("--type <TYPE>")]
-    [Description("New type: task, bug, chore, idea, feature")]
+    [Description("New type: task, bug, chore, feature")]
     public string? Type { get; init; }
 
     [CommandOption("-p|--priority <PRIORITY>")]
@@ -40,6 +40,10 @@ public sealed class EditSettings : CommandSettings
     [CommandOption("--parent-issues <ISSUES>")]
     [Description("Replace parent issue IDs (comma-separated)")]
     public string? ParentIssues { get; init; }
+
+    [CommandOption("--previous <ISSUES>")]
+    [Description("Replace previous issue IDs (issues that should be done before this one, comma-separated)")]
+    public string? PreviousIssues { get; init; }
 
     [CommandOption("-g|--group <GROUP>")]
     [Description("New issue group")]

@@ -75,16 +75,16 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
 
             if (!Enum.TryParse<IssueType>(template.Type, ignoreCase: true, out var issueType))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{template.Type}'. Use: task, bug, chore, idea, feature");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{template.Type}'. Use: task, bug, chore, feature");
                 return 1;
             }
 
-            var status = IssueStatus.Open;
+            var status = IssueStatus.Idea;
             if (!string.IsNullOrWhiteSpace(template.Status))
             {
                 if (!Enum.TryParse<IssueStatus>(template.Status, ignoreCase: true, out status))
                 {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: open, complete, closed, archived");
+                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
                     return 1;
                 }
             }
@@ -99,6 +99,12 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
             if (!string.IsNullOrWhiteSpace(template.ParentIssues))
             {
                 parentIssues = template.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            }
+
+            IReadOnlyList<string>? previousIssues = null;
+            if (!string.IsNullOrWhiteSpace(template.PreviousIssues))
+            {
+                previousIssues = template.PreviousIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             }
 
             IReadOnlyList<string>? tags = null;
@@ -118,6 +124,7 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 linkedPr: template.LinkedPr,
                 linkedIssues: linkedIssues,
                 parentIssues: parentIssues,
+                previousIssues: previousIssues,
                 group: template.Group,
                 assignedTo: template.AssignedTo,
                 tags: tags,
@@ -145,16 +152,16 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
     {
         if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var issueType))
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, idea, feature");
+            AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature");
             return 1;
         }
 
-        var status = IssueStatus.Open;
+        var status = IssueStatus.Idea;
         if (!string.IsNullOrWhiteSpace(settings.Status))
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out status))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, complete, closed, archived");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
                 return 1;
             }
         }
@@ -169,6 +176,12 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
         if (!string.IsNullOrWhiteSpace(settings.ParentIssues))
         {
             parentIssues = settings.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+
+        IReadOnlyList<string>? previousIssues = null;
+        if (!string.IsNullOrWhiteSpace(settings.PreviousIssues))
+        {
+            previousIssues = settings.PreviousIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
         IReadOnlyList<string>? tags = null;
@@ -190,6 +203,7 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 linkedPr: settings.LinkedPr,
                 linkedIssues: linkedIssues,
                 parentIssues: parentIssues,
+                previousIssues: previousIssues,
                 group: settings.Group,
                 assignedTo: settings.AssignedTo,
                 tags: tags,

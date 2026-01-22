@@ -29,10 +29,14 @@ public static class TableFormatter
         {
             var statusColor = issue.Status switch
             {
-                IssueStatus.Open => "yellow",
+                IssueStatus.Idea => "magenta",
+                IssueStatus.Spec => "cyan",
+                IssueStatus.Next => "yellow",
+                IssueStatus.Progress => "blue",
+                IssueStatus.Review => "purple",
                 IssueStatus.Complete => "green",
-                IssueStatus.Closed => "blue",
                 IssueStatus.Archived => "dim",
+                IssueStatus.Closed => "dim",
                 _ => "white"
             };
 
@@ -42,7 +46,6 @@ public static class TableFormatter
                 IssueType.Feature => "cyan",
                 IssueType.Task => "white",
                 IssueType.Chore => "dim",
-                IssueType.Idea => "magenta",
                 _ => "white"
             };
 
@@ -108,6 +111,11 @@ public static class TableFormatter
         if (issue.ParentIssues.Count > 0)
         {
             lines.Add($"[bold]Parent Issues:[/] {string.Join(", ", issue.ParentIssues)}");
+        }
+
+        if (issue.PreviousIssues.Count > 0)
+        {
+            lines.Add($"[bold]Previous Issues:[/] {string.Join(", ", issue.PreviousIssues)}");
         }
 
         if (!string.IsNullOrEmpty(issue.Group))

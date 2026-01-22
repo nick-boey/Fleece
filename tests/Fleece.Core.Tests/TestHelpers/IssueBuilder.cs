@@ -7,7 +7,7 @@ public class IssueBuilder
     private string _id = "abc123";
     private string _title = "Test Issue";
     private string? _description;
-    private IssueStatus _status = IssueStatus.Open;
+    private IssueStatus _status = IssueStatus.Idea;
     private IssueType _type = IssueType.Task;
     private int? _linkedPr;
     private IReadOnlyList<string> _linkedIssues = [];

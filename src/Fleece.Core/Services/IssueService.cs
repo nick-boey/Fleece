@@ -42,11 +42,12 @@ public sealed partial class IssueService(
         string title,
         IssueType type,
         string? description = null,
-        IssueStatus status = IssueStatus.Open,
+        IssueStatus status = IssueStatus.Idea,
         int? priority = null,
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
         IReadOnlyList<string>? parentIssues = null,
+        IReadOnlyList<string>? previousIssues = null,
         string? group = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
@@ -90,6 +91,9 @@ public sealed partial class IssueService(
             ParentIssues = parentIssues ?? [],
             ParentIssuesLastUpdate = now,
             ParentIssuesModifiedBy = createdBy,
+            PreviousIssues = previousIssues ?? [],
+            PreviousIssuesLastUpdate = now,
+            PreviousIssuesModifiedBy = createdBy,
             Group = group,
             GroupLastUpdate = group is not null ? now : null,
             GroupModifiedBy = group is not null ? createdBy : null,
@@ -141,6 +145,11 @@ public sealed partial class IssueService(
         if (parentIssues is not null && parentIssues.Count > 0)
         {
             propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = null, NewValue = string.Join(",", parentIssues), Timestamp = now });
+        }
+
+        if (previousIssues is not null && previousIssues.Count > 0)
+        {
+            propertyChanges.Add(new() { PropertyName = "PreviousIssues", OldValue = null, NewValue = string.Join(",", previousIssues), Timestamp = now });
         }
 
         if (group is not null)
@@ -199,6 +208,7 @@ public sealed partial class IssueService(
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
         IReadOnlyList<string>? parentIssues = null,
+        IReadOnlyList<string>? previousIssues = null,
         string? group = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
@@ -252,6 +262,9 @@ public sealed partial class IssueService(
             ParentIssues = parentIssues ?? existing.ParentIssues,
             ParentIssuesLastUpdate = parentIssues is not null ? now : existing.ParentIssuesLastUpdate,
             ParentIssuesModifiedBy = parentIssues is not null ? modifiedBy : existing.ParentIssuesModifiedBy,
+            PreviousIssues = previousIssues ?? existing.PreviousIssues,
+            PreviousIssuesLastUpdate = previousIssues is not null ? now : existing.PreviousIssuesLastUpdate,
+            PreviousIssuesModifiedBy = previousIssues is not null ? modifiedBy : existing.PreviousIssuesModifiedBy,
             Group = group ?? existing.Group,
             GroupLastUpdate = group is not null ? now : existing.GroupLastUpdate,
             GroupModifiedBy = group is not null ? modifiedBy : existing.GroupModifiedBy,
@@ -309,6 +322,11 @@ public sealed partial class IssueService(
         if (parentIssues is not null)
         {
             propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = string.Join(",", existing.ParentIssues), NewValue = string.Join(",", parentIssues), Timestamp = now });
+        }
+
+        if (previousIssues is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "PreviousIssues", OldValue = string.Join(",", existing.PreviousIssues), NewValue = string.Join(",", previousIssues), Timestamp = now });
         }
 
         if (group is not null)
@@ -440,5 +458,58 @@ public sealed partial class IssueService(
             .Where(i => tags is null || tags.Count == 0 || tags.Any(t => i.Tags.Contains(t, StringComparer.OrdinalIgnoreCase)))
             .Where(i => linkedPr is null || i.LinkedPR == linkedPr)
             .ToList();
+    }
+
+    public async Task<Issue> UpdateQuestionsAsync(
+        string id,
+        IReadOnlyList<Question> questions,
+        CancellationToken cancellationToken = default)
+    {
+        var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
+        var existingIndex = issues.FindIndex(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+        if (existingIndex < 0)
+        {
+            throw new KeyNotFoundException($"Issue with ID '{id}' not found.");
+        }
+
+        var existing = issues[existingIndex];
+        var now = DateTimeOffset.UtcNow;
+        var modifiedBy = gitConfigService.GetUserName();
+
+        var updated = existing with
+        {
+            Questions = questions,
+            QuestionsLastUpdate = now,
+            QuestionsModifiedBy = modifiedBy,
+            LastUpdate = now
+        };
+
+        issues[existingIndex] = updated;
+        await storage.SaveIssuesAsync(issues, cancellationToken);
+
+        // Record change
+        var changeRecord = new ChangeRecord
+        {
+            ChangeId = Guid.NewGuid(),
+            IssueId = id,
+            Type = ChangeType.Updated,
+            ChangedBy = modifiedBy ?? "unknown",
+            ChangedAt = now,
+            PropertyChanges =
+            [
+                new PropertyChange
+                {
+                    PropertyName = "Questions",
+                    OldValue = $"{existing.Questions.Count} question(s)",
+                    NewValue = $"{questions.Count} question(s)",
+                    Timestamp = now
+                }
+            ]
+        };
+
+        await changeService.AddAsync(changeRecord, cancellationToken);
+
+        return updated;
     }
 }

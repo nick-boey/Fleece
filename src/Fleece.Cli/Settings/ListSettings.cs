@@ -6,11 +6,11 @@ namespace Fleece.Cli.Settings;
 public sealed class ListSettings : CommandSettings
 {
     [CommandOption("-s|--status <STATUS>")]
-    [Description("Filter by status: open, complete, closed, archived")]
+    [Description("Filter by status: idea, spec, next, progress, review, complete, archived, closed")]
     public string? Status { get; init; }
 
     [CommandOption("-t|--type <TYPE>")]
-    [Description("Filter by type: task, bug, chore, idea, feature")]
+    [Description("Filter by type: task, bug, chore, feature")]
     public string? Type { get; init; }
 
     [CommandOption("-p|--priority <PRIORITY>")]
@@ -42,6 +42,10 @@ public sealed class ListSettings : CommandSettings
     public bool JsonVerbose { get; init; }
 
     [CommandOption("-a|--all")]
-    [Description("Show all issues including complete, closed, and archived")]
+    [Description("Show all issues including all statuses")]
     public bool All { get; init; }
+
+    [CommandOption("--one-line")]
+    [Description("Output each issue on a single line: <id> <status> <group> <type> <title>")]
+    public bool OneLine { get; init; }
 }

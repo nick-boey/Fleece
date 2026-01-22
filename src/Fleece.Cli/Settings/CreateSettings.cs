@@ -10,7 +10,7 @@ public sealed class CreateSettings : CommandSettings
     public string Title { get; init; } = null!;
 
     [CommandOption("--type <TYPE>")]
-    [Description("Issue type: task, bug, chore, idea, feature (required)")]
+    [Description("Issue type: task, bug, chore, feature (required)")]
     public string Type { get; init; } = null!;
 
     [CommandOption("-d|--description <DESC>")]
@@ -18,7 +18,7 @@ public sealed class CreateSettings : CommandSettings
     public string? Description { get; init; }
 
     [CommandOption("-s|--status <STATUS>")]
-    [Description("Initial status (default: open)")]
+    [Description("Initial status (default: idea)")]
     public string? Status { get; init; }
 
     [CommandOption("-p|--priority <PRIORITY>")]
@@ -36,6 +36,10 @@ public sealed class CreateSettings : CommandSettings
     [CommandOption("--parent-issues <ISSUES>")]
     [Description("Comma-separated parent issue IDs")]
     public string? ParentIssues { get; init; }
+
+    [CommandOption("--previous <ISSUES>")]
+    [Description("Comma-separated IDs of issues that should be done before this one")]
+    public string? PreviousIssues { get; init; }
 
     [CommandOption("-g|--group <GROUP>")]
     [Description("Issue group for categorization")]

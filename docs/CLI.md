@@ -29,13 +29,13 @@ When run with no arguments, opens your default editor with a YAML template for i
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--title` | `-t` | Issue title (used to generate ID) |
-| `--type` | | Issue type: task, bug, chore, idea, feature |
+| `--type` | | Issue type: task, bug, chore, feature |
 
 **Optional Options:**
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--description` | `-d` | Detailed description |
-| `--status` | `-s` | Initial status (default: open) |
+| `--status` | `-s` | Initial status (default: idea) |
 | `--priority` | `-p` | Priority 1-5 (1=highest) |
 | `--linked-pr` | | Associated PR number |
 | `--linked-issues` | | Comma-separated issue IDs or #numbers |
@@ -55,8 +55,8 @@ fleece create --title "Update documentation" --type task
 # Create a high-priority bug
 fleece create --title "Login fails on Safari" --type bug --priority 1
 
-# Create a feature with description
-fleece create --title "Add dark mode" --type feature -d "Support system theme preference"
+# Create a feature with description and mark ready for work
+fleece create --title "Add dark mode" --type feature -d "Support system theme preference" -s next
 
 # Create with tags
 fleece create --title "API refactor" --type task --tags "backend,breaking-change"
@@ -409,8 +409,8 @@ Outputs instructions that can be included in prompts to help LLMs understand how
 | `Id` | string | Yes | 6-char SHA256 hash of title |
 | `Title` | string | Yes | Issue title |
 | `Description` | string | No | Detailed description |
-| `Status` | enum | Yes | open, complete, closed, archived |
-| `Type` | enum | Yes | task, bug, chore, idea, feature |
+| `Status` | enum | Yes | idea, spec, next, progress, review, complete, archived, closed |
+| `Type` | enum | Yes | task, bug, chore, feature |
 | `LinkedPR` | int | No | Associated PR number |
 | `LinkedIssues` | string[] | No | Related issue IDs |
 | `ParentIssues` | string[] | No | Parent issue IDs |
@@ -425,7 +425,7 @@ Outputs instructions that can be included in prompts to help LLMs understand how
 ### Example JSONL Entry
 
 ```json
-{"Id":"a1b2c3","Title":"Fix login bug","Description":"Users can't log in on Safari","Status":"open","Type":"bug","Priority":1,"Tags":["urgent","backend"],"LastUpdate":"2024-01-15T10:30:00Z"}
+{"Id":"a1b2c3","Title":"Fix login bug","Description":"Users can't log in on Safari","Status":"next","Type":"bug","Priority":1,"Tags":["urgent","backend"],"LastUpdate":"2024-01-15T10:30:00Z"}
 ```
 
 ---
@@ -453,8 +453,9 @@ Include the output in your system prompt for AI-assisted issue management:
 
 ```
 When working on this codebase, track issues using the Fleece CLI:
-- Create issues: fleece create --title "..." --type task|bug|feature|chore|idea
+- Create issues: fleece create --title "..." --type task|bug|feature|chore
 - List issues: fleece list
+- Start work: fleece edit <id> --status progress
 - Complete work: fleece edit <id> --status complete
 - Link PRs: fleece edit <id> --linked-pr <number>
 ```
