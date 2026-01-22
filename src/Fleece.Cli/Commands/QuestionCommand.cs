@@ -50,14 +50,16 @@ public sealed class QuestionCommand(IIssueService issueService) : AsyncCommand<Q
 
     private static int ListQuestions(Issue issue, bool json)
     {
+        var questions = issue.Questions ?? [];
+
         if (json)
         {
-            var jsonOutput = JsonSerializer.Serialize(issue.Questions, FleeceJsonContext.Default.IReadOnlyListQuestion);
+            var jsonOutput = JsonSerializer.Serialize(questions, FleeceJsonContext.Default.IReadOnlyListQuestion);
             Console.WriteLine(jsonOutput);
             return 0;
         }
 
-        if (issue.Questions.Count == 0)
+        if (questions.Count == 0)
         {
             AnsiConsole.MarkupLine($"[dim]No questions on issue {issue.Id}[/]");
             return 0;
@@ -66,7 +68,7 @@ public sealed class QuestionCommand(IIssueService issueService) : AsyncCommand<Q
         AnsiConsole.MarkupLine($"[bold]Questions on {issue.Id}:[/]");
         AnsiConsole.WriteLine();
 
-        foreach (var q in issue.Questions)
+        foreach (var q in questions)
         {
             var answeredStatus = q.Answer is not null ? "[green]✓[/]" : "[yellow]?[/]";
             AnsiConsole.MarkupLine($"{answeredStatus} [bold]{q.Id}[/]: {Markup.Escape(q.Text)}");
@@ -107,7 +109,7 @@ public sealed class QuestionCommand(IIssueService issueService) : AsyncCommand<Q
             AskedAt = now
         };
 
-        var updatedQuestions = issue.Questions.ToList();
+        var updatedQuestions = (issue.Questions ?? []).ToList();
         updatedQuestions.Add(newQuestion);
 
         try
@@ -135,7 +137,8 @@ public sealed class QuestionCommand(IIssueService issueService) : AsyncCommand<Q
 
     private async Task<int> AnswerQuestionAsync(Issue issue, string questionId, string answerText, bool json)
     {
-        var questionIndex = issue.Questions.ToList().FindIndex(q =>
+        var questions = (issue.Questions ?? []).ToList();
+        var questionIndex = questions.FindIndex(q =>
             q.Id.Equals(questionId, StringComparison.OrdinalIgnoreCase));
 
         if (questionIndex < 0)
@@ -144,7 +147,7 @@ public sealed class QuestionCommand(IIssueService issueService) : AsyncCommand<Q
             return 1;
         }
 
-        var existingQuestion = issue.Questions[questionIndex];
+        var existingQuestion = questions[questionIndex];
         var now = DateTimeOffset.UtcNow;
 
         var answeredQuestion = existingQuestion with
@@ -153,12 +156,11 @@ public sealed class QuestionCommand(IIssueService issueService) : AsyncCommand<Q
             AnsweredAt = now
         };
 
-        var updatedQuestions = issue.Questions.ToList();
-        updatedQuestions[questionIndex] = answeredQuestion;
+        questions[questionIndex] = answeredQuestion;
 
         try
         {
-            var updated = await issueService.UpdateQuestionsAsync(issue.Id, updatedQuestions);
+            var updated = await issueService.UpdateQuestionsAsync(issue.Id, questions);
 
             if (json)
             {

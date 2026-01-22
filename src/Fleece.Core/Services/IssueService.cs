@@ -501,7 +501,7 @@ public sealed partial class IssueService(
                 new PropertyChange
                 {
                     PropertyName = "Questions",
-                    OldValue = $"{existing.Questions.Count} question(s)",
+                    OldValue = $"{(existing.Questions?.Count ?? 0)} question(s)",
                     NewValue = $"{questions.Count} question(s)",
                     Timestamp = now
                 }
