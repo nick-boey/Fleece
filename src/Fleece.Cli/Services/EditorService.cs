@@ -39,6 +39,7 @@ public sealed class EditorService
             group:
             assignedTo:
             tags:   # Comma-separated list, e.g.: urgent,backend,api
+            workingBranchId:   # Git branch name for this issue
             linkedPr:
             linkedIssues:   # Comma-separated issue IDs
             parentIssues:   # Comma-separated issue IDs
@@ -74,6 +75,7 @@ public sealed class EditorService
             group: {EscapeYamlValue(issue.Group)}
             assignedTo: {EscapeYamlValue(issue.AssignedTo)}
             tags: {tagsStr}  # Comma-separated list, e.g.: urgent,backend,api
+            workingBranchId: {EscapeYamlValue(issue.WorkingBranchId)}  # Git branch name for this issue
             linkedPr: {(issue.LinkedPR.HasValue ? issue.LinkedPR.Value.ToString() : "")}
             linkedIssues: {linkedIssuesStr}  # Comma-separated issue IDs
             parentIssues: {parentIssuesStr}  # Comma-separated issue IDs
@@ -217,4 +219,5 @@ public sealed class IssueTemplate
     public int? LinkedPr { get; set; }
     public string? LinkedIssues { get; set; }
     public string? ParentIssues { get; set; }
+    public string? WorkingBranchId { get; set; }
 }

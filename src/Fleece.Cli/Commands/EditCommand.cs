@@ -79,7 +79,8 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 parentIssues: parentIssues,
                 group: settings.Group,
                 assignedTo: settings.AssignedTo,
-                tags: tags);
+                tags: tags,
+                workingBranchId: settings.WorkingBranchId);
 
             if (settings.Json || settings.JsonVerbose)
             {
@@ -98,6 +99,11 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
             AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
             return 1;
         }
+        catch (ArgumentException ex) when (ex.ParamName == "workingBranchId")
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+            return 1;
+        }
     }
 
     private static bool HasNoOptions(EditSettings settings) =>
@@ -112,6 +118,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         string.IsNullOrWhiteSpace(settings.Group) &&
         string.IsNullOrWhiteSpace(settings.AssignedTo) &&
         string.IsNullOrWhiteSpace(settings.Tags) &&
+        string.IsNullOrWhiteSpace(settings.WorkingBranchId) &&
         !settings.Json &&
         !settings.JsonVerbose;
 
@@ -225,7 +232,8 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 parentIssues: parentIssues,
                 group: template.Group,
                 assignedTo: template.AssignedTo,
-                tags: tags);
+                tags: tags,
+                workingBranchId: template.WorkingBranchId);
 
             AnsiConsole.MarkupLine($"[green]Updated issue[/] [bold]{issue.Id}[/]");
             TableFormatter.RenderIssue(issue);
@@ -235,6 +243,11 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         catch (KeyNotFoundException)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
+            return 1;
+        }
+        catch (ArgumentException ex) when (ex.ParamName == "workingBranchId")
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
             return 1;
         }
         finally

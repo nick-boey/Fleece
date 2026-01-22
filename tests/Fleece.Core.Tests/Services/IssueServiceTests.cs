@@ -465,4 +465,131 @@ public class IssueServiceTests
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("a");
     }
+
+    [Test]
+    public async Task CreateAsync_SetsWorkingBranchId()
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var result = await _sut.CreateAsync(
+            title: "Test Issue",
+            type: IssueType.Task,
+            workingBranchId: "feat/my-feature");
+
+        result.WorkingBranchId.Should().Be("feat/my-feature");
+    }
+
+    [Test]
+    public async Task UpdateAsync_UpdatesWorkingBranchId()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.UpdateAsync("abc123", workingBranchId: "fix/bug-123");
+
+        result.WorkingBranchId.Should().Be("fix/bug-123");
+    }
+
+    [Test]
+    public void CreateAsync_ThrowsOnInvalidBranchName_WithSpace()
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var act = async () => await _sut.CreateAsync(
+            title: "Test Issue",
+            type: IssueType.Task,
+            workingBranchId: "invalid branch name");
+
+        act.Should().ThrowAsync<ArgumentException>()
+            .WithParameterName("workingBranchId");
+    }
+
+    [Test]
+    public void CreateAsync_ThrowsOnInvalidBranchName_WithTilde()
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var act = async () => await _sut.CreateAsync(
+            title: "Test Issue",
+            type: IssueType.Task,
+            workingBranchId: "invalid~branch");
+
+        act.Should().ThrowAsync<ArgumentException>()
+            .WithParameterName("workingBranchId");
+    }
+
+    [Test]
+    public void UpdateAsync_ThrowsOnInvalidBranchName()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var act = async () => await _sut.UpdateAsync("abc123", workingBranchId: "invalid:branch");
+
+        act.Should().ThrowAsync<ArgumentException>()
+            .WithParameterName("workingBranchId");
+    }
+
+    [TestCase("feat/my-feature")]
+    [TestCase("fix/bug-123")]
+    [TestCase("feature/add-login")]
+    [TestCase("my-branch")]
+    [TestCase("my_branch")]
+    [TestCase("v1.0.0")]
+    [TestCase("a")]
+    public async Task CreateAsync_AcceptsValidBranchNames(string branchName)
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var result = await _sut.CreateAsync(
+            title: "Test Issue",
+            type: IssueType.Task,
+            workingBranchId: branchName);
+
+        result.WorkingBranchId.Should().Be(branchName);
+    }
+
+    [TestCase("invalid branch")]
+    [TestCase("invalid~branch")]
+    [TestCase("invalid^branch")]
+    [TestCase("invalid:branch")]
+    [TestCase("invalid?branch")]
+    [TestCase("invalid*branch")]
+    [TestCase("invalid[branch")]
+    [TestCase(".hidden")]
+    [TestCase("branch.lock")]
+    [TestCase("branch..name")]
+    [TestCase("/leading-slash")]
+    [TestCase("trailing-slash/")]
+    public void CreateAsync_RejectsInvalidBranchNames(string branchName)
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var act = async () => await _sut.CreateAsync(
+            title: "Test Issue",
+            type: IssueType.Task,
+            workingBranchId: branchName);
+
+        act.Should().ThrowAsync<ArgumentException>()
+            .WithParameterName("workingBranchId");
+    }
+
+    [Test]
+    public async Task CreateAsync_AllowsNullWorkingBranchId()
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var result = await _sut.CreateAsync(
+            title: "Test Issue",
+            type: IssueType.Task,
+            workingBranchId: null);
+
+        result.WorkingBranchId.Should().BeNull();
+    }
 }
