@@ -49,6 +49,10 @@ public sealed class CreateSettings : CommandSettings
     [Description("Comma-separated tags (no whitespace allowed in tags)")]
     public string? Tags { get; init; }
 
+    [CommandOption("-b|--working-branch <BRANCH>")]
+    [Description("Working branch ID (valid Git branch name characters only)")]
+    public string? WorkingBranchId { get; init; }
+
     [CommandOption("--json")]
     [Description("Output as JSON")]
     public bool Json { get; init; }

@@ -16,6 +16,7 @@ public interface IIssueService
         string? group = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
+        string? workingBranchId = null,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<Issue>> GetAllAsync(CancellationToken cancellationToken = default);
@@ -35,6 +36,7 @@ public interface IIssueService
         string? group = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
+        string? workingBranchId = null,
         CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default);

@@ -53,6 +53,10 @@ public sealed class EditSettings : CommandSettings
     [Description("Replace tags (comma-separated, no whitespace allowed in tags)")]
     public string? Tags { get; init; }
 
+    [CommandOption("-b|--working-branch <BRANCH>")]
+    [Description("New working branch ID (valid Git branch name characters only)")]
+    public string? WorkingBranchId { get; init; }
+
     [CommandOption("--json")]
     [Description("Output as JSON")]
     public bool Json { get; init; }

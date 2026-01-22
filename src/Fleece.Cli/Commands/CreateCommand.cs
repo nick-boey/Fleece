@@ -120,7 +120,8 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 parentIssues: parentIssues,
                 group: template.Group,
                 assignedTo: template.AssignedTo,
-                tags: tags);
+                tags: tags,
+                workingBranchId: template.WorkingBranchId);
 
             if (settings.Json || settings.JsonVerbose)
             {
@@ -178,29 +179,38 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
 
         await storageService.EnsureDirectoryExistsAsync();
 
-        var issue = await issueService.CreateAsync(
-            title: settings.Title,
-            type: issueType,
-            description: settings.Description,
-            status: status,
-            priority: settings.Priority,
-            linkedPr: settings.LinkedPr,
-            linkedIssues: linkedIssues,
-            parentIssues: parentIssues,
-            group: settings.Group,
-            assignedTo: settings.AssignedTo,
-            tags: tags);
-
-        if (settings.Json || settings.JsonVerbose)
+        try
         {
-            JsonFormatter.RenderIssue(issue, verbose: settings.JsonVerbose);
-        }
-        else
-        {
-            AnsiConsole.MarkupLine($"[green]Created issue[/] [bold]{issue.Id}[/]");
-            TableFormatter.RenderIssue(issue);
-        }
+            var issue = await issueService.CreateAsync(
+                title: settings.Title,
+                type: issueType,
+                description: settings.Description,
+                status: status,
+                priority: settings.Priority,
+                linkedPr: settings.LinkedPr,
+                linkedIssues: linkedIssues,
+                parentIssues: parentIssues,
+                group: settings.Group,
+                assignedTo: settings.AssignedTo,
+                tags: tags,
+                workingBranchId: settings.WorkingBranchId);
 
-        return 0;
+            if (settings.Json || settings.JsonVerbose)
+            {
+                JsonFormatter.RenderIssue(issue, verbose: settings.JsonVerbose);
+            }
+            else
+            {
+                AnsiConsole.MarkupLine($"[green]Created issue[/] [bold]{issue.Id}[/]");
+                TableFormatter.RenderIssue(issue);
+            }
+
+            return 0;
+        }
+        catch (ArgumentException ex) when (ex.ParamName == "workingBranchId")
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+            return 1;
+        }
     }
 }
