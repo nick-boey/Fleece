@@ -74,7 +74,7 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
         var rootIssues = issues
             .Where(i =>
             {
-                if (i.ParentIssues.Count == 0)
+                if (i.ParentIssues is null || i.ParentIssues.Count == 0)
                 {
                     return true;
                 }
@@ -156,7 +156,7 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
 
         // Find children (issues that have this issue as a parent)
         var children = allIssues
-            .Where(i => i.ParentIssues.Contains(issue.Id, StringComparer.OrdinalIgnoreCase))
+            .Where(i => i.ParentIssues?.Contains(issue.Id, StringComparer.OrdinalIgnoreCase) ?? false)
             .OrderBy(i => i.Priority ?? 99)
             .ThenBy(i => i.Title)
             .ToList();
@@ -169,7 +169,7 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
             var isLastChild = i == children.Count - 1;
 
             // Check if this child has multiple parents within the filtered set
-            var parentsInSet = child.ParentIssues
+            var parentsInSet = (child.ParentIssues ?? [])
                 .Where(p => issueLookup.ContainsKey(p))
                 .ToList();
 
@@ -196,7 +196,7 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
 
         // Find root issues
         var rootIssues = issues
-            .Where(i => i.ParentIssues.Count == 0 ||
+            .Where(i => i.ParentIssues is null || i.ParentIssues.Count == 0 ||
                         i.ParentIssues.All(p => !issueLookup.ContainsKey(p)))
             .OrderBy(i => i.Priority ?? 99)
             .ThenBy(i => i.Title)
@@ -222,7 +222,7 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
         rendered.Add(issue.Id);
 
         var children = allIssues
-            .Where(i => i.ParentIssues.Contains(issue.Id, StringComparer.OrdinalIgnoreCase))
+            .Where(i => i.ParentIssues?.Contains(issue.Id, StringComparer.OrdinalIgnoreCase) ?? false)
             .OrderBy(i => i.Priority ?? 99)
             .ThenBy(i => i.Title)
             .ToList();

@@ -255,17 +255,21 @@ public sealed class IssueMerger
 
     private static (IReadOnlyList<string> Value, DateTimeOffset Timestamp, string? ModifiedBy, PropertyChange? Change) MergeCollections(
         string propertyName,
-        IReadOnlyList<string> listA, DateTimeOffset timestampA, string? modifiedByA,
-        IReadOnlyList<string> listB, DateTimeOffset timestampB, string? modifiedByB,
+        IReadOnlyList<string>? listA, DateTimeOffset timestampA, string? modifiedByA,
+        IReadOnlyList<string>? listB, DateTimeOffset timestampB, string? modifiedByB,
         string? mergedBy, DateTimeOffset mergeTime)
     {
+        // Handle null collections
+        var safeListA = listA ?? [];
+        var safeListB = listB ?? [];
+
         // Union strategy: combine both lists
-        var union = listA.Union(listB, StringComparer.OrdinalIgnoreCase).ToList();
+        var union = safeListA.Union(safeListB, StringComparer.OrdinalIgnoreCase).ToList();
         var newerTimestamp = timestampA > timestampB ? timestampA : timestampB;
 
         // Check if there's a conflict (lists are different)
-        var setA = new HashSet<string>(listA, StringComparer.OrdinalIgnoreCase);
-        var setB = new HashSet<string>(listB, StringComparer.OrdinalIgnoreCase);
+        var setA = new HashSet<string>(safeListA, StringComparer.OrdinalIgnoreCase);
+        var setB = new HashSet<string>(safeListB, StringComparer.OrdinalIgnoreCase);
 
         if (setA.SetEquals(setB))
         {
@@ -276,7 +280,7 @@ public sealed class IssueMerger
         var change = new PropertyChange
         {
             PropertyName = propertyName,
-            OldValue = $"A: [{string.Join(", ", listA)}], B: [{string.Join(", ", listB)}]",
+            OldValue = $"A: [{string.Join(", ", safeListA)}], B: [{string.Join(", ", safeListB)}]",
             NewValue = string.Join(", ", union),
             Timestamp = mergeTime,
             MergeResolution = "Union"
