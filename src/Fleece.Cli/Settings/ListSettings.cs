@@ -48,4 +48,8 @@ public sealed class ListSettings : CommandSettings
     [CommandOption("--one-line")]
     [Description("Output each issue on a single line: <id> <status> <group> <type> <title>")]
     public bool OneLine { get; init; }
+
+    [CommandOption("--strict")]
+    [Description("Fail with exit code 1 if schema warnings are detected")]
+    public bool Strict { get; init; }
 }
