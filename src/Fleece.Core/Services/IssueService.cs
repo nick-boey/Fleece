@@ -316,17 +316,17 @@ public sealed partial class IssueService(
 
         if (linkedIssues is not null)
         {
-            propertyChanges.Add(new() { PropertyName = "LinkedIssues", OldValue = string.Join(",", existing.LinkedIssues), NewValue = string.Join(",", linkedIssues), Timestamp = now });
+            propertyChanges.Add(new() { PropertyName = "LinkedIssues", OldValue = string.Join(",", existing.LinkedIssues ?? []), NewValue = string.Join(",", linkedIssues), Timestamp = now });
         }
 
         if (parentIssues is not null)
         {
-            propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = string.Join(",", existing.ParentIssues), NewValue = string.Join(",", parentIssues), Timestamp = now });
+            propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = string.Join(",", existing.ParentIssues ?? []), NewValue = string.Join(",", parentIssues), Timestamp = now });
         }
 
         if (previousIssues is not null)
         {
-            propertyChanges.Add(new() { PropertyName = "PreviousIssues", OldValue = string.Join(",", existing.PreviousIssues), NewValue = string.Join(",", previousIssues), Timestamp = now });
+            propertyChanges.Add(new() { PropertyName = "PreviousIssues", OldValue = string.Join(",", existing.PreviousIssues ?? []), NewValue = string.Join(",", previousIssues), Timestamp = now });
         }
 
         if (group is not null)
@@ -341,7 +341,7 @@ public sealed partial class IssueService(
 
         if (tags is not null)
         {
-            propertyChanges.Add(new() { PropertyName = "Tags", OldValue = string.Join(",", existing.Tags), NewValue = string.Join(",", tags), Timestamp = now });
+            propertyChanges.Add(new() { PropertyName = "Tags", OldValue = string.Join(",", existing.Tags ?? []), NewValue = string.Join(",", tags), Timestamp = now });
         }
 
         if (workingBranchId is not null)
@@ -432,7 +432,7 @@ public sealed partial class IssueService(
             .Where(i =>
                 i.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 (i.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                i.Tags.Any(t => t.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
+                (i.Tags?.Any(t => t.Contains(query, StringComparison.OrdinalIgnoreCase)) ?? false) ||
                 (i.Group?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
             .ToList();
     }
@@ -464,7 +464,7 @@ public sealed partial class IssueService(
             .Where(i => priority is null || i.Priority == priority)
             .Where(i => group is null || string.Equals(i.Group, group, StringComparison.OrdinalIgnoreCase))
             .Where(i => assignedTo is null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
-            .Where(i => tags is null || tags.Count == 0 || tags.Any(t => i.Tags.Contains(t, StringComparer.OrdinalIgnoreCase)))
+            .Where(i => tags is null || tags.Count == 0 || tags.Any(t => i.Tags?.Contains(t, StringComparer.OrdinalIgnoreCase) ?? false))
             .Where(i => linkedPr is null || i.LinkedPR == linkedPr)
             .ToList();
     }

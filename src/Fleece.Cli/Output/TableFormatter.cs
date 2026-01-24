@@ -103,17 +103,17 @@ public static class TableFormatter
             lines.Add($"[bold]Linked PR:[/] #{issue.LinkedPR}");
         }
 
-        if (issue.LinkedIssues.Count > 0)
+        if (issue.LinkedIssues?.Count > 0)
         {
             lines.Add($"[bold]Linked Issues:[/] {string.Join(", ", issue.LinkedIssues)}");
         }
 
-        if (issue.ParentIssues.Count > 0)
+        if (issue.ParentIssues?.Count > 0)
         {
             lines.Add($"[bold]Parent Issues:[/] {string.Join(", ", issue.ParentIssues)}");
         }
 
-        if (issue.PreviousIssues.Count > 0)
+        if (issue.PreviousIssues?.Count > 0)
         {
             lines.Add($"[bold]Previous Issues:[/] {string.Join(", ", issue.PreviousIssues)}");
         }
@@ -128,7 +128,7 @@ public static class TableFormatter
             lines.Add($"[bold]Assigned To:[/] {Markup.Escape(issue.AssignedTo)}");
         }
 
-        if (issue.Tags.Count > 0)
+        if (issue.Tags?.Count > 0)
         {
             lines.Add($"[bold]Tags:[/] {string.Join(", ", issue.Tags.Select(Markup.Escape))}");
         }
