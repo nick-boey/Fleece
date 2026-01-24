@@ -76,6 +76,11 @@ app.Configure(config =>
         .WithExample("question", "abc123", "--list")
         .WithExample("question", "abc123", "--ask", "What is the expected behavior?")
         .WithExample("question", "abc123", "--answer", "Q12345", "--text", "It should return a 200 status");
+
+    config.AddCommand<ValidateCommand>("validate")
+        .WithDescription("Validate issue dependencies for cycles")
+        .WithExample("validate")
+        .WithExample("validate", "--json");
 });
 
 return await app.RunAsync(args);
