@@ -12,6 +12,7 @@ public class IssueBuilder
     private int? _linkedPr;
     private IReadOnlyList<string> _linkedIssues = [];
     private IReadOnlyList<string> _parentIssues = [];
+    private IReadOnlyList<string> _previousIssues = [];
     private int? _priority;
     private string? _group;
     private string? _assignedTo;
@@ -64,6 +65,12 @@ public class IssueBuilder
     public IssueBuilder WithParentIssues(params string[] parents)
     {
         _parentIssues = parents;
+        return this;
+    }
+
+    public IssueBuilder WithPreviousIssues(params string[] previousIssues)
+    {
+        _previousIssues = previousIssues;
         return this;
     }
 
@@ -120,6 +127,8 @@ public class IssueBuilder
         LinkedIssuesLastUpdate = _lastUpdate,
         ParentIssues = _parentIssues,
         ParentIssuesLastUpdate = _lastUpdate,
+        PreviousIssues = _previousIssues,
+        PreviousIssuesLastUpdate = _lastUpdate,
         Priority = _priority,
         PriorityLastUpdate = _priority is not null ? _lastUpdate : null,
         Group = _group,
