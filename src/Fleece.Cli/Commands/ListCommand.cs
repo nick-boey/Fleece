@@ -67,7 +67,8 @@ public sealed class ListCommand(IStorageService storageService) : AsyncCommand<L
             settings.Group,
             settings.AssignedTo,
             settings.Tags,
-            settings.LinkedPr);
+            settings.LinkedPr,
+            settings.All);
 
         if (settings.Json || settings.JsonVerbose)
         {
@@ -85,6 +86,14 @@ public sealed class ListCommand(IStorageService storageService) : AsyncCommand<L
         return 0;
     }
 
+    private static readonly HashSet<IssueStatus> TerminalStatuses =
+    [
+        IssueStatus.Complete,
+        IssueStatus.Archived,
+        IssueStatus.Closed,
+        IssueStatus.Deleted
+    ];
+
     private static IReadOnlyList<Issue> ApplyFilters(
         IReadOnlyList<Issue> issues,
         IssueStatus? status,
@@ -93,7 +102,8 @@ public sealed class ListCommand(IStorageService storageService) : AsyncCommand<L
         string? group,
         string? assignedTo,
         string[]? tags,
-        int? linkedPr)
+        int? linkedPr,
+        bool includeTerminal)
     {
         return issues
             .Where(i => status is null || i.Status == status)
@@ -103,6 +113,7 @@ public sealed class ListCommand(IStorageService storageService) : AsyncCommand<L
             .Where(i => assignedTo is null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
             .Where(i => tags is null || tags.Length == 0 || tags.Any(t => i.Tags.Contains(t, StringComparer.OrdinalIgnoreCase)))
             .Where(i => linkedPr is null || i.LinkedPR == linkedPr)
+            .Where(i => includeTerminal || status is not null || !TerminalStatuses.Contains(i.Status))
             .ToList();
     }
 

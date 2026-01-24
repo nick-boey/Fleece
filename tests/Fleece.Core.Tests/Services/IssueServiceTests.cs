@@ -592,4 +592,137 @@ public class IssueServiceTests
 
         result.WorkingBranchId.Should().BeNull();
     }
+
+    [Test]
+    public async Task FilterAsync_ExcludesTerminalStatuses_ByDefault()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Spec, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Next, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "d", Title = "D", Status = IssueStatus.Progress, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "e", Title = "E", Status = IssueStatus.Review, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "f", Title = "F", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "g", Title = "G", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "h", Title = "H", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "i", Title = "I", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync();
+
+        result.Should().HaveCount(5);
+        result.Select(i => i.Id).Should().Contain(["a", "b", "c", "d", "e"]);
+        result.Select(i => i.Id).Should().NotContain(["f", "g", "h", "i"]);
+    }
+
+    [Test]
+    public async Task FilterAsync_IncludesTerminalStatuses_WhenIncludeTerminalIsTrue()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "d", Title = "D", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "e", Title = "E", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(includeTerminal: true);
+
+        result.Should().HaveCount(5);
+        result.Select(i => i.Id).Should().Contain(["a", "b", "c", "d", "e"]);
+    }
+
+    [Test]
+    public async Task FilterAsync_IncludesTerminalStatus_WhenExplicitlyFiltered()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        // When a specific terminal status is requested, it should be returned even without includeTerminal
+        var result = await _sut.FilterAsync(status: IssueStatus.Complete);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("b");
+    }
+
+    [Test]
+    public async Task FilterAsync_ExcludesAllTerminalStatuses_Complete()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync();
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task FilterAsync_ExcludesAllTerminalStatuses_Archived()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync();
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task FilterAsync_ExcludesAllTerminalStatuses_Closed()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync();
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task FilterAsync_ExcludesAllTerminalStatuses_Deleted()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync();
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task FilterAsync_CombinesTerminalFilterWithOtherFilters()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Idea, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Idea, Type = IssueType.Task, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Complete, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(type: IssueType.Bug, priority: 1);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
 }

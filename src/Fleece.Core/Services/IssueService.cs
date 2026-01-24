@@ -437,6 +437,12 @@ public sealed partial class IssueService(
             .ToList();
     }
 
+    /// <summary>
+    /// Terminal statuses that are excluded from results by default (when includeTerminal is false).
+    /// </summary>
+    private static readonly IssueStatus[] TerminalStatuses =
+        [IssueStatus.Complete, IssueStatus.Archived, IssueStatus.Closed, IssueStatus.Deleted];
+
     public async Task<IReadOnlyList<Issue>> FilterAsync(
         IssueStatus? status = null,
         IssueType? type = null,
@@ -445,12 +451,15 @@ public sealed partial class IssueService(
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
+        bool includeTerminal = false,
         CancellationToken cancellationToken = default)
     {
         var issues = await storage.LoadIssuesAsync(cancellationToken);
 
         return issues
             .Where(i => status is null || i.Status == status)
+            // Exclude terminal statuses unless includeTerminal is true or a specific status was requested
+            .Where(i => status is not null || includeTerminal || !TerminalStatuses.Contains(i.Status))
             .Where(i => type is null || i.Type == type)
             .Where(i => priority is null || i.Priority == priority)
             .Where(i => group is null || string.Equals(i.Group, group, StringComparison.OrdinalIgnoreCase))

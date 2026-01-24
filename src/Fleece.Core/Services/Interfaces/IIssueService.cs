@@ -53,6 +53,7 @@ public interface IIssueService
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
+        bool includeTerminal = false,
         CancellationToken cancellationToken = default);
 
     Task<Issue> UpdateQuestionsAsync(
