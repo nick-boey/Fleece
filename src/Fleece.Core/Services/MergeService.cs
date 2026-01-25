@@ -6,7 +6,6 @@ namespace Fleece.Core.Services;
 
 public sealed class MergeService(
     IStorageService storage,
-    IChangeService changeService,
     IGitConfigService gitConfigService,
     IJsonlSerializer serializer) : IMergeService
 {
@@ -68,12 +67,6 @@ public sealed class MergeService(
                     };
 
                     changeRecords.Add(changeRecord);
-
-                    // Only persist the change record if not in dry-run mode
-                    if (!dryRun)
-                    {
-                        await changeService.AddAsync(changeRecord, cancellationToken);
-                    }
                 }
             }
             else
@@ -93,6 +86,14 @@ public sealed class MergeService(
 
             // Save consolidated issues with new hash
             await storage.SaveIssuesWithHashAsync(mergedIssues, cancellationToken);
+
+            // Consolidate change records after issues have been saved with new hash
+            // Load all existing changes, add any new merge records, and save
+            // This ensures the changes file has the same hash as the issues file
+            var existingChanges = await storage.LoadChangesAsync(cancellationToken);
+            var allChanges = existingChanges.ToList();
+            allChanges.AddRange(changeRecords);
+            await storage.SaveChangesAsync(allChanges, cancellationToken);
         }
 
         return changeRecords;
