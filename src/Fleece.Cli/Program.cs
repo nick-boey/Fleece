@@ -44,6 +44,11 @@ app.Configure(config =>
         .WithDescription("Delete an issue by ID")
         .WithExample("delete", "abc123");
 
+    config.AddCommand<ShowCommand>("show")
+        .WithDescription("Show all details of an issue")
+        .WithExample("show", "abc123")
+        .WithExample("show", "abc123", "--json");
+
     config.AddCommand<SearchCommand>("search")
         .WithDescription("Search issues by text")
         .WithExample("search", "login");
