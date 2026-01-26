@@ -58,3 +58,5 @@ nunit-*.xml
 *.suo
 *.user
 .vs/
+
+.tmp/

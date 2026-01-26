@@ -13,7 +13,6 @@ namespace Fleece.Core.Tests.Services;
 public class MergeServiceTests
 {
     private IStorageService _storage = null!;
-    private IChangeService _changeService = null!;
     private IGitConfigService _gitConfigService = null!;
     private IJsonlSerializer _serializer = null!;
     private MergeService _sut = null!;
@@ -22,11 +21,10 @@ public class MergeServiceTests
     public void SetUp()
     {
         _storage = Substitute.For<IStorageService>();
-        _changeService = Substitute.For<IChangeService>();
         _gitConfigService = Substitute.For<IGitConfigService>();
         _gitConfigService.GetUserName().Returns("Test User");
         _serializer = new JsonlSerializer();
-        _sut = new MergeService(_storage, _changeService, _gitConfigService, _serializer);
+        _sut = new MergeService(_storage, _gitConfigService, _serializer);
     }
 
     private void SetupStorageMock(IReadOnlyList<Issue> issues)
@@ -108,8 +106,9 @@ public class MergeServiceTests
 
         await _sut.FindAndResolveDuplicatesAsync();
 
-        await _changeService.Received(1).AddAsync(
-            Arg.Is<ChangeRecord>(c => c.IssueId == "abc123" && c.Type == ChangeType.Merged),
+        await _storage.Received(1).SaveChangesAsync(
+            Arg.Is<IReadOnlyList<ChangeRecord>>(changes =>
+                changes.Any(c => c.IssueId == "abc123" && c.Type == ChangeType.Merged)),
             Arg.Any<CancellationToken>());
     }
 
@@ -132,11 +131,11 @@ public class MergeServiceTests
 
         // Property-level merge combines all into one merged result, so only 1 change record
         result.Should().HaveCount(1);
-        await _changeService.Received(1).AddAsync(Arg.Any<ChangeRecord>(), Arg.Any<CancellationToken>());
+        await _storage.Received(1).SaveChangesAsync(Arg.Any<IReadOnlyList<ChangeRecord>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task FindAndResolveDuplicatesAsync_DoesNotSaveWhenNoDuplicates()
+    public async Task FindAndResolveDuplicatesAsync_ConsolidatesFilesWhenNoDuplicates()
     {
         var issues = new List<Issue>
         {
@@ -148,5 +147,40 @@ public class MergeServiceTests
 
         // Still saves once because we have files to consolidate
         await _storage.Received(1).SaveIssuesWithHashAsync(Arg.Any<IReadOnlyList<Issue>>(), Arg.Any<CancellationToken>());
+        // Changes should also be consolidated even when there are no issue duplicates
+        await _storage.Received(1).SaveChangesAsync(Arg.Any<IReadOnlyList<ChangeRecord>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task FindAndResolveDuplicatesAsync_AlwaysConsolidatesChanges()
+    {
+        // Arrange: Single issue with no duplicates, but changes exist
+        var issues = new List<Issue>
+        {
+            new IssueBuilder().WithId("a").WithTitle("A").Build()
+        };
+        SetupStorageMock(issues);
+
+        var existingChanges = new List<ChangeRecord>
+        {
+            new()
+            {
+                ChangeId = Guid.NewGuid(),
+                IssueId = "a",
+                Type = ChangeType.Created,
+                ChangedBy = "user",
+                ChangedAt = DateTimeOffset.UtcNow.AddHours(-1),
+                PropertyChanges = []
+            }
+        };
+        _storage.LoadChangesAsync(Arg.Any<CancellationToken>()).Returns(existingChanges);
+
+        // Act
+        await _sut.FindAndResolveDuplicatesAsync();
+
+        // Assert: Changes should be consolidated even without issue duplicates
+        await _storage.Received(1).SaveChangesAsync(
+            Arg.Is<IReadOnlyList<ChangeRecord>>(changes => changes.Count == 1),
+            Arg.Any<CancellationToken>());
     }
 }
