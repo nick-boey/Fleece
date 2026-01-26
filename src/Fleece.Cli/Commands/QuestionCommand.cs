@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Fleece.Cli.Output;
 using Fleece.Cli.Settings;
 using Fleece.Core.Models;
 using Fleece.Core.Serialization;
@@ -14,13 +15,23 @@ public sealed class QuestionCommand(IIssueService issueService) : AsyncCommand<Q
 {
     public override async Task<int> ExecuteAsync(CommandContext context, QuestionSettings settings)
     {
-        // Get the issue first
-        var issue = await issueService.GetByIdAsync(settings.Id);
-        if (issue is null)
+        // Resolve the issue ID (supports partial IDs)
+        var matches = await issueService.ResolveByPartialIdAsync(settings.Id);
+
+        if (matches.Count == 0)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
             return 1;
         }
+
+        if (matches.Count > 1)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.Id}':");
+            TableFormatter.RenderIssues(matches);
+            return 1;
+        }
+
+        var issue = matches[0];
 
         // Determine which action to take
         if (settings.List)

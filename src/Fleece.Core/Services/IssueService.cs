@@ -198,6 +198,28 @@ public sealed partial class IssueService(
         return issues.FirstOrDefault(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
     }
 
+    public async Task<IReadOnlyList<Issue>> ResolveByPartialIdAsync(string partialId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(partialId))
+        {
+            return [];
+        }
+
+        var issues = await storage.LoadIssuesAsync(cancellationToken);
+
+        // If partial ID is less than 3 characters, require exact match only
+        if (partialId.Length < 3)
+        {
+            var exactMatch = issues.FirstOrDefault(i => i.Id.Equals(partialId, StringComparison.OrdinalIgnoreCase));
+            return exactMatch is not null ? [exactMatch] : [];
+        }
+
+        // For 3+ characters, find all issues whose ID starts with the partial ID
+        return issues
+            .Where(i => i.Id.StartsWith(partialId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
     public async Task<Issue> UpdateAsync(
         string id,
         string? title = null,

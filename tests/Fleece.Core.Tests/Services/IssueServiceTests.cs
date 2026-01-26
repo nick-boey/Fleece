@@ -202,6 +202,98 @@ public class IssueServiceTests
     }
 
     [Test]
+    public async Task ResolveByPartialIdAsync_ReturnsSingleIssue_WhenPartialIdMatchesOne()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "def456", Title = "Other", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.ResolveByPartialIdAsync("abc");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("abc123");
+    }
+
+    [Test]
+    public async Task ResolveByPartialIdAsync_ReturnsMultipleIssues_WhenPartialIdMatchesMany()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "abc123", Title = "Test 1", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "abc456", Title = "Test 2", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "def789", Title = "Other", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.ResolveByPartialIdAsync("abc");
+
+        result.Should().HaveCount(2);
+        result.Select(i => i.Id).Should().BeEquivalentTo(["abc123", "abc456"]);
+    }
+
+    [Test]
+    public async Task ResolveByPartialIdAsync_ReturnsEmpty_WhenNoMatches()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.ResolveByPartialIdAsync("xyz");
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task ResolveByPartialIdAsync_RequiresExactMatch_WhenLessThanThreeCharacters()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "ab", Title = "Exact", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "abc123", Title = "Partial", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.ResolveByPartialIdAsync("ab");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("ab");
+    }
+
+    [Test]
+    public async Task ResolveByPartialIdAsync_IsCaseInsensitive()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "ABC123", Title = "Test", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.ResolveByPartialIdAsync("abc");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("ABC123");
+    }
+
+    [Test]
+    public async Task ResolveByPartialIdAsync_ReturnsEmpty_WhenPartialIdIsEmpty()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.ResolveByPartialIdAsync("");
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task UpdateAsync_UpdatesProvidedFields()
     {
         var issues = new List<Issue>
