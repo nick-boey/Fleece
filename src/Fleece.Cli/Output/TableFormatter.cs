@@ -5,6 +5,25 @@ namespace Fleece.Cli.Output;
 
 public static class TableFormatter
 {
+    /// <summary>
+    /// Escapes text for safe console rendering.
+    /// Handles Spectre.Console markup escaping and replaces backticks with single quotes
+    /// to avoid rendering issues in Windows console.
+    /// </summary>
+    private static string EscapeForConsole(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return text ?? string.Empty;
+        }
+
+        // Replace backticks with single quotes for console compatibility
+        var sanitized = text.Replace('`', '\'');
+
+        // Apply Spectre.Console markup escaping
+        return Markup.Escape(sanitized);
+    }
+
     public static void RenderIssues(IReadOnlyList<Issue> issues)
     {
         if (issues.Count == 0)
@@ -55,12 +74,12 @@ public static class TableFormatter
 
             table.AddRow(
                 $"[bold]{issue.Id}[/]",
-                Markup.Escape(issue.Title),
+                EscapeForConsole(issue.Title),
                 $"[{typeColor}]{issue.Type}[/]",
                 $"[{statusColor}]{issue.Status}[/]",
                 priDisplay,
-                Markup.Escape(groupDisplay),
-                Markup.Escape(assignedDisplay),
+                EscapeForConsole(groupDisplay),
+                EscapeForConsole(assignedDisplay),
                 issue.LastUpdate.ToString("yyyy-MM-dd")
             );
         }
@@ -73,7 +92,7 @@ public static class TableFormatter
     {
         var panel = new Panel(BuildIssueContent(issue))
         {
-            Header = new PanelHeader($"[bold]{issue.Id}[/] - {Markup.Escape(issue.Title)}"),
+            Header = new PanelHeader($"[bold]{issue.Id}[/] - {EscapeForConsole(issue.Title)}"),
             Border = BoxBorder.Rounded
         };
 
@@ -95,7 +114,7 @@ public static class TableFormatter
 
         if (!string.IsNullOrEmpty(issue.Description))
         {
-            lines.Add($"[bold]Description:[/] {Markup.Escape(issue.Description)}");
+            lines.Add($"[bold]Description:[/] {EscapeForConsole(issue.Description)}");
         }
 
         if (issue.CreatedAt != default)
@@ -105,7 +124,7 @@ public static class TableFormatter
 
         if (!string.IsNullOrEmpty(issue.WorkingBranchId))
         {
-            lines.Add($"[bold]Working Branch:[/] {Markup.Escape(issue.WorkingBranchId)}");
+            lines.Add($"[bold]Working Branch:[/] {EscapeForConsole(issue.WorkingBranchId)}");
         }
 
         if (issue.LinkedPR.HasValue)
@@ -130,22 +149,22 @@ public static class TableFormatter
 
         if (!string.IsNullOrEmpty(issue.Group))
         {
-            lines.Add($"[bold]Group:[/] {Markup.Escape(issue.Group)}");
+            lines.Add($"[bold]Group:[/] {EscapeForConsole(issue.Group)}");
         }
 
         if (!string.IsNullOrEmpty(issue.AssignedTo))
         {
-            lines.Add($"[bold]Assigned To:[/] {Markup.Escape(issue.AssignedTo)}");
+            lines.Add($"[bold]Assigned To:[/] {EscapeForConsole(issue.AssignedTo)}");
         }
 
         if (issue.Tags?.Count > 0)
         {
-            lines.Add($"[bold]Tags:[/] {string.Join(", ", issue.Tags.Select(Markup.Escape))}");
+            lines.Add($"[bold]Tags:[/] {string.Join(", ", issue.Tags.Select(EscapeForConsole))}");
         }
 
         if (!string.IsNullOrEmpty(issue.CreatedBy))
         {
-            lines.Add($"[bold]Created By:[/] {Markup.Escape(issue.CreatedBy)}");
+            lines.Add($"[bold]Created By:[/] {EscapeForConsole(issue.CreatedBy)}");
         }
 
         lines.Add($"[bold]Last Update:[/] {issue.LastUpdate:yyyy-MM-dd HH:mm:ss}");
@@ -157,16 +176,16 @@ public static class TableFormatter
             lines.Add("[bold]Questions:[/]");
             foreach (var question in issue.Questions)
             {
-                lines.Add($"  [cyan]{question.Id}:[/] {Markup.Escape(question.Text)}");
+                lines.Add($"  [cyan]{question.Id}:[/] {EscapeForConsole(question.Text)}");
                 var askedBy = question.AskedBy ?? "unknown";
-                lines.Add($"    [dim]Asked by:[/] {Markup.Escape(askedBy)} [dim]on[/] {question.AskedAt:yyyy-MM-dd}");
+                lines.Add($"    [dim]Asked by:[/] {EscapeForConsole(askedBy)} [dim]on[/] {question.AskedAt:yyyy-MM-dd}");
 
                 if (!string.IsNullOrEmpty(question.Answer))
                 {
-                    lines.Add($"    [green]Answer:[/] {Markup.Escape(question.Answer)}");
+                    lines.Add($"    [green]Answer:[/] {EscapeForConsole(question.Answer)}");
                     var answeredBy = question.AnsweredBy ?? "unknown";
                     var answeredAt = question.AnsweredAt?.ToString("yyyy-MM-dd") ?? "unknown";
-                    lines.Add($"    [dim]Answered by:[/] {Markup.Escape(answeredBy)} [dim]on[/] {answeredAt}");
+                    lines.Add($"    [dim]Answered by:[/] {EscapeForConsole(answeredBy)} [dim]on[/] {answeredAt}");
                 }
                 else
                 {
@@ -197,7 +216,7 @@ public static class TableFormatter
                 _ => "white"
             };
 
-            var header = $"[{typeColor}]{change.Type}[/] {change.IssueId} by {Markup.Escape(change.ChangedBy)}";
+            var header = $"[{typeColor}]{change.Type}[/] {change.IssueId} by {EscapeForConsole(change.ChangedBy)}";
             var content = BuildChangeContent(change);
 
             var panel = new Panel(content)
@@ -227,7 +246,7 @@ public static class TableFormatter
             $"[bold]Change ID:[/] {change.ChangeId}",
             $"[bold]Issue ID:[/] {change.IssueId}",
             $"[bold]Type:[/] {change.Type}",
-            $"[bold]Changed By:[/] {Markup.Escape(change.ChangedBy)}",
+            $"[bold]Changed By:[/] {EscapeForConsole(change.ChangedBy)}",
             $"[bold]Changed At:[/] {change.ChangedAt:yyyy-MM-dd HH:mm:ss}"
         };
 
@@ -262,8 +281,8 @@ public static class TableFormatter
 
             table.AddRow(
                 $"[bold]{pc.PropertyName}[/]",
-                Markup.Escape(pc.OldValue ?? "(null)"),
-                Markup.Escape(pc.NewValue ?? "(null)"),
+                EscapeForConsole(pc.OldValue ?? "(null)"),
+                EscapeForConsole(pc.NewValue ?? "(null)"),
                 $"[{resolutionColor}]{resolutionDisplay}[/]"
             );
         }
