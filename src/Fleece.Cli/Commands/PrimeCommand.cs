@@ -7,6 +7,13 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 {
     public override int Execute(CommandContext context, PrimeSettings settings)
     {
+        // Check if .fleece folder exists - if not, exit silently (no priming needed)
+        var fleeceDirectoryPath = Path.Combine(Directory.GetCurrentDirectory(), ".fleece");
+        if (!Directory.Exists(fleeceDirectoryPath))
+        {
+            return 0;
+        }
+
         var instructions = """
             # Fleece Issue Tracking
 
