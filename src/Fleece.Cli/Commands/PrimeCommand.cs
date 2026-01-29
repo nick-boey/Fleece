@@ -7,15 +7,12 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 {
     private static readonly Dictionary<string, string> Topics = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["workflow"] = WorkflowContent,
         ["hierarchy"] = HierarchyContent,
         ["commands"] = CommandsContent,
-        ["types"] = TypesContent,
         ["statuses"] = StatusesContent,
         ["sync"] = SyncContent,
         ["json"] = JsonContent,
-        ["questions"] = QuestionsContent,
-        ["tips"] = TipsContent
+        ["questions"] = QuestionsContent
     };
 
     public override int Execute(CommandContext context, PrimeSettings settings)
@@ -49,28 +46,10 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         This project uses Fleece for local issue tracking. Issues are stored in `.fleece/issues.jsonl`.
 
-        ## Quick Start
-        1. Run `fleece install` to set up Claude Code hooks
-        2. Use `fleece create` to create issues
-        3. Use `fleece list` to view issues
-        4. Use `fleece edit <ID> --status progress` to update status
+        ## Issue Types
+        - task, bug, chore, feature
 
-        ## Detailed Help Topics
-        Run `fleece prime <topic>` for detailed information:
-
-        - workflow   - Issue status progression and when to update
-        - hierarchy  - Parent-child relationships and tree view
-        - commands   - All available CLI commands
-        - types      - Issue types (task, bug, chore, feature)
-        - statuses   - Issue status values and meanings
-        - sync       - Keeping issues synchronized with git
-        - json       - Programmatic and JSON output usage
-        - questions  - Q&A feature on issues
-        - tips       - Workflow best practices
-        """;
-
-    private const string WorkflowContent = """
-        # Issue Status Workflow
+        ## Issue Status Workflow
 
         Issues progress through statuses as work advances. Update status to reflect current state:
 
@@ -80,24 +59,35 @@ public sealed class PrimeCommand : Command<PrimeSettings>
                                               ↘ closed (abandoned/won't fix)
         ```
 
-        ## When to Update Status
+        ## Working on Issues
 
-        - `idea` → `spec`: When requirements are defined and documented
-        - `spec` → `next`: When prioritized for upcoming work
-        - `next` → `progress`: When actively working on the issue
-        - `progress` → `review`: When work is complete and awaiting review
-        - `review` → `complete`: When work is verified and merged
+        1. When starting work on an issue, update status:
+           `fleece edit <ID> --status progress`
 
-        ## Alternative Endings
+        2. When work is ready for review:
+           `fleece edit <ID> --status review`
 
-        - Use `archived` when an issue becomes irrelevant (superseded, no longer needed)
-        - Use `closed` when explicitly deciding not to do the work (won't fix, out of scope)
+        3. When completing work:
+           `fleece edit <ID> --status complete`
 
-        ## Example Commands
+        4. Link PRs to issues:
+           `fleece edit <ID> --linked-pr 123`
 
-        - Start work: `fleece edit <ID> --status progress`
-        - Ready for review: `fleece edit <ID> --status review`
-        - Mark complete: `fleece edit <ID> --status complete`
+        5. Create follow-up issues as needed
+
+        6. Use `--previous` to indicate order dependencies:
+           `fleece create --title "B" --previous "A"`
+
+        7. Use `--parent-issues` to break down large issues into sub-tasks
+
+        8. Commit `.fleece/` changes with related code changes
+
+        9. Run `fleece tree` to visualize work breakdown
+
+        ## Detailed Help Topics
+        Run `fleece prime <topic>` for detailed information:
+
+        - hierarchy, commands, statuses, sync, json, questions
         """;
 
     private const string HierarchyContent = """
@@ -167,21 +157,6 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         ## Setup
 
         - `fleece install` - Install Claude Code hooks
-        """;
-
-    private const string TypesContent = """
-        # Issue Types
-
-        - **task**: General work item
-        - **bug**: Something broken that needs fixing
-        - **chore**: Maintenance work (refactoring, cleanup, dependencies)
-        - **feature**: New functionality to implement
-
-        ## Usage
-
-        Specify type when creating: `fleece create --title "Fix login" --type bug`
-
-        Filter by type: `fleece list --type bug`
         """;
 
     private const string StatusesContent = """
@@ -267,32 +242,5 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         ## Answer a Question
 
         `fleece question <ID> --answer <Q-ID> --text "The expected behavior is..."`
-        """;
-
-    private const string TipsContent = """
-        # Workflow Tips
-
-        1. When starting work on an issue, update status:
-           `fleece edit <ID> --status progress`
-
-        2. When work is ready for review:
-           `fleece edit <ID> --status review`
-
-        3. When completing work:
-           `fleece edit <ID> --status complete`
-
-        4. Link PRs to issues:
-           `fleece edit <ID> --linked-pr 123`
-
-        5. Create follow-up issues as needed
-
-        6. Use `--previous` to indicate order dependencies:
-           `fleece create --title "B" --previous "A"`
-
-        7. Use `--parent-issues` to break down large issues into sub-tasks
-
-        8. Commit `.fleece/` changes with related code changes
-
-        9. Run `fleece tree` to visualize work breakdown
         """;
 }
