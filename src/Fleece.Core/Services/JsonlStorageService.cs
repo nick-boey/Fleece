@@ -17,12 +17,14 @@ public sealed class JsonlStorageService : IStorageService
 
     private readonly string _basePath;
     private readonly IJsonlSerializer _serializer;
+    private readonly ISchemaValidator _schemaValidator;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
-    public JsonlStorageService(string basePath, IJsonlSerializer serializer)
+    public JsonlStorageService(string basePath, IJsonlSerializer serializer, ISchemaValidator schemaValidator)
     {
         _basePath = basePath;
         _serializer = serializer;
+        _schemaValidator = schemaValidator;
     }
 
     private string FleeceDirectoryPath => Path.Combine(_basePath, FleeceDirectory);
@@ -359,6 +361,46 @@ public sealed class JsonlStorageService : IStorageService
         }
 
         return Task.FromResult((false, string.Empty));
+    }
+
+    public async Task<LoadIssuesResult> LoadIssuesWithDiagnosticsAsync(CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            var allIssues = new List<Issue>();
+            var diagnostics = new List<ParseDiagnostic>();
+            var files = GetAllIssueFilesInternal();
+
+            foreach (var file in files)
+            {
+                var content = await File.ReadAllTextAsync(file, cancellationToken);
+
+                // Validate schema and collect diagnostics
+                var diagnostic = _schemaValidator.ValidateJsonlContent(file, content);
+                diagnostics.Add(diagnostic);
+
+                // Still try to load issues even if there are warnings
+                var issues = _serializer.DeserializeIssues(content);
+                allIssues.AddRange(issues);
+            }
+
+            // Deduplicate by ID, keeping the newest version
+            var deduplicatedIssues = allIssues
+                .GroupBy(i => i.Id, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderByDescending(i => i.LastUpdate).First())
+                .ToList();
+
+            return new LoadIssuesResult
+            {
+                Issues = deduplicatedIssues,
+                Diagnostics = diagnostics
+            };
+        }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     private static string ComputeContentHash(string content)

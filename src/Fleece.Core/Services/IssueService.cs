@@ -198,6 +198,28 @@ public sealed partial class IssueService(
         return issues.FirstOrDefault(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
     }
 
+    public async Task<IReadOnlyList<Issue>> ResolveByPartialIdAsync(string partialId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(partialId))
+        {
+            return [];
+        }
+
+        var issues = await storage.LoadIssuesAsync(cancellationToken);
+
+        // If partial ID is less than 3 characters, require exact match only
+        if (partialId.Length < 3)
+        {
+            var exactMatch = issues.FirstOrDefault(i => i.Id.Equals(partialId, StringComparison.OrdinalIgnoreCase));
+            return exactMatch is not null ? [exactMatch] : [];
+        }
+
+        // For 3+ characters, find all issues whose ID starts with the partial ID
+        return issues
+            .Where(i => i.Id.StartsWith(partialId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
     public async Task<Issue> UpdateAsync(
         string id,
         string? title = null,
@@ -316,17 +338,17 @@ public sealed partial class IssueService(
 
         if (linkedIssues is not null)
         {
-            propertyChanges.Add(new() { PropertyName = "LinkedIssues", OldValue = string.Join(",", existing.LinkedIssues), NewValue = string.Join(",", linkedIssues), Timestamp = now });
+            propertyChanges.Add(new() { PropertyName = "LinkedIssues", OldValue = string.Join(",", existing.LinkedIssues ?? []), NewValue = string.Join(",", linkedIssues), Timestamp = now });
         }
 
         if (parentIssues is not null)
         {
-            propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = string.Join(",", existing.ParentIssues), NewValue = string.Join(",", parentIssues), Timestamp = now });
+            propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = string.Join(",", existing.ParentIssues ?? []), NewValue = string.Join(",", parentIssues), Timestamp = now });
         }
 
         if (previousIssues is not null)
         {
-            propertyChanges.Add(new() { PropertyName = "PreviousIssues", OldValue = string.Join(",", existing.PreviousIssues), NewValue = string.Join(",", previousIssues), Timestamp = now });
+            propertyChanges.Add(new() { PropertyName = "PreviousIssues", OldValue = string.Join(",", existing.PreviousIssues ?? []), NewValue = string.Join(",", previousIssues), Timestamp = now });
         }
 
         if (group is not null)
@@ -341,7 +363,7 @@ public sealed partial class IssueService(
 
         if (tags is not null)
         {
-            propertyChanges.Add(new() { PropertyName = "Tags", OldValue = string.Join(",", existing.Tags), NewValue = string.Join(",", tags), Timestamp = now });
+            propertyChanges.Add(new() { PropertyName = "Tags", OldValue = string.Join(",", existing.Tags ?? []), NewValue = string.Join(",", tags), Timestamp = now });
         }
 
         if (workingBranchId is not null)
@@ -432,10 +454,16 @@ public sealed partial class IssueService(
             .Where(i =>
                 i.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 (i.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                i.Tags.Any(t => t.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
+                (i.Tags?.Any(t => t.Contains(query, StringComparison.OrdinalIgnoreCase)) ?? false) ||
                 (i.Group?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
             .ToList();
     }
+
+    /// <summary>
+    /// Terminal statuses that are excluded from results by default (when includeTerminal is false).
+    /// </summary>
+    private static readonly IssueStatus[] TerminalStatuses =
+        [IssueStatus.Complete, IssueStatus.Archived, IssueStatus.Closed, IssueStatus.Deleted];
 
     public async Task<IReadOnlyList<Issue>> FilterAsync(
         IssueStatus? status = null,
@@ -445,17 +473,20 @@ public sealed partial class IssueService(
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
+        bool includeTerminal = false,
         CancellationToken cancellationToken = default)
     {
         var issues = await storage.LoadIssuesAsync(cancellationToken);
 
         return issues
             .Where(i => status is null || i.Status == status)
+            // Exclude terminal statuses unless includeTerminal is true or a specific status was requested
+            .Where(i => status is not null || includeTerminal || !TerminalStatuses.Contains(i.Status))
             .Where(i => type is null || i.Type == type)
             .Where(i => priority is null || i.Priority == priority)
             .Where(i => group is null || string.Equals(i.Group, group, StringComparison.OrdinalIgnoreCase))
             .Where(i => assignedTo is null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
-            .Where(i => tags is null || tags.Count == 0 || tags.Any(t => i.Tags.Contains(t, StringComparer.OrdinalIgnoreCase)))
+            .Where(i => tags is null || tags.Count == 0 || tags.Any(t => i.Tags?.Contains(t, StringComparer.OrdinalIgnoreCase) ?? false))
             .Where(i => linkedPr is null || i.LinkedPR == linkedPr)
             .ToList();
     }

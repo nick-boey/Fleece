@@ -6,9 +6,9 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class DeleteCommand(IIssueService issueService, IStorageService storageService) : AsyncCommand<DeleteSettings>
+public sealed class ShowCommand(IIssueService issueService, IStorageService storageService) : AsyncCommand<ShowSettings>
 {
-    public override async Task<int> ExecuteAsync(CommandContext context, DeleteSettings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, ShowSettings settings)
     {
         var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
@@ -32,18 +32,21 @@ public sealed class DeleteCommand(IIssueService issueService, IStorageService st
             return 1;
         }
 
-        var resolvedId = matches[0].Id;
-        var deleted = await issueService.DeleteAsync(resolvedId);
+        var issue = matches[0];
 
-        if (deleted)
+        if (settings.JsonVerbose)
         {
-            AnsiConsole.MarkupLine($"[green]Deleted issue[/] [bold]{resolvedId}[/]");
-            return 0;
+            JsonFormatter.RenderIssue(issue, verbose: true);
+        }
+        else if (settings.Json)
+        {
+            JsonFormatter.RenderIssue(issue, verbose: false);
         }
         else
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{resolvedId}' not found");
-            return 1;
+            TableFormatter.RenderIssue(issue);
         }
+
+        return 0;
     }
 }

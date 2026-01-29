@@ -13,13 +13,18 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IJsonlSerializer, JsonlSerializer>();
         services.AddSingleton<IIdGenerator, Sha256IdGenerator>();
+        services.AddSingleton<ISchemaValidator, SchemaValidator>();
         services.AddSingleton<IStorageService>(sp =>
-            new JsonlStorageService(basePath, sp.GetRequiredService<IJsonlSerializer>()));
+            new JsonlStorageService(
+                basePath,
+                sp.GetRequiredService<IJsonlSerializer>(),
+                sp.GetRequiredService<ISchemaValidator>()));
         services.AddSingleton<IGitConfigService, GitConfigService>();
         services.AddSingleton<IChangeService, ChangeService>();
         services.AddSingleton<IIssueService, IssueService>();
         services.AddSingleton<IMergeService, MergeService>();
         services.AddSingleton<IMigrationService, MigrationService>();
+        services.AddSingleton<IValidationService, ValidationService>();
 
         return services;
     }

@@ -24,6 +24,13 @@ public interface IIssueService
 
     Task<Issue?> GetByIdAsync(string id, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Resolves a partial ID (3+ characters) to matching issues.
+    /// Returns issues whose ID starts with the given partial ID (case-insensitive).
+    /// If the partial ID is less than 3 characters, requires exact match.
+    /// </summary>
+    Task<IReadOnlyList<Issue>> ResolveByPartialIdAsync(string partialId, CancellationToken cancellationToken = default);
+
     Task<Issue> UpdateAsync(
         string id,
         string? title = null,
@@ -53,6 +60,7 @@ public interface IIssueService
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
+        bool includeTerminal = false,
         CancellationToken cancellationToken = default);
 
     Task<Issue> UpdateQuestionsAsync(

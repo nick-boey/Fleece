@@ -98,22 +98,32 @@ public static class TableFormatter
             lines.Add($"[bold]Description:[/] {Markup.Escape(issue.Description)}");
         }
 
+        if (issue.CreatedAt != default)
+        {
+            lines.Add($"[bold]Created At:[/] {issue.CreatedAt:yyyy-MM-dd HH:mm:ss}");
+        }
+
+        if (!string.IsNullOrEmpty(issue.WorkingBranchId))
+        {
+            lines.Add($"[bold]Working Branch:[/] {Markup.Escape(issue.WorkingBranchId)}");
+        }
+
         if (issue.LinkedPR.HasValue)
         {
             lines.Add($"[bold]Linked PR:[/] #{issue.LinkedPR}");
         }
 
-        if (issue.LinkedIssues.Count > 0)
+        if (issue.LinkedIssues?.Count > 0)
         {
             lines.Add($"[bold]Linked Issues:[/] {string.Join(", ", issue.LinkedIssues)}");
         }
 
-        if (issue.ParentIssues.Count > 0)
+        if (issue.ParentIssues?.Count > 0)
         {
             lines.Add($"[bold]Parent Issues:[/] {string.Join(", ", issue.ParentIssues)}");
         }
 
-        if (issue.PreviousIssues.Count > 0)
+        if (issue.PreviousIssues?.Count > 0)
         {
             lines.Add($"[bold]Previous Issues:[/] {string.Join(", ", issue.PreviousIssues)}");
         }
@@ -128,7 +138,7 @@ public static class TableFormatter
             lines.Add($"[bold]Assigned To:[/] {Markup.Escape(issue.AssignedTo)}");
         }
 
-        if (issue.Tags.Count > 0)
+        if (issue.Tags?.Count > 0)
         {
             lines.Add($"[bold]Tags:[/] {string.Join(", ", issue.Tags.Select(Markup.Escape))}");
         }
@@ -139,6 +149,31 @@ public static class TableFormatter
         }
 
         lines.Add($"[bold]Last Update:[/] {issue.LastUpdate:yyyy-MM-dd HH:mm:ss}");
+
+        // Questions section
+        if (issue.Questions?.Count > 0)
+        {
+            lines.Add("");
+            lines.Add("[bold]Questions:[/]");
+            foreach (var question in issue.Questions)
+            {
+                lines.Add($"  [cyan]{question.Id}:[/] {Markup.Escape(question.Text)}");
+                var askedBy = question.AskedBy ?? "unknown";
+                lines.Add($"    [dim]Asked by:[/] {Markup.Escape(askedBy)} [dim]on[/] {question.AskedAt:yyyy-MM-dd}");
+
+                if (!string.IsNullOrEmpty(question.Answer))
+                {
+                    lines.Add($"    [green]Answer:[/] {Markup.Escape(question.Answer)}");
+                    var answeredBy = question.AnsweredBy ?? "unknown";
+                    var answeredAt = question.AnsweredAt?.ToString("yyyy-MM-dd") ?? "unknown";
+                    lines.Add($"    [dim]Answered by:[/] {Markup.Escape(answeredBy)} [dim]on[/] {answeredAt}");
+                }
+                else
+                {
+                    lines.Add("    [yellow](Unanswered)[/]");
+                }
+            }
+        }
 
         return string.Join("\n", lines);
     }

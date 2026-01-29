@@ -37,4 +37,10 @@ public interface IStorageService
     /// </summary>
     /// <returns>A tuple indicating if multiple files exist and an error message to display.</returns>
     Task<(bool HasMultiple, string Message)> HasMultipleUnmergedFilesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Loads all issues with diagnostic information about parsing.
+    /// </summary>
+    /// <returns>Result containing issues and parsing diagnostics per file.</returns>
+    Task<LoadIssuesResult> LoadIssuesWithDiagnosticsAsync(CancellationToken cancellationToken = default);
 }

@@ -19,10 +19,28 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
             return 1;
         }
 
+        // Resolve partial ID first
+        var matches = await issueService.ResolveByPartialIdAsync(settings.Id);
+
+        if (matches.Count == 0)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
+            return 1;
+        }
+
+        if (matches.Count > 1)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.Id}':");
+            TableFormatter.RenderIssues(matches);
+            return 1;
+        }
+
+        var resolvedId = matches[0].Id;
+
         // If no options are provided (only the ID), use editor-based editing
         if (HasNoOptions(settings))
         {
-            return await EditWithEditorAsync(settings);
+            return await EditWithEditorAsync(settings, resolvedId);
         }
 
         IssueStatus? status = null;
@@ -74,7 +92,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         try
         {
             var issue = await issueService.UpdateAsync(
-                id: settings.Id,
+                id: resolvedId,
                 title: settings.Title,
                 description: settings.Description,
                 status: status,
@@ -130,24 +148,13 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         !settings.Json &&
         !settings.JsonVerbose;
 
-    private async Task<int> EditWithEditorAsync(EditSettings settings)
+    private async Task<int> EditWithEditorAsync(EditSettings settings, string resolvedId)
     {
-        // First, get the existing issue
-        Issue existingIssue;
-        try
+        // Get the existing issue using the already-resolved ID
+        var existingIssue = await issueService.GetByIdAsync(resolvedId);
+        if (existingIssue is null)
         {
-            var issues = await issueService.GetAllAsync();
-            var found = issues.FirstOrDefault(i => i.Id.Equals(settings.Id, StringComparison.OrdinalIgnoreCase));
-            if (found is null)
-            {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
-                return 1;
-            }
-            existingIssue = found;
-        }
-        catch (Exception ex)
-        {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Failed to load issue: {ex.Message}");
+            AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{resolvedId}' not found");
             return 1;
         }
 
@@ -239,7 +246,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
             }
 
             var issue = await issueService.UpdateAsync(
-                id: settings.Id,
+                id: resolvedId,
                 title: template.Title,
                 description: template.Description,
                 status: status,
@@ -261,7 +268,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         }
         catch (KeyNotFoundException)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
+            AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{resolvedId}' not found");
             return 1;
         }
         catch (ArgumentException ex) when (ex.ParamName == "workingBranchId")

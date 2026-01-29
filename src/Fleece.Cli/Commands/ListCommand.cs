@@ -7,7 +7,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class ListCommand(IIssueService issueService, IStorageService storageService) : AsyncCommand<ListSettings>
+public sealed class ListCommand(IStorageService storageService) : AsyncCommand<ListSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ListSettings settings)
     {
@@ -15,6 +15,17 @@ public sealed class ListCommand(IIssueService issueService, IStorageService stor
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            return 1;
+        }
+
+        // Load issues with diagnostics
+        var loadResult = await storageService.LoadIssuesWithDiagnosticsAsync();
+        var hasWarnings = DiagnosticFormatter.RenderDiagnostics(loadResult.Diagnostics);
+
+        // Fail early in strict mode if there are warnings
+        if (settings.Strict && hasWarnings)
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] Schema warnings detected in strict mode.");
             return 1;
         }
 
@@ -47,7 +58,17 @@ public sealed class ListCommand(IIssueService issueService, IStorageService stor
             return 1;
         }
 
-        var issues = await issueService.FilterAsync(status, type, settings.Priority, settings.Group, settings.AssignedTo, settings.Tags, settings.LinkedPr);
+        // Apply filtering to loaded issues
+        var issues = ApplyFilters(
+            loadResult.Issues,
+            status,
+            type,
+            settings.Priority,
+            settings.Group,
+            settings.AssignedTo,
+            settings.Tags,
+            settings.LinkedPr,
+            settings.All);
 
         if (settings.Json || settings.JsonVerbose)
         {
@@ -63,6 +84,37 @@ public sealed class ListCommand(IIssueService issueService, IStorageService stor
         }
 
         return 0;
+    }
+
+    private static readonly HashSet<IssueStatus> TerminalStatuses =
+    [
+        IssueStatus.Complete,
+        IssueStatus.Archived,
+        IssueStatus.Closed,
+        IssueStatus.Deleted
+    ];
+
+    private static IReadOnlyList<Issue> ApplyFilters(
+        IReadOnlyList<Issue> issues,
+        IssueStatus? status,
+        IssueType? type,
+        int? priority,
+        string? group,
+        string? assignedTo,
+        string[]? tags,
+        int? linkedPr,
+        bool includeTerminal)
+    {
+        return issues
+            .Where(i => status is null || i.Status == status)
+            .Where(i => type is null || i.Type == type)
+            .Where(i => priority is null || i.Priority == priority)
+            .Where(i => group is null || string.Equals(i.Group, group, StringComparison.OrdinalIgnoreCase))
+            .Where(i => assignedTo is null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
+            .Where(i => tags is null || tags.Length == 0 || tags.Any(t => i.Tags.Contains(t, StringComparer.OrdinalIgnoreCase)))
+            .Where(i => linkedPr is null || i.LinkedPR == linkedPr)
+            .Where(i => includeTerminal || status is not null || !TerminalStatuses.Contains(i.Status))
+            .ToList();
     }
 
     private static void RenderOneLine(IReadOnlyList<Issue> issues)

@@ -13,6 +13,7 @@ public class JsonlStorageServiceTests
     private string _testDirectory = null!;
     private JsonlStorageService _sut = null!;
     private JsonlSerializer _serializer = null!;
+    private SchemaValidator _schemaValidator = null!;
 
     [SetUp]
     public void SetUp()
@@ -20,7 +21,8 @@ public class JsonlStorageServiceTests
         _testDirectory = Path.Combine(Path.GetTempPath(), $"fleece-tests-{Guid.NewGuid()}");
         Directory.CreateDirectory(_testDirectory);
         _serializer = new JsonlSerializer();
-        _sut = new JsonlStorageService(_testDirectory, _serializer);
+        _schemaValidator = new SchemaValidator();
+        _sut = new JsonlStorageService(_testDirectory, _serializer, _schemaValidator);
     }
 
     [TearDown]
@@ -177,5 +179,65 @@ public class JsonlStorageServiceTests
         var result = await _sut.LoadIssuesAsync();
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("def456");
+    }
+
+    [Test]
+    public async Task LoadIssuesWithDiagnosticsAsync_ReturnsEmptyResult_WhenNoFiles()
+    {
+        var result = await _sut.LoadIssuesWithDiagnosticsAsync();
+
+        result.Issues.Should().BeEmpty();
+        result.Diagnostics.Should().BeEmpty();
+        result.HasWarnings.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task LoadIssuesWithDiagnosticsAsync_ReturnsIssuesAndDiagnostics()
+    {
+        var issues = new[]
+        {
+            new IssueBuilder().WithId("abc123").WithTitle("Issue 1").Build()
+        };
+        await _sut.SaveIssuesAsync(issues);
+
+        var result = await _sut.LoadIssuesWithDiagnosticsAsync();
+
+        result.Issues.Should().HaveCount(1);
+        result.Diagnostics.Should().HaveCount(1);
+        result.HasWarnings.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task LoadIssuesWithDiagnosticsAsync_ReportsUnknownProperties()
+    {
+        // Create a file with an unknown property
+        var fleeceDir = Path.Combine(_testDirectory, ".fleece");
+        Directory.CreateDirectory(fleeceDir);
+        var filePath = Path.Combine(fleeceDir, "issues_test123.jsonl");
+        var json = """{"id":"abc123","title":"Test","status":"Idea","type":"Task","lastUpdate":"2024-01-01T00:00:00Z","unknownField":"value"}""";
+        await File.WriteAllTextAsync(filePath, json);
+
+        var result = await _sut.LoadIssuesWithDiagnosticsAsync();
+
+        result.HasWarnings.Should().BeTrue();
+        result.Diagnostics[0].UnknownProperties.Should().Contain("unknownField");
+        // Issue should still load
+        result.Issues.Should().HaveCount(1);
+    }
+
+    [Test]
+    public async Task LoadIssuesWithDiagnosticsAsync_ReportsParseErrors()
+    {
+        // Create a file with invalid JSON
+        var fleeceDir = Path.Combine(_testDirectory, ".fleece");
+        Directory.CreateDirectory(fleeceDir);
+        var filePath = Path.Combine(fleeceDir, "issues_test123.jsonl");
+        await File.WriteAllTextAsync(filePath, "not valid json");
+
+        var result = await _sut.LoadIssuesWithDiagnosticsAsync();
+
+        result.HasWarnings.Should().BeTrue();
+        result.Diagnostics[0].ParseErrors.Should().NotBeEmpty();
+        result.Diagnostics[0].FailedRows.Should().Be(1);
     }
 }
