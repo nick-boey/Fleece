@@ -86,6 +86,12 @@ app.Configure(config =>
         .WithDescription("Validate issue dependencies for cycles")
         .WithExample("validate")
         .WithExample("validate", "--json");
+
+    config.AddCommand<CommitCommand>("commit")
+        .WithDescription("Commit fleece changes to git")
+        .WithExample("commit")
+        .WithExample("commit", "-m", "Add new issues")
+        .WithExample("commit", "--push");
 });
 
 return await app.RunAsync(args);
