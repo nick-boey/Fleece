@@ -1,0 +1,12 @@
+{
+  "json.schemas": [
+    {
+      "fileMatch": ["**/.fleece/issues*.jsonl"],
+      "url": "./src/Fleece.Core/Schemas/issue.schema.json"
+    },
+    {
+      "fileMatch": ["**/.fleece/changes*.jsonl"],
+      "url": "./src/Fleece.Core/Schemas/change-record.schema.json"
+    }
+  ]
+}

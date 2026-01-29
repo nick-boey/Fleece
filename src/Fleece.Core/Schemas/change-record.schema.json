@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://fleece.dev/schemas/change-record.schema.json",
+  "title": "Fleece Change Record",
+  "description": "A single change record in a Fleece changes JSONL file",
+  "type": "object",
+  "required": ["changeId", "issueId", "type", "changedBy", "changedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "changeId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this change event"
+    },
+    "issueId": {
+      "type": "string",
+      "description": "ID of the issue that was changed",
+      "minLength": 1
+    },
+    "type": {
+      "$ref": "#/$defs/changeType"
+    },
+    "changedBy": {
+      "type": "string",
+      "description": "Username who made the change",
+      "minLength": 1
+    },
+    "changedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the change occurred (ISO 8601)"
+    },
+    "propertyChanges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/propertyChange" },
+      "default": [],
+      "description": "List of individual property changes"
+    }
+  },
+  "$defs": {
+    "changeType": {
+      "type": "string",
+      "enum": ["Created", "Updated", "Deleted", "Merged"],
+      "description": "Type of change operation"
+    },
+    "propertyChange": {
+      "type": "object",
+      "required": ["propertyName", "timestamp"],
+      "additionalProperties": false,
+      "description": "Represents a change to a single property",
+      "properties": {
+        "propertyName": {
+          "type": "string",
+          "description": "Name of the property that changed",
+          "minLength": 1
+        },
+        "oldValue": {
+          "type": ["string", "null"],
+          "description": "Previous value (as string representation)"
+        },
+        "newValue": {
+          "type": ["string", "null"],
+          "description": "New value (as string representation)"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this property change occurred"
+        },
+        "mergeResolution": {
+          "type": ["string", "null"],
+          "enum": ["A", "B", "Union", null],
+          "description": "For merge operations: which version was chosen. Null for non-merge changes."
+        }
+      }
+    }
+  }
+}
