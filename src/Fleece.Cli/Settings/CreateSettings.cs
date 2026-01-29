@@ -56,4 +56,12 @@ public sealed class CreateSettings : CommandSettings
     [CommandOption("--json-verbose")]
     [Description("Output as JSON with all metadata fields")]
     public bool JsonVerbose { get; init; }
+
+    [CommandOption("--commit")]
+    [Description("Commit changes to git after creating issue")]
+    public bool Commit { get; init; }
+
+    [CommandOption("--push")]
+    [Description("Push to remote after committing (implies --commit)")]
+    public bool Push { get; init; }
 }
