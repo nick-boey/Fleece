@@ -1,11 +1,20 @@
 using System.Reflection;
 using Fleece.Cli.Commands;
+using Fleece.Cli.Tui;
 using Fleece.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console.Cli;
 
 var services = new ServiceCollection();
 services.AddFleeceCore();
+
+// If no arguments, launch TUI
+if (args.Length == 0)
+{
+    var serviceProvider = services.BuildServiceProvider();
+    var tuiApp = new TuiApp(serviceProvider);
+    return tuiApp.Run();
+}
 
 var registrar = new TypeRegistrar(services);
 var app = new CommandApp(registrar);
