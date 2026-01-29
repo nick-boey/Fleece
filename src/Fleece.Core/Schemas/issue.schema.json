@@ -1,0 +1,279 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://fleece.dev/schemas/issue.schema.json",
+  "title": "Fleece Issue",
+  "description": "A single issue record in a Fleece issues JSONL file",
+  "type": "object",
+  "required": ["id", "title", "status", "type", "lastUpdate"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the issue",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "description": "Issue title",
+      "minLength": 1
+    },
+    "titleLastUpdate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when title was last modified (ISO 8601)"
+    },
+    "titleModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified the title"
+    },
+    "description": {
+      "type": ["string", "null"],
+      "description": "Detailed description of the issue"
+    },
+    "descriptionLastUpdate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Timestamp when description was last modified"
+    },
+    "descriptionModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified the description"
+    },
+    "status": {
+      "$ref": "#/$defs/issueStatus"
+    },
+    "statusLastUpdate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when status was last modified"
+    },
+    "statusModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified the status"
+    },
+    "type": {
+      "$ref": "#/$defs/issueType"
+    },
+    "typeLastUpdate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when type was last modified"
+    },
+    "typeModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified the type"
+    },
+    "linkedPR": {
+      "type": ["integer", "null"],
+      "description": "Associated pull request number",
+      "minimum": 1
+    },
+    "linkedPRLastUpdate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Timestamp when linkedPR was last modified"
+    },
+    "linkedPRModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified linkedPR"
+    },
+    "linkedIssues": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "IDs of related issues"
+    },
+    "linkedIssuesLastUpdate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when linkedIssues was last modified"
+    },
+    "linkedIssuesModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified linkedIssues"
+    },
+    "parentIssues": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "IDs of parent issues (for hierarchy/subtasks)"
+    },
+    "parentIssuesLastUpdate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when parentIssues was last modified"
+    },
+    "parentIssuesModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified parentIssues"
+    },
+    "previousIssues": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "IDs of issues that must be completed before this one"
+    },
+    "previousIssuesLastUpdate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when previousIssues was last modified"
+    },
+    "previousIssuesModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified previousIssues"
+    },
+    "priority": {
+      "type": ["integer", "null"],
+      "description": "Priority level (lower number = higher priority)"
+    },
+    "priorityLastUpdate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Timestamp when priority was last modified"
+    },
+    "priorityModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified priority"
+    },
+    "group": {
+      "type": ["string", "null"],
+      "description": "Grouping category for the issue"
+    },
+    "groupLastUpdate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Timestamp when group was last modified"
+    },
+    "groupModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified group"
+    },
+    "assignedTo": {
+      "type": ["string", "null"],
+      "description": "Username of the assigned user"
+    },
+    "assignedToLastUpdate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Timestamp when assignedTo was last modified"
+    },
+    "assignedToModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified assignedTo"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Arbitrary tags for categorization"
+    },
+    "tagsLastUpdate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when tags was last modified"
+    },
+    "tagsModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified tags"
+    },
+    "questions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/question" },
+      "default": [],
+      "description": "Questions associated with this issue"
+    },
+    "questionsLastUpdate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when questions was last modified"
+    },
+    "questionsModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified questions"
+    },
+    "workingBranchId": {
+      "type": ["string", "null"],
+      "description": "ID of the working branch for this issue"
+    },
+    "workingBranchIdLastUpdate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Timestamp when workingBranchId was last modified"
+    },
+    "workingBranchIdModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified workingBranchId"
+    },
+    "createdBy": {
+      "type": ["string", "null"],
+      "description": "Username who created the issue"
+    },
+    "createdByLastUpdate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Timestamp when createdBy was last modified"
+    },
+    "lastUpdate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Overall last modification timestamp"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Issue creation timestamp"
+    }
+  },
+  "$defs": {
+    "issueStatus": {
+      "type": "string",
+      "enum": ["Idea", "Spec", "Next", "Progress", "Review", "Complete", "Archived", "Closed", "Deleted"],
+      "description": "Current workflow status of the issue"
+    },
+    "issueType": {
+      "type": "string",
+      "enum": ["Task", "Bug", "Chore", "Feature"],
+      "description": "Type/category of the issue"
+    },
+    "question": {
+      "type": "object",
+      "required": ["id", "text", "askedAt"],
+      "additionalProperties": false,
+      "description": "A question asked about an issue with optional answer",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the question (e.g., 'Q12345')",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string",
+          "description": "The question text",
+          "minLength": 1
+        },
+        "answer": {
+          "type": ["string", "null"],
+          "description": "The answer text, if provided"
+        },
+        "askedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the question was asked"
+        },
+        "askedBy": {
+          "type": ["string", "null"],
+          "description": "Who asked the question"
+        },
+        "answeredAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When the question was answered"
+        },
+        "answeredBy": {
+          "type": ["string", "null"],
+          "description": "Who answered the question"
+        }
+      }
+    }
+  }
+}
