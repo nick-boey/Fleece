@@ -6,6 +6,6 @@ namespace Fleece.Cli.Settings;
 public sealed class PrimeSettings : CommandSettings
 {
     [CommandArgument(0, "[topic]")]
-    [Description("Topic to display help for (workflow, hierarchy, commands, types, statuses, sync, json, questions, tips)")]
+    [Description("Topic to display help for (hierarchy, commands, statuses, sync, json, questions)")]
     public string? Topic { get; init; }
 }
