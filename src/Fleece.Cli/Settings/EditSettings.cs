@@ -38,16 +38,8 @@ public sealed class EditSettings : CommandSettings
     public string? LinkedIssues { get; init; }
 
     [CommandOption("--parent-issues <ISSUES>")]
-    [Description("Replace parent issue IDs (comma-separated)")]
+    [Description("Replace parent issue IDs with optional sort order (e.g., abc123,def456:bbb)")]
     public string? ParentIssues { get; init; }
-
-    [CommandOption("--previous <ISSUES>")]
-    [Description("Replace previous issue IDs (issues that should be done before this one, comma-separated)")]
-    public string? PreviousIssues { get; init; }
-
-    [CommandOption("-g|--group <GROUP>")]
-    [Description("New issue group")]
-    public string? Group { get; init; }
 
     [CommandOption("-a|--assign <USER>")]
     [Description("New assignee username")]

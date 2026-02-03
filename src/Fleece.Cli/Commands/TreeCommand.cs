@@ -41,7 +41,7 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
             type = parsedType;
         }
 
-        var issues = await issueService.FilterAsync(status, type, settings.Priority, settings.Group, settings.AssignedTo, settings.Tags, settings.LinkedPr, settings.All);
+        var issues = await issueService.FilterAsync(status, type, settings.Priority, settings.AssignedTo, settings.Tags, settings.LinkedPr, settings.All);
         var issueList = issues.ToList();
 
         if (settings.Json)
@@ -79,7 +79,7 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
                     return true;
                 }
                 // Check if ALL parents are NOT in the lookup (meaning this is an orphan)
-                var allParentsMissing = i.ParentIssues.All(p => !issueLookup.ContainsKey(p));
+                var allParentsMissing = i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue));
                 return allParentsMissing;
             })
             .OrderBy(i => i.Priority ?? 99)
@@ -154,11 +154,18 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
         var priorityStr = issue.Priority.HasValue ? $"[dim]P{issue.Priority}[/] " : "";
         AnsiConsole.MarkupLine($"{prefix}{connector2}[{statusColor}]{typeIcon}[/] [{statusColor}]{issue.Id}[/] {priorityStr}{Markup.Escape(issue.Title)}");
 
-        // Find children (issues that have this issue as a parent)
+        // Find children (issues that have this issue as a parent), sorted by SortOrder
         var children = allIssues
-            .Where(i => i.ParentIssues?.Contains(issue.Id, StringComparer.OrdinalIgnoreCase) ?? false)
-            .OrderBy(i => i.Priority ?? 99)
-            .ThenBy(i => i.Title)
+            .Where(i => i.ParentIssues?.Any(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase)) ?? false)
+            .Select(i => new
+            {
+                Issue = i,
+                SortOrder = i.ParentIssues?.FirstOrDefault(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase))?.SortOrder ?? "zzz"
+            })
+            .OrderBy(x => x.SortOrder, StringComparer.Ordinal)
+            .ThenBy(x => x.Issue.Priority ?? 99)
+            .ThenBy(x => x.Issue.Title)
+            .Select(x => x.Issue)
             .ToList();
 
         // Render children with proper indentation
@@ -170,17 +177,17 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
 
             // Check if this child has multiple parents within the filtered set
             var parentsInSet = (child.ParentIssues ?? [])
-                .Where(p => issueLookup.ContainsKey(p))
+                .Where(p => issueLookup.ContainsKey(p.ParentIssue))
                 .ToList();
 
             if (parentsInSet.Count > 1 && !rendered.Contains(child.Id))
             {
                 // Show virtual parent indicator for other parents
-                var otherParents = parentsInSet.Where(p => !p.Equals(issue.Id, StringComparison.OrdinalIgnoreCase)).ToList();
+                var otherParents = parentsInSet.Where(p => !p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase)).ToList();
                 if (otherParents.Count > 0)
                 {
                     var virtualConnector = isLastChild ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ";
-                    AnsiConsole.MarkupLine($"{childPrefix}{virtualConnector}[dim](also child of: {string.Join(", ", otherParents)})[/]");
+                    AnsiConsole.MarkupLine($"{childPrefix}{virtualConnector}[dim](also child of: {string.Join(", ", otherParents.Select(p => p.ParentIssue))})[/]");
                 }
             }
 
@@ -197,7 +204,7 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
         // Find root issues
         var rootIssues = issues
             .Where(i => i.ParentIssues is null || i.ParentIssues.Count == 0 ||
-                        i.ParentIssues.All(p => !issueLookup.ContainsKey(p)))
+                        i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
             .OrderBy(i => i.Priority ?? 99)
             .ThenBy(i => i.Title)
             .ToList();
@@ -222,9 +229,16 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
         rendered.Add(issue.Id);
 
         var children = allIssues
-            .Where(i => i.ParentIssues?.Contains(issue.Id, StringComparer.OrdinalIgnoreCase) ?? false)
-            .OrderBy(i => i.Priority ?? 99)
-            .ThenBy(i => i.Title)
+            .Where(i => i.ParentIssues?.Any(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase)) ?? false)
+            .Select(i => new
+            {
+                Issue = i,
+                SortOrder = i.ParentIssues?.FirstOrDefault(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase))?.SortOrder ?? "zzz"
+            })
+            .OrderBy(x => x.SortOrder, StringComparer.Ordinal)
+            .ThenBy(x => x.Issue.Priority ?? 99)
+            .ThenBy(x => x.Issue.Title)
+            .Select(x => x.Issue)
             .ToList();
 
         return new

@@ -142,7 +142,7 @@ public class JsonlSerializerTests
             .WithType(IssueType.Feature)
             .WithLinkedPr(123)
             .WithLinkedIssues("abc123", "#456")
-            .WithParentIssues("parent1")
+            .WithParentIssueIds("parent1")
             .WithPriority(2)
             .WithLastUpdate(new DateTimeOffset(2024, 6, 15, 12, 0, 0, TimeSpan.Zero))
             .Build();
