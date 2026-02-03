@@ -71,16 +71,11 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
             linkedIssues = settings.LinkedIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
-        IReadOnlyList<string>? parentIssues = null;
+        IReadOnlyList<ParentIssueRef>? parentIssues = null;
         if (!string.IsNullOrWhiteSpace(settings.ParentIssues))
         {
-            parentIssues = settings.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        }
-
-        IReadOnlyList<string>? previousIssues = null;
-        if (!string.IsNullOrWhiteSpace(settings.PreviousIssues))
-        {
-            previousIssues = settings.PreviousIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var parsed = ParentIssueRef.ParseFromStrings(settings.ParentIssues);
+            parentIssues = parsed.Count > 0 ? parsed : [];
         }
 
         IReadOnlyList<string>? tags = null;
@@ -101,8 +96,6 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 linkedPr: settings.LinkedPr,
                 linkedIssues: linkedIssues,
                 parentIssues: parentIssues,
-                previousIssues: previousIssues,
-                group: settings.Group,
                 assignedTo: settings.AssignedTo,
                 tags: tags,
                 workingBranchId: settings.WorkingBranchId);
@@ -140,8 +133,6 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         !settings.LinkedPr.HasValue &&
         string.IsNullOrWhiteSpace(settings.LinkedIssues) &&
         string.IsNullOrWhiteSpace(settings.ParentIssues) &&
-        string.IsNullOrWhiteSpace(settings.PreviousIssues) &&
-        string.IsNullOrWhiteSpace(settings.Group) &&
         string.IsNullOrWhiteSpace(settings.AssignedTo) &&
         string.IsNullOrWhiteSpace(settings.Tags) &&
         string.IsNullOrWhiteSpace(settings.WorkingBranchId) &&
@@ -215,25 +206,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 linkedIssues = [];
             }
 
-            IReadOnlyList<string>? parentIssues = null;
-            if (!string.IsNullOrWhiteSpace(template.ParentIssues))
-            {
-                parentIssues = template.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            }
-            else
-            {
-                parentIssues = [];
-            }
-
-            IReadOnlyList<string>? previousIssues = null;
-            if (!string.IsNullOrWhiteSpace(template.PreviousIssues))
-            {
-                previousIssues = template.PreviousIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            }
-            else
-            {
-                previousIssues = [];
-            }
+            var parentIssues = ParentIssueRef.ParseFromStrings(template.ParentIssues);
 
             IReadOnlyList<string>? tags = null;
             if (!string.IsNullOrWhiteSpace(template.Tags))
@@ -255,8 +228,6 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 linkedPr: template.LinkedPr,
                 linkedIssues: linkedIssues,
                 parentIssues: parentIssues,
-                previousIssues: previousIssues,
-                group: template.Group,
                 assignedTo: template.AssignedTo,
                 tags: tags,
                 workingBranchId: template.WorkingBranchId);

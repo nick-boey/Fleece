@@ -64,7 +64,6 @@ public sealed class ListCommand(IStorageService storageService) : AsyncCommand<L
             status,
             type,
             settings.Priority,
-            settings.Group,
             settings.AssignedTo,
             settings.Tags,
             settings.LinkedPr,
@@ -99,7 +98,6 @@ public sealed class ListCommand(IStorageService storageService) : AsyncCommand<L
         IssueStatus? status,
         IssueType? type,
         int? priority,
-        string? group,
         string? assignedTo,
         string[]? tags,
         int? linkedPr,
@@ -109,7 +107,6 @@ public sealed class ListCommand(IStorageService storageService) : AsyncCommand<L
             .Where(i => status is null || i.Status == status)
             .Where(i => type is null || i.Type == type)
             .Where(i => priority is null || i.Priority == priority)
-            .Where(i => group is null || string.Equals(i.Group, group, StringComparison.OrdinalIgnoreCase))
             .Where(i => assignedTo is null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
             .Where(i => tags is null || tags.Length == 0 || tags.Any(t => i.Tags.Contains(t, StringComparer.OrdinalIgnoreCase)))
             .Where(i => linkedPr is null || i.LinkedPR == linkedPr)
@@ -127,8 +124,7 @@ public sealed class ListCommand(IStorageService storageService) : AsyncCommand<L
 
         foreach (var issue in issues)
         {
-            var groupDisplay = issue.Group ?? "-";
-            Console.WriteLine($"{issue.Id} {issue.Status.ToString().ToLowerInvariant()} {groupDisplay} {issue.Type.ToString().ToLowerInvariant()} {issue.Title}");
+            Console.WriteLine($"{issue.Id} {issue.Status.ToString().ToLowerInvariant()} {issue.Type.ToString().ToLowerInvariant()} {issue.Title}");
         }
     }
 }

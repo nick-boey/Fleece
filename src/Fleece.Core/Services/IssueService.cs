@@ -46,9 +46,7 @@ public sealed partial class IssueService(
         int? priority = null,
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
-        IReadOnlyList<string>? parentIssues = null,
-        IReadOnlyList<string>? previousIssues = null,
-        string? group = null,
+        IReadOnlyList<ParentIssueRef>? parentIssues = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         string? workingBranchId = null,
@@ -91,12 +89,6 @@ public sealed partial class IssueService(
             ParentIssues = parentIssues ?? [],
             ParentIssuesLastUpdate = now,
             ParentIssuesModifiedBy = createdBy,
-            PreviousIssues = previousIssues ?? [],
-            PreviousIssuesLastUpdate = now,
-            PreviousIssuesModifiedBy = createdBy,
-            Group = group,
-            GroupLastUpdate = group is not null ? now : null,
-            GroupModifiedBy = group is not null ? createdBy : null,
             AssignedTo = assignedTo,
             AssignedToLastUpdate = assignedTo is not null ? now : null,
             AssignedToModifiedBy = assignedTo is not null ? createdBy : null,
@@ -144,17 +136,7 @@ public sealed partial class IssueService(
 
         if (parentIssues is not null && parentIssues.Count > 0)
         {
-            propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = null, NewValue = string.Join(",", parentIssues), Timestamp = now });
-        }
-
-        if (previousIssues is not null && previousIssues.Count > 0)
-        {
-            propertyChanges.Add(new() { PropertyName = "PreviousIssues", OldValue = null, NewValue = string.Join(",", previousIssues), Timestamp = now });
-        }
-
-        if (group is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "Group", OldValue = null, NewValue = group, Timestamp = now });
+            propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = null, NewValue = string.Join(",", parentIssues.Select(p => p.ParentIssue)), Timestamp = now });
         }
 
         if (assignedTo is not null)
@@ -229,9 +211,7 @@ public sealed partial class IssueService(
         int? priority = null,
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
-        IReadOnlyList<string>? parentIssues = null,
-        IReadOnlyList<string>? previousIssues = null,
-        string? group = null,
+        IReadOnlyList<ParentIssueRef>? parentIssues = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         string? workingBranchId = null,
@@ -284,12 +264,6 @@ public sealed partial class IssueService(
             ParentIssues = parentIssues ?? existing.ParentIssues,
             ParentIssuesLastUpdate = parentIssues is not null ? now : existing.ParentIssuesLastUpdate,
             ParentIssuesModifiedBy = parentIssues is not null ? modifiedBy : existing.ParentIssuesModifiedBy,
-            PreviousIssues = previousIssues ?? existing.PreviousIssues,
-            PreviousIssuesLastUpdate = previousIssues is not null ? now : existing.PreviousIssuesLastUpdate,
-            PreviousIssuesModifiedBy = previousIssues is not null ? modifiedBy : existing.PreviousIssuesModifiedBy,
-            Group = group ?? existing.Group,
-            GroupLastUpdate = group is not null ? now : existing.GroupLastUpdate,
-            GroupModifiedBy = group is not null ? modifiedBy : existing.GroupModifiedBy,
             AssignedTo = assignedTo ?? existing.AssignedTo,
             AssignedToLastUpdate = assignedTo is not null ? now : existing.AssignedToLastUpdate,
             AssignedToModifiedBy = assignedTo is not null ? modifiedBy : existing.AssignedToModifiedBy,
@@ -343,17 +317,7 @@ public sealed partial class IssueService(
 
         if (parentIssues is not null)
         {
-            propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = string.Join(",", existing.ParentIssues ?? []), NewValue = string.Join(",", parentIssues), Timestamp = now });
-        }
-
-        if (previousIssues is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "PreviousIssues", OldValue = string.Join(",", existing.PreviousIssues ?? []), NewValue = string.Join(",", previousIssues), Timestamp = now });
-        }
-
-        if (group is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "Group", OldValue = existing.Group, NewValue = group, Timestamp = now });
+            propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = string.Join(",", existing.ParentIssues?.Select(p => p.ParentIssue) ?? []), NewValue = string.Join(",", parentIssues.Select(p => p.ParentIssue)), Timestamp = now });
         }
 
         if (assignedTo is not null)
@@ -454,8 +418,7 @@ public sealed partial class IssueService(
             .Where(i =>
                 i.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 (i.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (i.Tags?.Any(t => t.Contains(query, StringComparison.OrdinalIgnoreCase)) ?? false) ||
-                (i.Group?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                (i.Tags?.Any(t => t.Contains(query, StringComparison.OrdinalIgnoreCase)) ?? false))
             .ToList();
     }
 
@@ -469,7 +432,6 @@ public sealed partial class IssueService(
         IssueStatus? status = null,
         IssueType? type = null,
         int? priority = null,
-        string? group = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
@@ -484,7 +446,6 @@ public sealed partial class IssueService(
             .Where(i => status is not null || includeTerminal || !TerminalStatuses.Contains(i.Status))
             .Where(i => type is null || i.Type == type)
             .Where(i => priority is null || i.Priority == priority)
-            .Where(i => group is null || string.Equals(i.Group, group, StringComparison.OrdinalIgnoreCase))
             .Where(i => assignedTo is null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
             .Where(i => tags is null || tags.Count == 0 || tags.Any(t => i.Tags?.Contains(t, StringComparer.OrdinalIgnoreCase) ?? false))
             .Where(i => linkedPr is null || i.LinkedPR == linkedPr)

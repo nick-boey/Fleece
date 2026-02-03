@@ -34,16 +34,8 @@ public sealed class CreateSettings : CommandSettings
     public string? LinkedIssues { get; init; }
 
     [CommandOption("--parent-issues <ISSUES>")]
-    [Description("Comma-separated parent issue IDs")]
+    [Description("Comma-separated parent issue IDs with optional sort order (e.g., abc123,def456:bbb)")]
     public string? ParentIssues { get; init; }
-
-    [CommandOption("--previous <ISSUES>")]
-    [Description("Comma-separated IDs of issues that should be done before this one")]
-    public string? PreviousIssues { get; init; }
-
-    [CommandOption("-g|--group <GROUP>")]
-    [Description("Issue group for categorization")]
-    public string? Group { get; init; }
 
     [CommandOption("-a|--assign <USER>")]
     [Description("Username to assign the issue to")]

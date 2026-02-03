@@ -74,27 +74,14 @@ public class IssueServiceTests
             priority: 2,
             linkedPr: 42,
             linkedIssues: ["issue1"],
-            parentIssues: ["parent1"]);
+            parentIssues: [new ParentIssueRef { ParentIssue = "parent1", SortOrder = "aaa" }]);
 
         result.Description.Should().Be("A description");
         result.Status.Should().Be(IssueStatus.Complete);
         result.Priority.Should().Be(2);
         result.LinkedPR.Should().Be(42);
         result.LinkedIssues.Should().ContainSingle("issue1");
-        result.ParentIssues.Should().ContainSingle("parent1");
-    }
-
-    [Test]
-    public async Task CreateAsync_SetsGroup()
-    {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
-
-        var result = await _sut.CreateAsync(
-            title: "Test Issue",
-            type: IssueType.Task,
-            group: "platform-team");
-
-        result.Group.Should().Be("platform-team");
+        result.ParentIssues.Should().ContainSingle().Which.ParentIssue.Should().Be("parent1");
     }
 
     [Test]
@@ -109,22 +96,6 @@ public class IssueServiceTests
 
         result.Tags.Should().HaveCount(3);
         result.Tags.Should().Contain(["backend", "api", "urgent"]);
-    }
-
-    [Test]
-    public async Task CreateAsync_SetsGroupAndTags()
-    {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
-
-        var result = await _sut.CreateAsync(
-            title: "Test Issue",
-            type: IssueType.Feature,
-            group: "frontend-team",
-            tags: ["ui", "design"]);
-
-        result.Group.Should().Be("frontend-team");
-        result.Tags.Should().HaveCount(2);
-        result.Tags.Should().Contain(["ui", "design"]);
     }
 
     [Test]
@@ -537,22 +508,6 @@ public class IssueServiceTests
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.SearchAsync("backend");
-
-        result.Should().HaveCount(1);
-        result[0].Id.Should().Be("a");
-    }
-
-    [Test]
-    public async Task SearchAsync_FindsMatchesInGroup()
-    {
-        var issues = new List<Issue>
-        {
-            new() { Id = "a", Title = "Fix bug", Group = "platform-team", Status = IssueStatus.Progress, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "Add feature", Group = "frontend-team", Status = IssueStatus.Progress, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
-        };
-        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
-
-        var result = await _sut.SearchAsync("platform");
 
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("a");

@@ -27,8 +27,8 @@ public class ValidationServiceTests
         // Arrange: Linear chain A -> B -> C (no cycle)
         var issues = new List<Issue>
         {
-            new IssueBuilder().WithId("A").WithPreviousIssues("B").Build(),
-            new IssueBuilder().WithId("B").WithPreviousIssues("C").Build(),
+            new IssueBuilder().WithId("A").WithParentIssueIds("B").Build(),
+            new IssueBuilder().WithId("B").WithParentIssueIds("C").Build(),
             new IssueBuilder().WithId("C").Build()
         };
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
@@ -47,8 +47,8 @@ public class ValidationServiceTests
         // Arrange: A -> B -> A (cycle)
         var issues = new List<Issue>
         {
-            new IssueBuilder().WithId("A").WithPreviousIssues("B").Build(),
-            new IssueBuilder().WithId("B").WithPreviousIssues("A").Build()
+            new IssueBuilder().WithId("A").WithParentIssueIds("B").Build(),
+            new IssueBuilder().WithId("B").WithParentIssueIds("A").Build()
         };
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -67,7 +67,7 @@ public class ValidationServiceTests
         // Arrange: A -> A (self-reference)
         var issues = new List<Issue>
         {
-            new IssueBuilder().WithId("A").WithPreviousIssues("A").Build()
+            new IssueBuilder().WithId("A").WithParentIssueIds("A").Build()
         };
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -86,10 +86,10 @@ public class ValidationServiceTests
         // Arrange: Two independent cycles: A -> B -> A, C -> D -> C
         var issues = new List<Issue>
         {
-            new IssueBuilder().WithId("A").WithPreviousIssues("B").Build(),
-            new IssueBuilder().WithId("B").WithPreviousIssues("A").Build(),
-            new IssueBuilder().WithId("C").WithPreviousIssues("D").Build(),
-            new IssueBuilder().WithId("D").WithPreviousIssues("C").Build()
+            new IssueBuilder().WithId("A").WithParentIssueIds("B").Build(),
+            new IssueBuilder().WithId("B").WithParentIssueIds("A").Build(),
+            new IssueBuilder().WithId("C").WithParentIssueIds("D").Build(),
+            new IssueBuilder().WithId("D").WithParentIssueIds("C").Build()
         };
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -107,10 +107,10 @@ public class ValidationServiceTests
         // Arrange: A -> B -> C -> D -> A (longer cycle)
         var issues = new List<Issue>
         {
-            new IssueBuilder().WithId("A").WithPreviousIssues("B").Build(),
-            new IssueBuilder().WithId("B").WithPreviousIssues("C").Build(),
-            new IssueBuilder().WithId("C").WithPreviousIssues("D").Build(),
-            new IssueBuilder().WithId("D").WithPreviousIssues("A").Build()
+            new IssueBuilder().WithId("A").WithParentIssueIds("B").Build(),
+            new IssueBuilder().WithId("B").WithParentIssueIds("C").Build(),
+            new IssueBuilder().WithId("C").WithParentIssueIds("D").Build(),
+            new IssueBuilder().WithId("D").WithParentIssueIds("A").Build()
         };
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -126,7 +126,7 @@ public class ValidationServiceTests
     [Test]
     public async Task ValidateDependencyCyclesAsync_NoDependencies_ReturnsValid()
     {
-        // Arrange: Issues with no PreviousIssues
+        // Arrange: Issues with no ParentIssues
         var issues = new List<Issue>
         {
             new IssueBuilder().WithId("A").Build(),
@@ -149,8 +149,8 @@ public class ValidationServiceTests
         // Arrange: A -> B -> NonExistent (non-existent reference should be ignored)
         var issues = new List<Issue>
         {
-            new IssueBuilder().WithId("A").WithPreviousIssues("B").Build(),
-            new IssueBuilder().WithId("B").WithPreviousIssues("NonExistent").Build()
+            new IssueBuilder().WithId("A").WithParentIssueIds("B").Build(),
+            new IssueBuilder().WithId("B").WithParentIssueIds("NonExistent").Build()
         };
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -168,8 +168,8 @@ public class ValidationServiceTests
         // Arrange: Case-insensitive cycle detection
         var issues = new List<Issue>
         {
-            new IssueBuilder().WithId("abc").WithPreviousIssues("DEF").Build(),
-            new IssueBuilder().WithId("DEF").WithPreviousIssues("ABC").Build()
+            new IssueBuilder().WithId("abc").WithParentIssueIds("DEF").Build(),
+            new IssueBuilder().WithId("DEF").WithParentIssueIds("ABC").Build()
         };
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -207,9 +207,9 @@ public class ValidationServiceTests
         // A depends on B and C, B and C both depend on D
         var issues = new List<Issue>
         {
-            new IssueBuilder().WithId("A").WithPreviousIssues("B", "C").Build(),
-            new IssueBuilder().WithId("B").WithPreviousIssues("D").Build(),
-            new IssueBuilder().WithId("C").WithPreviousIssues("D").Build(),
+            new IssueBuilder().WithId("A").WithParentIssueIds("B", "C").Build(),
+            new IssueBuilder().WithId("B").WithParentIssueIds("D").Build(),
+            new IssueBuilder().WithId("C").WithParentIssueIds("D").Build(),
             new IssueBuilder().WithId("D").Build()
         };
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
@@ -228,10 +228,10 @@ public class ValidationServiceTests
         // Arrange: X -> A -> B -> C -> B (cycle B -> C -> B, with tail X -> A)
         var issues = new List<Issue>
         {
-            new IssueBuilder().WithId("X").WithPreviousIssues("A").Build(),
-            new IssueBuilder().WithId("A").WithPreviousIssues("B").Build(),
-            new IssueBuilder().WithId("B").WithPreviousIssues("C").Build(),
-            new IssueBuilder().WithId("C").WithPreviousIssues("B").Build()
+            new IssueBuilder().WithId("X").WithParentIssueIds("A").Build(),
+            new IssueBuilder().WithId("A").WithParentIssueIds("B").Build(),
+            new IssueBuilder().WithId("B").WithParentIssueIds("C").Build(),
+            new IssueBuilder().WithId("C").WithParentIssueIds("B").Build()
         };
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 

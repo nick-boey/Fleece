@@ -28,21 +28,13 @@ public sealed record Issue
     public DateTimeOffset LinkedIssuesLastUpdate { get; init; }
     public string? LinkedIssuesModifiedBy { get; init; }
 
-    public IReadOnlyList<string> ParentIssues { get; init; } = [];
+    public IReadOnlyList<ParentIssueRef> ParentIssues { get; init; } = [];
     public DateTimeOffset ParentIssuesLastUpdate { get; init; }
     public string? ParentIssuesModifiedBy { get; init; }
-
-    public IReadOnlyList<string> PreviousIssues { get; init; } = [];
-    public DateTimeOffset PreviousIssuesLastUpdate { get; init; }
-    public string? PreviousIssuesModifiedBy { get; init; }
 
     public int? Priority { get; init; }
     public DateTimeOffset? PriorityLastUpdate { get; init; }
     public string? PriorityModifiedBy { get; init; }
-
-    public string? Group { get; init; }
-    public DateTimeOffset? GroupLastUpdate { get; init; }
-    public string? GroupModifiedBy { get; init; }
 
     public string? AssignedTo { get; init; }
     public DateTimeOffset? AssignedToLastUpdate { get; init; }

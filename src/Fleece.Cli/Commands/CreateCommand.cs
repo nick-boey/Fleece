@@ -95,17 +95,7 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 linkedIssues = template.LinkedIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             }
 
-            IReadOnlyList<string>? parentIssues = null;
-            if (!string.IsNullOrWhiteSpace(template.ParentIssues))
-            {
-                parentIssues = template.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            }
-
-            IReadOnlyList<string>? previousIssues = null;
-            if (!string.IsNullOrWhiteSpace(template.PreviousIssues))
-            {
-                previousIssues = template.PreviousIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            }
+            var parentIssues = ParentIssueRef.ParseFromStrings(template.ParentIssues);
 
             IReadOnlyList<string>? tags = null;
             if (!string.IsNullOrWhiteSpace(template.Tags))
@@ -123,9 +113,7 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 priority: template.Priority,
                 linkedPr: template.LinkedPr,
                 linkedIssues: linkedIssues,
-                parentIssues: parentIssues,
-                previousIssues: previousIssues,
-                group: template.Group,
+                parentIssues: parentIssues.Count > 0 ? parentIssues : null,
                 assignedTo: template.AssignedTo,
                 tags: tags,
                 workingBranchId: template.WorkingBranchId);
@@ -172,17 +160,7 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
             linkedIssues = settings.LinkedIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
-        IReadOnlyList<string>? parentIssues = null;
-        if (!string.IsNullOrWhiteSpace(settings.ParentIssues))
-        {
-            parentIssues = settings.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        }
-
-        IReadOnlyList<string>? previousIssues = null;
-        if (!string.IsNullOrWhiteSpace(settings.PreviousIssues))
-        {
-            previousIssues = settings.PreviousIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        }
+        var parentIssues = ParentIssueRef.ParseFromStrings(settings.ParentIssues);
 
         IReadOnlyList<string>? tags = null;
         if (!string.IsNullOrWhiteSpace(settings.Tags))
@@ -202,9 +180,7 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 priority: settings.Priority,
                 linkedPr: settings.LinkedPr,
                 linkedIssues: linkedIssues,
-                parentIssues: parentIssues,
-                previousIssues: previousIssues,
-                group: settings.Group,
+                parentIssues: parentIssues.Count > 0 ? parentIssues : null,
                 assignedTo: settings.AssignedTo,
                 tags: tags,
                 workingBranchId: settings.WorkingBranchId);

@@ -36,14 +36,12 @@ public sealed class EditorService
             description:
             status: idea  # Options: idea, spec, next, progress, review, complete, archived, closed
             priority:   # 1-5 (1=highest)
-            group:
             assignedTo:
             tags:   # Comma-separated list, e.g.: urgent,backend,api
             workingBranchId:   # Git branch name for this issue
             linkedPr:
             linkedIssues:   # Comma-separated issue IDs
-            parentIssues:   # Comma-separated issue IDs
-            previousIssues:   # Comma-separated issue IDs (issues that should be done before this one)
+            parentIssues:   # Comma-separated issue IDs with optional sort order (e.g., abc123,def456:bbb)
             """;
 
         File.WriteAllText(filePath, template);
@@ -57,8 +55,7 @@ public sealed class EditorService
         var filePath = Path.Combine(TemplateDirectory, fileName);
 
         var linkedIssuesStr = issue.LinkedIssues.Count > 0 ? string.Join(", ", issue.LinkedIssues) : "";
-        var parentIssuesStr = issue.ParentIssues.Count > 0 ? string.Join(", ", issue.ParentIssues) : "";
-        var previousIssuesStr = issue.PreviousIssues.Count > 0 ? string.Join(", ", issue.PreviousIssues) : "";
+        var parentIssuesStr = issue.ParentIssues.Count > 0 ? string.Join(", ", issue.ParentIssues.Select(p => p.ParentIssue)) : "";
         var tagsStr = issue.Tags.Count > 0 ? string.Join(", ", issue.Tags) : "";
 
         var template = $"""
@@ -74,14 +71,12 @@ public sealed class EditorService
             description: {EscapeYamlValue(issue.Description)}
             status: {issue.Status.ToString().ToLowerInvariant()}  # Options: idea, spec, next, progress, review, complete, archived, closed
             priority: {(issue.Priority.HasValue ? issue.Priority.Value.ToString() : "")}  # 1-5 (1=highest)
-            group: {EscapeYamlValue(issue.Group)}
             assignedTo: {EscapeYamlValue(issue.AssignedTo)}
             tags: {tagsStr}  # Comma-separated list, e.g.: urgent,backend,api
             workingBranchId: {EscapeYamlValue(issue.WorkingBranchId)}  # Git branch name for this issue
             linkedPr: {(issue.LinkedPR.HasValue ? issue.LinkedPR.Value.ToString() : "")}
             linkedIssues: {linkedIssuesStr}  # Comma-separated issue IDs
-            parentIssues: {parentIssuesStr}  # Comma-separated issue IDs
-            previousIssues: {previousIssuesStr}  # Comma-separated issue IDs (issues that should be done before this one)
+            parentIssues: {parentIssuesStr}  # Comma-separated issue IDs with optional sort order (e.g., abc123,def456:bbb)
             """;
 
         File.WriteAllText(filePath, template);
@@ -216,12 +211,10 @@ public sealed class IssueTemplate
     public string? Description { get; set; }
     public string? Status { get; set; }
     public int? Priority { get; set; }
-    public string? Group { get; set; }
     public string? AssignedTo { get; set; }
     public string? Tags { get; set; }
     public int? LinkedPr { get; set; }
     public string? LinkedIssues { get; set; }
     public string? ParentIssues { get; set; }
-    public string? PreviousIssues { get; set; }
     public string? WorkingBranchId { get; set; }
 }

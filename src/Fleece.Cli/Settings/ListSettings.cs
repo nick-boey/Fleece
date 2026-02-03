@@ -17,10 +17,6 @@ public sealed class ListSettings : CommandSettings
     [Description("Filter by priority")]
     public int? Priority { get; init; }
 
-    [CommandOption("-g|--group <GROUP>")]
-    [Description("Filter by group")]
-    public string? Group { get; init; }
-
     [CommandOption("--assigned <USER>")]
     [Description("Filter by assignee")]
     public string? AssignedTo { get; init; }
@@ -46,7 +42,7 @@ public sealed class ListSettings : CommandSettings
     public bool All { get; init; }
 
     [CommandOption("--one-line")]
-    [Description("Output each issue on a single line: <id> <status> <group> <type> <title>")]
+    [Description("Output each issue on a single line: <id> <status> <type> <title>")]
     public bool OneLine { get; init; }
 
     [CommandOption("--strict")]
