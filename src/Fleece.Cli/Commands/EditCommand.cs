@@ -48,7 +48,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out var parsedStatus))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, progress, review, complete, archived, closed");
                 return 1;
             }
             status = parsedStatus;
@@ -71,22 +71,28 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
             linkedIssues = settings.LinkedIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
-        IReadOnlyList<string>? parentIssues = null;
+        IReadOnlyList<ParentIssueRef>? parentIssues = null;
         if (!string.IsNullOrWhiteSpace(settings.ParentIssues))
         {
-            parentIssues = settings.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        }
-
-        IReadOnlyList<string>? previousIssues = null;
-        if (!string.IsNullOrWhiteSpace(settings.PreviousIssues))
-        {
-            previousIssues = settings.PreviousIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var parsed = ParentIssueRef.ParseFromStrings(settings.ParentIssues);
+            parentIssues = parsed.Count > 0 ? parsed : [];
         }
 
         IReadOnlyList<string>? tags = null;
         if (!string.IsNullOrWhiteSpace(settings.Tags))
         {
             tags = settings.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+
+        ExecutionMode? executionMode = null;
+        if (!string.IsNullOrWhiteSpace(settings.ExecutionMode))
+        {
+            if (!Enum.TryParse<ExecutionMode>(settings.ExecutionMode, ignoreCase: true, out var parsedMode))
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid execution mode '{settings.ExecutionMode}'. Use: series, parallel");
+                return 1;
+            }
+            executionMode = parsedMode;
         }
 
         try
@@ -101,11 +107,10 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 linkedPr: settings.LinkedPr,
                 linkedIssues: linkedIssues,
                 parentIssues: parentIssues,
-                previousIssues: previousIssues,
-                group: settings.Group,
                 assignedTo: settings.AssignedTo,
                 tags: tags,
-                workingBranchId: settings.WorkingBranchId);
+                workingBranchId: settings.WorkingBranchId,
+                executionMode: executionMode);
 
             if (settings.Json || settings.JsonVerbose)
             {
@@ -140,11 +145,10 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         !settings.LinkedPr.HasValue &&
         string.IsNullOrWhiteSpace(settings.LinkedIssues) &&
         string.IsNullOrWhiteSpace(settings.ParentIssues) &&
-        string.IsNullOrWhiteSpace(settings.PreviousIssues) &&
-        string.IsNullOrWhiteSpace(settings.Group) &&
         string.IsNullOrWhiteSpace(settings.AssignedTo) &&
         string.IsNullOrWhiteSpace(settings.Tags) &&
         string.IsNullOrWhiteSpace(settings.WorkingBranchId) &&
+        string.IsNullOrWhiteSpace(settings.ExecutionMode) &&
         !settings.Json &&
         !settings.JsonVerbose;
 
@@ -199,7 +203,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
             {
                 if (!Enum.TryParse<IssueStatus>(template.Status, ignoreCase: true, out var parsedStatus))
                 {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
+                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: open, progress, review, complete, archived, closed");
                     return 1;
                 }
                 status = parsedStatus;
@@ -215,25 +219,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 linkedIssues = [];
             }
 
-            IReadOnlyList<string>? parentIssues = null;
-            if (!string.IsNullOrWhiteSpace(template.ParentIssues))
-            {
-                parentIssues = template.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            }
-            else
-            {
-                parentIssues = [];
-            }
-
-            IReadOnlyList<string>? previousIssues = null;
-            if (!string.IsNullOrWhiteSpace(template.PreviousIssues))
-            {
-                previousIssues = template.PreviousIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            }
-            else
-            {
-                previousIssues = [];
-            }
+            var parentIssues = ParentIssueRef.ParseFromStrings(template.ParentIssues);
 
             IReadOnlyList<string>? tags = null;
             if (!string.IsNullOrWhiteSpace(template.Tags))
@@ -255,8 +241,6 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 linkedPr: template.LinkedPr,
                 linkedIssues: linkedIssues,
                 parentIssues: parentIssues,
-                previousIssues: previousIssues,
-                group: template.Group,
                 assignedTo: template.AssignedTo,
                 tags: tags,
                 workingBranchId: template.WorkingBranchId);

@@ -76,7 +76,7 @@ public sealed class IssueMerger
         }
 
         // Merge collections with union strategy
-        var (linkedIssues, linkedIssuesTimestamp, linkedIssuesModifiedBy, linkedIssuesChange) = MergeCollections(
+        var (linkedIssues, linkedIssuesTimestamp, linkedIssuesModifiedBy, linkedIssuesChange) = MergeStringCollections(
             "LinkedIssues", issueA.LinkedIssues, issueA.LinkedIssuesLastUpdate, issueA.LinkedIssuesModifiedBy,
             issueB.LinkedIssues, issueB.LinkedIssuesLastUpdate, issueB.LinkedIssuesModifiedBy, mergedBy, now);
         if (linkedIssuesChange is not null)
@@ -84,21 +84,12 @@ public sealed class IssueMerger
             changes.Add(linkedIssuesChange);
         }
 
-        var (parentIssues, parentIssuesTimestamp, parentIssuesModifiedBy, parentIssuesChange) = MergeCollections(
+        var (parentIssues, parentIssuesTimestamp, parentIssuesModifiedBy, parentIssuesChange) = MergeParentIssueCollections(
             "ParentIssues", issueA.ParentIssues, issueA.ParentIssuesLastUpdate, issueA.ParentIssuesModifiedBy,
             issueB.ParentIssues, issueB.ParentIssuesLastUpdate, issueB.ParentIssuesModifiedBy, mergedBy, now);
         if (parentIssuesChange is not null)
         {
             changes.Add(parentIssuesChange);
-        }
-
-        // Merge Group
-        var (group, groupTimestamp, groupModifiedBy, groupChange) = MergeNullableProperty(
-            "Group", issueA.Group, issueA.GroupLastUpdate, issueA.GroupModifiedBy,
-            issueB.Group, issueB.GroupLastUpdate, issueB.GroupModifiedBy, mergedBy, now);
-        if (groupChange is not null)
-        {
-            changes.Add(groupChange);
         }
 
         // Merge AssignedTo
@@ -108,6 +99,15 @@ public sealed class IssueMerger
         if (assignedToChange is not null)
         {
             changes.Add(assignedToChange);
+        }
+
+        // Merge Tags
+        var (tags, tagsTimestamp, tagsModifiedBy, tagsChange) = MergeStringCollections(
+            "Tags", issueA.Tags, issueA.TagsLastUpdate, issueA.TagsModifiedBy,
+            issueB.Tags, issueB.TagsLastUpdate, issueB.TagsModifiedBy, mergedBy, now);
+        if (tagsChange is not null)
+        {
+            changes.Add(tagsChange);
         }
 
         // Merge CreatedBy - keep oldest non-null value (creator never changes)
@@ -156,12 +156,12 @@ public sealed class IssueMerger
             ParentIssues = parentIssues,
             ParentIssuesLastUpdate = parentIssuesTimestamp,
             ParentIssuesModifiedBy = parentIssuesModifiedBy,
-            Group = group,
-            GroupLastUpdate = groupTimestamp,
-            GroupModifiedBy = groupModifiedBy,
             AssignedTo = assignedTo,
             AssignedToLastUpdate = assignedToTimestamp,
             AssignedToModifiedBy = assignedToModifiedBy,
+            Tags = tags,
+            TagsLastUpdate = tagsTimestamp,
+            TagsModifiedBy = tagsModifiedBy,
             CreatedBy = createdBy,
             CreatedByLastUpdate = createdByTimestamp,
             LastUpdate = lastUpdate,
@@ -253,7 +253,7 @@ public sealed class IssueMerger
         return (winner, winnerTimestamp, winnerModifiedBy, change);
     }
 
-    private static (IReadOnlyList<string> Value, DateTimeOffset Timestamp, string? ModifiedBy, PropertyChange? Change) MergeCollections(
+    private static (IReadOnlyList<string> Value, DateTimeOffset Timestamp, string? ModifiedBy, PropertyChange? Change) MergeStringCollections(
         string propertyName,
         IReadOnlyList<string>? listA, DateTimeOffset timestampA, string? modifiedByA,
         IReadOnlyList<string>? listB, DateTimeOffset timestampB, string? modifiedByB,
@@ -287,6 +287,69 @@ public sealed class IssueMerger
         };
 
         return (union, newerTimestamp, mergedBy ?? (timestampA > timestampB ? modifiedByA : modifiedByB), change);
+    }
+
+    private static (IReadOnlyList<ParentIssueRef> Value, DateTimeOffset Timestamp, string? ModifiedBy, PropertyChange? Change) MergeParentIssueCollections(
+        string propertyName,
+        IReadOnlyList<ParentIssueRef>? listA, DateTimeOffset timestampA, string? modifiedByA,
+        IReadOnlyList<ParentIssueRef>? listB, DateTimeOffset timestampB, string? modifiedByB,
+        string? mergedBy, DateTimeOffset mergeTime)
+    {
+        // Handle null collections
+        var safeListA = listA ?? [];
+        var safeListB = listB ?? [];
+
+        var newerTimestamp = timestampA > timestampB ? timestampA : timestampB;
+
+        // Create dictionaries keyed by ParentIssue ID
+        var dictA = safeListA.ToDictionary(p => p.ParentIssue, StringComparer.OrdinalIgnoreCase);
+        var dictB = safeListB.ToDictionary(p => p.ParentIssue, StringComparer.OrdinalIgnoreCase);
+
+        // Union by ParentIssue ID, keeping newer SortOrder based on timestamp
+        var allParentIds = new HashSet<string>(dictA.Keys.Concat(dictB.Keys), StringComparer.OrdinalIgnoreCase);
+        var merged = new List<ParentIssueRef>();
+
+        foreach (var parentId in allParentIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            var inA = dictA.TryGetValue(parentId, out var refA);
+            var inB = dictB.TryGetValue(parentId, out var refB);
+
+            if (inA && inB)
+            {
+                // Both have it - use newer SortOrder based on timestamp
+                var winner = timestampA >= timestampB ? refA! : refB!;
+                merged.Add(winner);
+            }
+            else if (inA)
+            {
+                merged.Add(refA!);
+            }
+            else
+            {
+                merged.Add(refB!);
+            }
+        }
+
+        // Check if there's a conflict
+        var setA = new HashSet<string>(safeListA.Select(p => p.ParentIssue), StringComparer.OrdinalIgnoreCase);
+        var setB = new HashSet<string>(safeListB.Select(p => p.ParentIssue), StringComparer.OrdinalIgnoreCase);
+
+        if (setA.SetEquals(setB) && safeListA.SequenceEqual(safeListB))
+        {
+            var modifiedBy = timestampA > timestampB ? modifiedByA : modifiedByB;
+            return (merged, newerTimestamp, modifiedBy, null);
+        }
+
+        var change = new PropertyChange
+        {
+            PropertyName = propertyName,
+            OldValue = $"A: [{string.Join(", ", safeListA.Select(p => p.ParentIssue))}], B: [{string.Join(", ", safeListB.Select(p => p.ParentIssue))}]",
+            NewValue = string.Join(", ", merged.Select(p => p.ParentIssue)),
+            Timestamp = mergeTime,
+            MergeResolution = "Union"
+        };
+
+        return (merged, newerTimestamp, mergedBy ?? (timestampA > timestampB ? modifiedByA : modifiedByB), change);
     }
 
     private static (string? Value, DateTimeOffset? Timestamp) MergeCreatedBy(

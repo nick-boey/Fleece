@@ -58,7 +58,7 @@ public class IssueServiceTests
 
         var result = await _sut.CreateAsync("Test Issue", IssueType.Task);
 
-        result.Status.Should().Be(IssueStatus.Idea);
+        result.Status.Should().Be(IssueStatus.Open);
     }
 
     [Test]
@@ -74,27 +74,14 @@ public class IssueServiceTests
             priority: 2,
             linkedPr: 42,
             linkedIssues: ["issue1"],
-            parentIssues: ["parent1"]);
+            parentIssues: [new ParentIssueRef { ParentIssue = "parent1", SortOrder = "aaa" }]);
 
         result.Description.Should().Be("A description");
         result.Status.Should().Be(IssueStatus.Complete);
         result.Priority.Should().Be(2);
         result.LinkedPR.Should().Be(42);
         result.LinkedIssues.Should().ContainSingle("issue1");
-        result.ParentIssues.Should().ContainSingle("parent1");
-    }
-
-    [Test]
-    public async Task CreateAsync_SetsGroup()
-    {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
-
-        var result = await _sut.CreateAsync(
-            title: "Test Issue",
-            type: IssueType.Task,
-            group: "platform-team");
-
-        result.Group.Should().Be("platform-team");
+        result.ParentIssues.Should().ContainSingle().Which.ParentIssue.Should().Be("parent1");
     }
 
     [Test]
@@ -109,22 +96,6 @@ public class IssueServiceTests
 
         result.Tags.Should().HaveCount(3);
         result.Tags.Should().Contain(["backend", "api", "urgent"]);
-    }
-
-    [Test]
-    public async Task CreateAsync_SetsGroupAndTags()
-    {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
-
-        var result = await _sut.CreateAsync(
-            title: "Test Issue",
-            type: IssueType.Feature,
-            group: "frontend-team",
-            tags: ["ui", "design"]);
-
-        result.Group.Should().Be("frontend-team");
-        result.Tags.Should().HaveCount(2);
-        result.Tags.Should().Contain(["ui", "design"]);
     }
 
     [Test]
@@ -152,8 +123,8 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Idea, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -167,7 +138,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -192,7 +163,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "ABC123", Title = "Test", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "ABC123", Title = "Test", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -206,8 +177,8 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "def456", Title = "Other", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "def456", Title = "Other", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -222,9 +193,9 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "abc123", Title = "Test 1", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "abc456", Title = "Test 2", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "def789", Title = "Other", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "abc123", Title = "Test 1", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "abc456", Title = "Test 2", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "def789", Title = "Other", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -239,7 +210,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -253,8 +224,8 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "ab", Title = "Exact", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "abc123", Title = "Partial", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "ab", Title = "Exact", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "abc123", Title = "Partial", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -269,7 +240,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "ABC123", Title = "Test", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "ABC123", Title = "Test", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -284,7 +255,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -298,7 +269,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -324,7 +295,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -340,7 +311,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -367,7 +338,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "abc123", Title = "Test", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -383,8 +354,8 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "Fix login bug", Status = IssueStatus.Idea, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "Add feature", Status = IssueStatus.Idea, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "Fix login bug", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Add feature", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -399,8 +370,8 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "Bug", Description = "Users cannot login", Status = IssueStatus.Idea, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "Feature", Description = "Add new button", Status = IssueStatus.Idea, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "Bug", Description = "Users cannot login", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Feature", Description = "Add new button", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -415,12 +386,12 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var result = await _sut.FilterAsync(status: IssueStatus.Idea);
+        var result = await _sut.FilterAsync(status: IssueStatus.Open);
 
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("a");
@@ -431,8 +402,8 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Idea, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Idea, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -447,13 +418,13 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Idea, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Idea, Type = IssueType.Bug, Priority = 2, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Bug, Priority = 2, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "c", Title = "C", Status = IssueStatus.Complete, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var result = await _sut.FilterAsync(status: IssueStatus.Idea, type: IssueType.Bug, priority: 1);
+        var result = await _sut.FilterAsync(status: IssueStatus.Open, type: IssueType.Bug, priority: 1);
 
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("a");
@@ -543,22 +514,6 @@ public class IssueServiceTests
     }
 
     [Test]
-    public async Task SearchAsync_FindsMatchesInGroup()
-    {
-        var issues = new List<Issue>
-        {
-            new() { Id = "a", Title = "Fix bug", Group = "platform-team", Status = IssueStatus.Progress, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "Add feature", Group = "frontend-team", Status = IssueStatus.Progress, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
-        };
-        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
-
-        var result = await _sut.SearchAsync("platform");
-
-        result.Should().HaveCount(1);
-        result[0].Id.Should().Be("a");
-    }
-
-    [Test]
     public async Task CreateAsync_SetsWorkingBranchId()
     {
         _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
@@ -576,7 +531,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -618,7 +573,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -690,9 +645,9 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Spec, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Next, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "d", Title = "D", Status = IssueStatus.Progress, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "e", Title = "E", Status = IssueStatus.Review, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "f", Title = "F", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
@@ -714,7 +669,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "c", Title = "C", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "d", Title = "D", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
@@ -733,7 +688,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Idea, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
@@ -806,8 +761,8 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Idea, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Idea, Type = IssueType.Task, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "c", Title = "C", Status = IssueStatus.Complete, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);

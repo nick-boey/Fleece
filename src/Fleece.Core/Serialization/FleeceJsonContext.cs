@@ -8,7 +8,8 @@ namespace Fleece.Core.Serialization;
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     WriteIndented = false,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    UseStringEnumConverter = true)]
+    UseStringEnumConverter = true,
+    Converters = [typeof(IssueStatusConverter)])]
 [JsonSerializable(typeof(Issue))]
 [JsonSerializable(typeof(IssueDto))]
 [JsonSerializable(typeof(ChangeRecord))]
@@ -16,11 +17,13 @@ namespace Fleece.Core.Serialization;
 [JsonSerializable(typeof(ChangeType))]
 [JsonSerializable(typeof(MergeResult))]
 [JsonSerializable(typeof(Question))]
+[JsonSerializable(typeof(ParentIssueRef))]
 [JsonSerializable(typeof(IReadOnlyList<Issue>))]
 [JsonSerializable(typeof(IReadOnlyList<IssueDto>))]
 [JsonSerializable(typeof(IReadOnlyList<ChangeRecord>))]
 [JsonSerializable(typeof(IReadOnlyList<PropertyChange>))]
 [JsonSerializable(typeof(IReadOnlyList<Question>))]
+[JsonSerializable(typeof(IReadOnlyList<ParentIssueRef>))]
 public partial class FleeceJsonContext : JsonSerializerContext
 {
 }

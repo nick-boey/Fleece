@@ -8,16 +8,15 @@ public interface IIssueService
         string title,
         IssueType type,
         string? description = null,
-        IssueStatus status = IssueStatus.Idea,
+        IssueStatus status = IssueStatus.Open,
         int? priority = null,
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
-        IReadOnlyList<string>? parentIssues = null,
-        IReadOnlyList<string>? previousIssues = null,
-        string? group = null,
+        IReadOnlyList<ParentIssueRef>? parentIssues = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         string? workingBranchId = null,
+        ExecutionMode? executionMode = null,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<Issue>> GetAllAsync(CancellationToken cancellationToken = default);
@@ -40,12 +39,11 @@ public interface IIssueService
         int? priority = null,
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
-        IReadOnlyList<string>? parentIssues = null,
-        IReadOnlyList<string>? previousIssues = null,
-        string? group = null,
+        IReadOnlyList<ParentIssueRef>? parentIssues = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         string? workingBranchId = null,
+        ExecutionMode? executionMode = null,
         CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default);
@@ -56,7 +54,6 @@ public interface IIssueService
         IssueStatus? status = null,
         IssueType? type = null,
         int? priority = null,
-        string? group = null,
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,

@@ -8,7 +8,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class CreateCommand(IIssueService issueService, IStorageService storageService) : AsyncCommand<CreateSettings>
+public sealed class CreateCommand(IIssueService issueService, IStorageService storageService, IGitService gitService) : AsyncCommand<CreateSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, CreateSettings settings)
     {
@@ -79,12 +79,12 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 return 1;
             }
 
-            var status = IssueStatus.Idea;
+            var status = IssueStatus.Open;
             if (!string.IsNullOrWhiteSpace(template.Status))
             {
                 if (!Enum.TryParse<IssueStatus>(template.Status, ignoreCase: true, out status))
                 {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
+                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: open, progress, review, complete, archived, closed");
                     return 1;
                 }
             }
@@ -95,17 +95,7 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 linkedIssues = template.LinkedIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             }
 
-            IReadOnlyList<string>? parentIssues = null;
-            if (!string.IsNullOrWhiteSpace(template.ParentIssues))
-            {
-                parentIssues = template.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            }
-
-            IReadOnlyList<string>? previousIssues = null;
-            if (!string.IsNullOrWhiteSpace(template.PreviousIssues))
-            {
-                previousIssues = template.PreviousIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            }
+            var parentIssues = ParentIssueRef.ParseFromStrings(template.ParentIssues);
 
             IReadOnlyList<string>? tags = null;
             if (!string.IsNullOrWhiteSpace(template.Tags))
@@ -123,9 +113,7 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 priority: template.Priority,
                 linkedPr: template.LinkedPr,
                 linkedIssues: linkedIssues,
-                parentIssues: parentIssues,
-                previousIssues: previousIssues,
-                group: template.Group,
+                parentIssues: parentIssues.Count > 0 ? parentIssues : null,
                 assignedTo: template.AssignedTo,
                 tags: tags,
                 workingBranchId: template.WorkingBranchId);
@@ -139,6 +127,9 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 AnsiConsole.MarkupLine($"[green]Created issue[/] [bold]{issue.Id}[/]");
                 TableFormatter.RenderIssue(issue);
             }
+
+            // Handle git commit/push if requested
+            HandleGitCommitPush(settings, issue.Title);
 
             return 0;
         }
@@ -156,12 +147,12 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
             return 1;
         }
 
-        var status = IssueStatus.Idea;
+        var status = IssueStatus.Open;
         if (!string.IsNullOrWhiteSpace(settings.Status))
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out status))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, progress, review, complete, archived, closed");
                 return 1;
             }
         }
@@ -172,22 +163,23 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
             linkedIssues = settings.LinkedIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
-        IReadOnlyList<string>? parentIssues = null;
-        if (!string.IsNullOrWhiteSpace(settings.ParentIssues))
-        {
-            parentIssues = settings.ParentIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        }
-
-        IReadOnlyList<string>? previousIssues = null;
-        if (!string.IsNullOrWhiteSpace(settings.PreviousIssues))
-        {
-            previousIssues = settings.PreviousIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        }
+        var parentIssues = ParentIssueRef.ParseFromStrings(settings.ParentIssues);
 
         IReadOnlyList<string>? tags = null;
         if (!string.IsNullOrWhiteSpace(settings.Tags))
         {
             tags = settings.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+
+        ExecutionMode? executionMode = null;
+        if (!string.IsNullOrWhiteSpace(settings.ExecutionMode))
+        {
+            if (!Enum.TryParse<ExecutionMode>(settings.ExecutionMode, ignoreCase: true, out var parsedMode))
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid execution mode '{settings.ExecutionMode}'. Use: series, parallel");
+                return 1;
+            }
+            executionMode = parsedMode;
         }
 
         await storageService.EnsureDirectoryExistsAsync();
@@ -202,12 +194,11 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 priority: settings.Priority,
                 linkedPr: settings.LinkedPr,
                 linkedIssues: linkedIssues,
-                parentIssues: parentIssues,
-                previousIssues: previousIssues,
-                group: settings.Group,
+                parentIssues: parentIssues.Count > 0 ? parentIssues : null,
                 assignedTo: settings.AssignedTo,
                 tags: tags,
-                workingBranchId: settings.WorkingBranchId);
+                workingBranchId: settings.WorkingBranchId,
+                executionMode: executionMode);
 
             if (settings.Json || settings.JsonVerbose)
             {
@@ -219,12 +210,41 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 TableFormatter.RenderIssue(issue);
             }
 
+            // Handle git commit/push if requested
+            HandleGitCommitPush(settings, issue.Title);
+
             return 0;
         }
         catch (ArgumentException ex) when (ex.ParamName == "workingBranchId")
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
             return 1;
+        }
+    }
+
+    private void HandleGitCommitPush(CreateSettings settings, string issueTitle)
+    {
+        if (!settings.Commit && !settings.Push)
+        {
+            return;
+        }
+
+        var commitMessage = $"Add issue: {issueTitle}";
+        var gitResult = settings.Push
+            ? gitService.CommitAndPushFleeceChanges(commitMessage)
+            : gitService.CommitFleeceChanges(commitMessage);
+
+        if (!gitResult.Success)
+        {
+            AnsiConsole.MarkupLine($"[yellow]Warning:[/] Issue created but git operation failed: {gitResult.ErrorMessage}");
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[dim]Changes committed to git[/]");
+            if (settings.Push)
+            {
+                AnsiConsole.MarkupLine("[dim]Pushed to remote[/]");
+            }
         }
     }
 }

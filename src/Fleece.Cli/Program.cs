@@ -86,6 +86,18 @@ app.Configure(config =>
         .WithDescription("Validate issue dependencies for cycles")
         .WithExample("validate")
         .WithExample("validate", "--json");
+
+    config.AddCommand<CommitCommand>("commit")
+        .WithDescription("Commit fleece changes to git")
+        .WithExample("commit")
+        .WithExample("commit", "-m", "Add new issues")
+        .WithExample("commit", "--push");
+
+    config.AddCommand<NextCommand>("next")
+        .WithDescription("Find issues that can be worked on next based on dependencies and execution mode")
+        .WithExample("next")
+        .WithExample("next", "--parent", "abc123")
+        .WithExample("next", "--json");
 });
 
 return await app.RunAsync(args);

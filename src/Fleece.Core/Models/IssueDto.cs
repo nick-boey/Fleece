@@ -12,10 +12,8 @@ public sealed record IssueDto
     public required IssueType Type { get; init; }
     public int? LinkedPR { get; init; }
     public IReadOnlyList<string> LinkedIssues { get; init; } = [];
-    public IReadOnlyList<string> ParentIssues { get; init; } = [];
-    public IReadOnlyList<string> PreviousIssues { get; init; } = [];
+    public IReadOnlyList<ParentIssueRef> ParentIssues { get; init; } = [];
     public int? Priority { get; init; }
-    public string? Group { get; init; }
     public string? AssignedTo { get; init; }
     public IReadOnlyList<string> Tags { get; init; } = [];
     public IReadOnlyList<Question> Questions { get; init; } = [];
@@ -33,9 +31,7 @@ public sealed record IssueDto
         LinkedPR = issue.LinkedPR,
         LinkedIssues = issue.LinkedIssues,
         ParentIssues = issue.ParentIssues,
-        PreviousIssues = issue.PreviousIssues,
         Priority = issue.Priority,
-        Group = issue.Group,
         AssignedTo = issue.AssignedTo,
         Tags = issue.Tags,
         Questions = issue.Questions,

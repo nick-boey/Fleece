@@ -6,7 +6,7 @@ namespace Fleece.Cli.Settings;
 public sealed class TreeSettings : CommandSettings
 {
     [CommandOption("-s|--status <STATUS>")]
-    [Description("Filter by status: idea, spec, next, progress, review, complete, archived, closed")]
+    [Description("Filter by status: open, progress, review, complete, archived, closed")]
     public string? Status { get; init; }
 
     [CommandOption("-t|--type <TYPE>")]
@@ -16,10 +16,6 @@ public sealed class TreeSettings : CommandSettings
     [CommandOption("-p|--priority <PRIORITY>")]
     [Description("Filter by priority")]
     public int? Priority { get; init; }
-
-    [CommandOption("-g|--group <GROUP>")]
-    [Description("Filter by group")]
-    public string? Group { get; init; }
 
     [CommandOption("--assigned <USER>")]
     [Description("Filter by assignee")]

@@ -21,7 +21,6 @@ public static class TableFormatter
         table.AddColumn(new TableColumn("Type").Centered());
         table.AddColumn(new TableColumn("Status").Centered());
         table.AddColumn(new TableColumn("Pri").Centered());
-        table.AddColumn(new TableColumn("Group").Centered());
         table.AddColumn(new TableColumn("Assigned").Centered());
         table.AddColumn(new TableColumn("Updated").Centered());
 
@@ -29,9 +28,7 @@ public static class TableFormatter
         {
             var statusColor = issue.Status switch
             {
-                IssueStatus.Idea => "magenta",
-                IssueStatus.Spec => "cyan",
-                IssueStatus.Next => "yellow",
+                IssueStatus.Open => "cyan",
                 IssueStatus.Progress => "blue",
                 IssueStatus.Review => "purple",
                 IssueStatus.Complete => "green",
@@ -50,7 +47,6 @@ public static class TableFormatter
             };
 
             var priDisplay = issue.Priority?.ToString() ?? "-";
-            var groupDisplay = issue.Group ?? "-";
             var assignedDisplay = issue.AssignedTo ?? "-";
 
             table.AddRow(
@@ -59,7 +55,6 @@ public static class TableFormatter
                 $"[{typeColor}]{issue.Type}[/]",
                 $"[{statusColor}]{issue.Status}[/]",
                 priDisplay,
-                Markup.Escape(groupDisplay),
                 Markup.Escape(assignedDisplay),
                 issue.LastUpdate.ToString("yyyy-MM-dd")
             );
@@ -120,17 +115,7 @@ public static class TableFormatter
 
         if (issue.ParentIssues?.Count > 0)
         {
-            lines.Add($"[bold]Parent Issues:[/] {string.Join(", ", issue.ParentIssues)}");
-        }
-
-        if (issue.PreviousIssues?.Count > 0)
-        {
-            lines.Add($"[bold]Previous Issues:[/] {string.Join(", ", issue.PreviousIssues)}");
-        }
-
-        if (!string.IsNullOrEmpty(issue.Group))
-        {
-            lines.Add($"[bold]Group:[/] {Markup.Escape(issue.Group)}");
+            lines.Add($"[bold]Parent Issues:[/] {string.Join(", ", issue.ParentIssues.Select(p => p.ParentIssue))}");
         }
 
         if (!string.IsNullOrEmpty(issue.AssignedTo))

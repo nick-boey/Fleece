@@ -94,9 +94,9 @@
     },
     "parentIssues": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": { "$ref": "#/$defs/parentIssueRef" },
       "default": [],
-      "description": "IDs of parent issues (for hierarchy/subtasks)"
+      "description": "References to parent issues with sort order for hierarchy/subtasks"
     },
     "parentIssuesLastUpdate": {
       "type": "string",
@@ -106,21 +106,6 @@
     "parentIssuesModifiedBy": {
       "type": ["string", "null"],
       "description": "Username who last modified parentIssues"
-    },
-    "previousIssues": {
-      "type": "array",
-      "items": { "type": "string" },
-      "default": [],
-      "description": "IDs of issues that must be completed before this one"
-    },
-    "previousIssuesLastUpdate": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Timestamp when previousIssues was last modified"
-    },
-    "previousIssuesModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified previousIssues"
     },
     "priority": {
       "type": ["integer", "null"],
@@ -134,19 +119,6 @@
     "priorityModifiedBy": {
       "type": ["string", "null"],
       "description": "Username who last modified priority"
-    },
-    "group": {
-      "type": ["string", "null"],
-      "description": "Grouping category for the issue"
-    },
-    "groupLastUpdate": {
-      "type": ["string", "null"],
-      "format": "date-time",
-      "description": "Timestamp when group was last modified"
-    },
-    "groupModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified group"
     },
     "assignedTo": {
       "type": ["string", "null"],
@@ -204,6 +176,18 @@
       "type": ["string", "null"],
       "description": "Username who last modified workingBranchId"
     },
+    "executionMode": {
+      "$ref": "#/$defs/executionMode"
+    },
+    "executionModeLastUpdate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Timestamp when executionMode was last modified"
+    },
+    "executionModeModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified executionMode"
+    },
     "createdBy": {
       "type": ["string", "null"],
       "description": "Username who created the issue"
@@ -227,13 +211,37 @@
   "$defs": {
     "issueStatus": {
       "type": "string",
-      "enum": ["Idea", "Spec", "Next", "Progress", "Review", "Complete", "Archived", "Closed", "Deleted"],
+      "enum": ["Open", "Progress", "Review", "Complete", "Archived", "Closed", "Deleted"],
       "description": "Current workflow status of the issue"
     },
     "issueType": {
       "type": "string",
       "enum": ["Task", "Bug", "Chore", "Feature"],
       "description": "Type/category of the issue"
+    },
+    "parentIssueRef": {
+      "type": "object",
+      "required": ["parentIssue", "sortOrder"],
+      "additionalProperties": false,
+      "description": "Reference to a parent issue with sort order",
+      "properties": {
+        "parentIssue": {
+          "type": "string",
+          "description": "ID of the parent issue",
+          "minLength": 1
+        },
+        "sortOrder": {
+          "type": "string",
+          "description": "Lexicographic sort order for ordering children under this parent",
+          "minLength": 1
+        }
+      }
+    },
+    "executionMode": {
+      "type": "string",
+      "enum": ["Series", "Parallel"],
+      "default": "Series",
+      "description": "Execution mode for child issues: Series (sequential) or Parallel (concurrent)"
     },
     "question": {
       "type": "object",

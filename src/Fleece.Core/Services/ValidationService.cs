@@ -24,20 +24,20 @@ public class ValidationService : IValidationService
     }
 
     /// <summary>
-    /// Detects cycles in the PreviousIssues dependency graph using DFS.
+    /// Detects cycles in the ParentIssues dependency graph using DFS.
     /// </summary>
     private static List<DependencyCycle> DetectCycles(IEnumerable<Issue> issues)
     {
         var issueList = issues.ToList();
 
-        // Build adjacency map: issue ID -> list of PreviousIssues (dependencies)
+        // Build adjacency map: issue ID -> list of ParentIssues (dependencies)
         var adjacency = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         var issueIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var issue in issueList)
         {
             issueIds.Add(issue.Id);
-            adjacency[issue.Id] = (issue.PreviousIssues ?? []).ToList();
+            adjacency[issue.Id] = (issue.ParentIssues ?? []).Select(p => p.ParentIssue).ToList();
         }
 
         // Node colors for DFS: White = unvisited, Gray = in current path, Black = fully processed
