@@ -1,5 +1,5 @@
+using System.Text.Json;
 using Fleece.Cli.Settings;
-using Fleece.Core.Serialization;
 using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -94,12 +94,12 @@ public sealed class CommitCommand(IGitService gitService) : Command<CommitSettin
     private static void OutputJsonError(string error)
     {
         var result = new { success = false, error };
-        AnsiConsole.WriteLine(System.Text.Json.JsonSerializer.Serialize(result, FleeceJsonContext.Default.Options));
+        AnsiConsole.WriteLine(JsonSerializer.Serialize(result));
     }
 
     private static void OutputJsonResult(bool committed, bool pushed, string? message, string? warning = null)
     {
         var result = new { success = true, committed, pushed, message, warning };
-        AnsiConsole.WriteLine(System.Text.Json.JsonSerializer.Serialize(result, FleeceJsonContext.Default.Options));
+        AnsiConsole.WriteLine(JsonSerializer.Serialize(result));
     }
 }
