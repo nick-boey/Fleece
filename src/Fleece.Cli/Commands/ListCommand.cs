@@ -34,7 +34,7 @@ public sealed class ListCommand(IStorageService storageService) : AsyncCommand<L
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out var parsedStatus))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, progress, review, complete, archived, closed");
                 return 1;
             }
             status = parsedStatus;

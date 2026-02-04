@@ -23,7 +23,7 @@ public class JsonlSerializerTests
         var issue = new IssueBuilder()
             .WithId("abc123")
             .WithTitle("Test Issue")
-            .WithStatus(IssueStatus.Idea)
+            .WithStatus(IssueStatus.Open)
             .WithType(IssueType.Task)
             .Build();
 
@@ -70,7 +70,7 @@ public class JsonlSerializerTests
         result.Should().NotBeNull();
         result!.Id.Should().Be("abc123");
         result.Title.Should().Be("Test");
-        result.Status.Should().Be(IssueStatus.Idea);
+        result.Status.Should().Be(IssueStatus.Open);
         result.Type.Should().Be(IssueType.Bug);
     }
 

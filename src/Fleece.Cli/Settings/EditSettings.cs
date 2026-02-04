@@ -18,7 +18,7 @@ public sealed class EditSettings : CommandSettings
     public string? Description { get; init; }
 
     [CommandOption("-s|--status <STATUS>")]
-    [Description("New status: idea, spec, next, progress, review, complete, archived, closed")]
+    [Description("New status: open, progress, review, complete, archived, closed")]
     public string? Status { get; init; }
 
     [CommandOption("--type <TYPE>")]
@@ -52,6 +52,10 @@ public sealed class EditSettings : CommandSettings
     [CommandOption("-b|--working-branch <BRANCH>")]
     [Description("New working branch ID (valid Git branch name characters only)")]
     public string? WorkingBranchId { get; init; }
+
+    [CommandOption("-e|--execution-mode <MODE>")]
+    [Description("Execution mode for child issues: series, parallel")]
+    public string? ExecutionMode { get; init; }
 
     [CommandOption("--json")]
     [Description("Output as JSON")]

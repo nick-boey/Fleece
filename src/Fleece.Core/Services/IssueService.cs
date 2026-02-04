@@ -42,7 +42,7 @@ public sealed partial class IssueService(
         string title,
         IssueType type,
         string? description = null,
-        IssueStatus status = IssueStatus.Idea,
+        IssueStatus status = IssueStatus.Open,
         int? priority = null,
         int? linkedPr = null,
         IReadOnlyList<string>? linkedIssues = null,
@@ -50,6 +50,7 @@ public sealed partial class IssueService(
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         string? workingBranchId = null,
+        ExecutionMode? executionMode = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
@@ -98,6 +99,9 @@ public sealed partial class IssueService(
             WorkingBranchId = workingBranchId,
             WorkingBranchIdLastUpdate = workingBranchId is not null ? now : null,
             WorkingBranchIdModifiedBy = workingBranchId is not null ? createdBy : null,
+            ExecutionMode = executionMode ?? ExecutionMode.Series,
+            ExecutionModeLastUpdate = executionMode is not null ? now : null,
+            ExecutionModeModifiedBy = executionMode is not null ? createdBy : null,
             CreatedBy = createdBy,
             CreatedByLastUpdate = createdBy is not null ? now : null,
             LastUpdate = now,
@@ -152,6 +156,11 @@ public sealed partial class IssueService(
         if (workingBranchId is not null)
         {
             propertyChanges.Add(new() { PropertyName = "WorkingBranchId", OldValue = null, NewValue = workingBranchId, Timestamp = now });
+        }
+
+        if (executionMode is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "ExecutionMode", OldValue = null, NewValue = executionMode.ToString(), Timestamp = now });
         }
 
         var changeRecord = new ChangeRecord
@@ -215,6 +224,7 @@ public sealed partial class IssueService(
         string? assignedTo = null,
         IReadOnlyList<string>? tags = null,
         string? workingBranchId = null,
+        ExecutionMode? executionMode = null,
         CancellationToken cancellationToken = default)
     {
         if (!IsValidGitBranchName(workingBranchId))
@@ -273,6 +283,9 @@ public sealed partial class IssueService(
             WorkingBranchId = workingBranchId ?? existing.WorkingBranchId,
             WorkingBranchIdLastUpdate = workingBranchId is not null ? now : existing.WorkingBranchIdLastUpdate,
             WorkingBranchIdModifiedBy = workingBranchId is not null ? modifiedBy : existing.WorkingBranchIdModifiedBy,
+            ExecutionMode = executionMode ?? existing.ExecutionMode,
+            ExecutionModeLastUpdate = executionMode is not null ? now : existing.ExecutionModeLastUpdate,
+            ExecutionModeModifiedBy = executionMode is not null ? modifiedBy : existing.ExecutionModeModifiedBy,
             CreatedBy = existing.CreatedBy,
             CreatedByLastUpdate = existing.CreatedByLastUpdate,
             LastUpdate = now,
@@ -333,6 +346,11 @@ public sealed partial class IssueService(
         if (workingBranchId is not null)
         {
             propertyChanges.Add(new() { PropertyName = "WorkingBranchId", OldValue = existing.WorkingBranchId, NewValue = workingBranchId, Timestamp = now });
+        }
+
+        if (executionMode is not null)
+        {
+            propertyChanges.Add(new() { PropertyName = "ExecutionMode", OldValue = existing.ExecutionMode.ToString(), NewValue = executionMode.ToString(), Timestamp = now });
         }
 
         issues[existingIndex] = updated;

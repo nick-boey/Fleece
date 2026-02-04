@@ -24,7 +24,7 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out var parsedStatus))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, progress, review, complete, archived, closed");
                 return 1;
             }
             status = parsedStatus;
@@ -132,9 +132,7 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
         var connector2 = isRoot ? "" : (isLast ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ");
         var statusColor = issue.Status switch
         {
-            IssueStatus.Idea => "magenta",
-            IssueStatus.Spec => "cyan",
-            IssueStatus.Next => "yellow",
+            IssueStatus.Open => "cyan",
             IssueStatus.Progress => "blue",
             IssueStatus.Review => "purple",
             IssueStatus.Complete => "green",

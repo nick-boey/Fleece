@@ -48,7 +48,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out var parsedStatus))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, progress, review, complete, archived, closed");
                 return 1;
             }
             status = parsedStatus;
@@ -84,6 +84,17 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
             tags = settings.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
+        ExecutionMode? executionMode = null;
+        if (!string.IsNullOrWhiteSpace(settings.ExecutionMode))
+        {
+            if (!Enum.TryParse<ExecutionMode>(settings.ExecutionMode, ignoreCase: true, out var parsedMode))
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid execution mode '{settings.ExecutionMode}'. Use: series, parallel");
+                return 1;
+            }
+            executionMode = parsedMode;
+        }
+
         try
         {
             var issue = await issueService.UpdateAsync(
@@ -98,7 +109,8 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 parentIssues: parentIssues,
                 assignedTo: settings.AssignedTo,
                 tags: tags,
-                workingBranchId: settings.WorkingBranchId);
+                workingBranchId: settings.WorkingBranchId,
+                executionMode: executionMode);
 
             if (settings.Json || settings.JsonVerbose)
             {
@@ -136,6 +148,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         string.IsNullOrWhiteSpace(settings.AssignedTo) &&
         string.IsNullOrWhiteSpace(settings.Tags) &&
         string.IsNullOrWhiteSpace(settings.WorkingBranchId) &&
+        string.IsNullOrWhiteSpace(settings.ExecutionMode) &&
         !settings.Json &&
         !settings.JsonVerbose;
 
@@ -190,7 +203,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
             {
                 if (!Enum.TryParse<IssueStatus>(template.Status, ignoreCase: true, out var parsedStatus))
                 {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
+                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: open, progress, review, complete, archived, closed");
                     return 1;
                 }
                 status = parsedStatus;

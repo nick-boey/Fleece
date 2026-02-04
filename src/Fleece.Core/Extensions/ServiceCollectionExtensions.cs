@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMergeService, MergeService>();
         services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton<IValidationService, ValidationService>();
+        services.AddSingleton<INextService, NextService>();
 
         return services;
     }
