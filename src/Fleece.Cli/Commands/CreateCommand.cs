@@ -79,12 +79,12 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 return 1;
             }
 
-            var status = IssueStatus.Idea;
+            var status = IssueStatus.Open;
             if (!string.IsNullOrWhiteSpace(template.Status))
             {
                 if (!Enum.TryParse<IssueStatus>(template.Status, ignoreCase: true, out status))
                 {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
+                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: open, progress, review, complete, archived, closed");
                     return 1;
                 }
             }
@@ -147,12 +147,12 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
             return 1;
         }
 
-        var status = IssueStatus.Idea;
+        var status = IssueStatus.Open;
         if (!string.IsNullOrWhiteSpace(settings.Status))
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out status))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: idea, spec, next, progress, review, complete, archived, closed");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, progress, review, complete, archived, closed");
                 return 1;
             }
         }
@@ -171,6 +171,17 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
             tags = settings.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
+        ExecutionMode? executionMode = null;
+        if (!string.IsNullOrWhiteSpace(settings.ExecutionMode))
+        {
+            if (!Enum.TryParse<ExecutionMode>(settings.ExecutionMode, ignoreCase: true, out var parsedMode))
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid execution mode '{settings.ExecutionMode}'. Use: series, parallel");
+                return 1;
+            }
+            executionMode = parsedMode;
+        }
+
         await storageService.EnsureDirectoryExistsAsync();
 
         try
@@ -186,7 +197,8 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 parentIssues: parentIssues.Count > 0 ? parentIssues : null,
                 assignedTo: settings.AssignedTo,
                 tags: tags,
-                workingBranchId: settings.WorkingBranchId);
+                workingBranchId: settings.WorkingBranchId,
+                executionMode: executionMode);
 
             if (settings.Json || settings.JsonVerbose)
             {

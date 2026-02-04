@@ -18,7 +18,7 @@ public sealed class CreateSettings : CommandSettings
     public string? Description { get; init; }
 
     [CommandOption("-s|--status <STATUS>")]
-    [Description("Initial status (default: idea)")]
+    [Description("Initial status (default: open)")]
     public string? Status { get; init; }
 
     [CommandOption("-p|--priority <PRIORITY>")]
@@ -48,6 +48,10 @@ public sealed class CreateSettings : CommandSettings
     [CommandOption("-b|--working-branch <BRANCH>")]
     [Description("Working branch ID (valid Git branch name characters only)")]
     public string? WorkingBranchId { get; init; }
+
+    [CommandOption("-e|--execution-mode <MODE>")]
+    [Description("Execution mode for child issues: series (default), parallel")]
+    public string? ExecutionMode { get; init; }
 
     [CommandOption("--json")]
     [Description("Output as JSON")]

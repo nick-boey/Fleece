@@ -6,7 +6,7 @@ namespace Fleece.Cli.Settings;
 public sealed class TreeSettings : CommandSettings
 {
     [CommandOption("-s|--status <STATUS>")]
-    [Description("Filter by status: idea, spec, next, progress, review, complete, archived, closed")]
+    [Description("Filter by status: open, progress, review, complete, archived, closed")]
     public string? Status { get; init; }
 
     [CommandOption("-t|--type <TYPE>")]

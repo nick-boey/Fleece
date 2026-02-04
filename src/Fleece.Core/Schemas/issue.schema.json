@@ -176,6 +176,18 @@
       "type": ["string", "null"],
       "description": "Username who last modified workingBranchId"
     },
+    "executionMode": {
+      "$ref": "#/$defs/executionMode"
+    },
+    "executionModeLastUpdate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Timestamp when executionMode was last modified"
+    },
+    "executionModeModifiedBy": {
+      "type": ["string", "null"],
+      "description": "Username who last modified executionMode"
+    },
     "createdBy": {
       "type": ["string", "null"],
       "description": "Username who created the issue"
@@ -199,7 +211,7 @@
   "$defs": {
     "issueStatus": {
       "type": "string",
-      "enum": ["Idea", "Spec", "Next", "Progress", "Review", "Complete", "Archived", "Closed", "Deleted"],
+      "enum": ["Open", "Progress", "Review", "Complete", "Archived", "Closed", "Deleted"],
       "description": "Current workflow status of the issue"
     },
     "issueType": {
@@ -224,6 +236,12 @@
           "minLength": 1
         }
       }
+    },
+    "executionMode": {
+      "type": "string",
+      "enum": ["Series", "Parallel"],
+      "default": "Series",
+      "description": "Execution mode for child issues: Series (sequential) or Parallel (concurrent)"
     },
     "question": {
       "type": "object",

@@ -8,7 +8,8 @@ namespace Fleece.Core.Serialization;
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     WriteIndented = false,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    UseStringEnumConverter = true)]
+    UseStringEnumConverter = true,
+    Converters = [typeof(IssueStatusConverter)])]
 [JsonSerializable(typeof(Issue))]
 [JsonSerializable(typeof(IssueDto))]
 [JsonSerializable(typeof(ChangeRecord))]

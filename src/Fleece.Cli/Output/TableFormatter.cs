@@ -28,9 +28,7 @@ public static class TableFormatter
         {
             var statusColor = issue.Status switch
             {
-                IssueStatus.Idea => "magenta",
-                IssueStatus.Spec => "cyan",
-                IssueStatus.Next => "yellow",
+                IssueStatus.Open => "cyan",
                 IssueStatus.Progress => "blue",
                 IssueStatus.Review => "purple",
                 IssueStatus.Complete => "green",

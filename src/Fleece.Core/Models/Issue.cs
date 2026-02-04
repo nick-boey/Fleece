@@ -52,6 +52,10 @@ public sealed record Issue
     public DateTimeOffset? WorkingBranchIdLastUpdate { get; init; }
     public string? WorkingBranchIdModifiedBy { get; init; }
 
+    public ExecutionMode ExecutionMode { get; init; } = ExecutionMode.Series;
+    public DateTimeOffset? ExecutionModeLastUpdate { get; init; }
+    public string? ExecutionModeModifiedBy { get; init; }
+
     public string? CreatedBy { get; init; }
     public DateTimeOffset? CreatedByLastUpdate { get; init; }
 

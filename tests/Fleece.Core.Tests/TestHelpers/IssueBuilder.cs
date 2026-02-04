@@ -8,7 +8,7 @@ public class IssueBuilder
     private string _id = "abc123";
     private string _title = "Test Issue";
     private string? _description;
-    private IssueStatus _status = IssueStatus.Idea;
+    private IssueStatus _status = IssueStatus.Open;
     private IssueType _type = IssueType.Task;
     private int? _linkedPr;
     private IReadOnlyList<string> _linkedIssues = [];
@@ -17,6 +17,7 @@ public class IssueBuilder
     private string? _assignedTo;
     private string? _createdBy;
     private IReadOnlyList<string> _tags = [];
+    private ExecutionMode _executionMode = ExecutionMode.Series;
     private DateTimeOffset _lastUpdate = DateTimeOffset.UtcNow;
     private DateTimeOffset _createdAt = DateTimeOffset.UtcNow;
 
@@ -79,6 +80,12 @@ public class IssueBuilder
         return this;
     }
 
+    public IssueBuilder WithParentIssueIdAndOrder(string parentId, string sortOrder)
+    {
+        _parentIssues = [new ParentIssueRef { ParentIssue = parentId, SortOrder = sortOrder }];
+        return this;
+    }
+
     public IssueBuilder WithPriority(int? priority)
     {
         _priority = priority;
@@ -100,6 +107,12 @@ public class IssueBuilder
     public IssueBuilder WithTags(params string[] tags)
     {
         _tags = tags;
+        return this;
+    }
+
+    public IssueBuilder WithExecutionMode(ExecutionMode executionMode)
+    {
+        _executionMode = executionMode;
         return this;
     }
 
@@ -138,6 +151,8 @@ public class IssueBuilder
         AssignedToLastUpdate = _assignedTo is not null ? _lastUpdate : null,
         Tags = _tags,
         TagsLastUpdate = _lastUpdate,
+        ExecutionMode = _executionMode,
+        ExecutionModeLastUpdate = _lastUpdate,
         CreatedBy = _createdBy,
         CreatedByLastUpdate = _createdBy is not null ? _lastUpdate : null,
         LastUpdate = _lastUpdate,
