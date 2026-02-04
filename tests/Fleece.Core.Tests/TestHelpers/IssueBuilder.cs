@@ -80,6 +80,12 @@ public class IssueBuilder
         return this;
     }
 
+    public IssueBuilder WithParentIssueIdAndOrder(string parentId, string sortOrder)
+    {
+        _parentIssues = [new ParentIssueRef { ParentIssue = parentId, SortOrder = sortOrder }];
+        return this;
+    }
+
     public IssueBuilder WithPriority(int? priority)
     {
         _priority = priority;

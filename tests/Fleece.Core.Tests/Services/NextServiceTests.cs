@@ -67,83 +67,26 @@ public class NextServiceTests
         result.Should().BeEmpty();
     }
 
-    #endregion
-
-    #region PreviousIssues Dependency Tests
-
     [Test]
-    public async Task GetNextIssuesAsync_WithUnmetPreviousIssue_ReturnsEmptyList()
+    public async Task GetNextIssuesAsync_WithCompletedIssue_ReturnsEmptyList()
     {
-        var blocker = new IssueBuilder().WithId("blocker").WithStatus(IssueStatus.Open).Build();
-        var blocked = new IssueBuilder().WithId("blocked").WithStatus(IssueStatus.Open).WithPreviousIssues("blocker").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([blocker, blocked]);
+        var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Complete).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
         var result = await _sut.GetNextIssuesAsync();
 
-        // Only blocker should be actionable, blocked is waiting on blocker
-        result.Should().ContainSingle().Which.Id.Should().Be("blocker");
+        result.Should().BeEmpty();
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_WithCompletedPreviousIssue_ReturnsBlockedIssue()
+    public async Task GetNextIssuesAsync_WithArchivedIssue_ReturnsEmptyList()
     {
-        var blocker = new IssueBuilder().WithId("blocker").WithStatus(IssueStatus.Complete).Build();
-        var blocked = new IssueBuilder().WithId("blocked").WithStatus(IssueStatus.Open).WithPreviousIssues("blocker").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([blocker, blocked]);
+        var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Archived).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
         var result = await _sut.GetNextIssuesAsync();
 
-        result.Should().ContainSingle().Which.Id.Should().Be("blocked");
-    }
-
-    [Test]
-    public async Task GetNextIssuesAsync_WithArchivedPreviousIssue_ReturnsBlockedIssue()
-    {
-        var blocker = new IssueBuilder().WithId("blocker").WithStatus(IssueStatus.Archived).Build();
-        var blocked = new IssueBuilder().WithId("blocked").WithStatus(IssueStatus.Open).WithPreviousIssues("blocker").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([blocker, blocked]);
-
-        var result = await _sut.GetNextIssuesAsync();
-
-        result.Should().ContainSingle().Which.Id.Should().Be("blocked");
-    }
-
-    [Test]
-    public async Task GetNextIssuesAsync_WithClosedPreviousIssue_ReturnsBlockedIssue()
-    {
-        var blocker = new IssueBuilder().WithId("blocker").WithStatus(IssueStatus.Closed).Build();
-        var blocked = new IssueBuilder().WithId("blocked").WithStatus(IssueStatus.Open).WithPreviousIssues("blocker").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([blocker, blocked]);
-
-        var result = await _sut.GetNextIssuesAsync();
-
-        result.Should().ContainSingle().Which.Id.Should().Be("blocked");
-    }
-
-    [Test]
-    public async Task GetNextIssuesAsync_WithMultiplePreviousIssues_AllMustBeComplete()
-    {
-        var blocker1 = new IssueBuilder().WithId("blocker1").WithStatus(IssueStatus.Complete).Build();
-        var blocker2 = new IssueBuilder().WithId("blocker2").WithStatus(IssueStatus.Open).Build();
-        var blocked = new IssueBuilder().WithId("blocked").WithStatus(IssueStatus.Open).WithPreviousIssues("blocker1", "blocker2").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([blocker1, blocker2, blocked]);
-
-        var result = await _sut.GetNextIssuesAsync();
-
-        // blocker2 is still open, so blocked is not actionable
-        result.Should().ContainSingle().Which.Id.Should().Be("blocker2");
-    }
-
-    [Test]
-    public async Task GetNextIssuesAsync_WithNonExistentPreviousIssue_TreatsAsComplete()
-    {
-        // If a previous issue doesn't exist in the system, treat it as done
-        var blocked = new IssueBuilder().WithId("blocked").WithStatus(IssueStatus.Open).WithPreviousIssues("nonexistent").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([blocked]);
-
-        var result = await _sut.GetNextIssuesAsync();
-
-        result.Should().ContainSingle().Which.Id.Should().Be("blocked");
+        result.Should().BeEmpty();
     }
 
     #endregion
@@ -154,13 +97,13 @@ public class NextServiceTests
     public async Task GetNextIssuesAsync_SeriesParent_OnlyFirstChildIsActionable()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
-        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open).WithParentIssues("parent").WithPriority(1).Build();
-        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open).WithParentIssues("parent").WithPriority(2).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.GetNextIssuesAsync();
 
-        // In series mode, only the first child (by priority) should be actionable
+        // In series mode, only the first child (by sort order) should be actionable
         result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child1"]);
     }
 
@@ -168,8 +111,8 @@ public class NextServiceTests
     public async Task GetNextIssuesAsync_SeriesParent_SecondChildActionableWhenFirstComplete()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
-        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Complete).WithParentIssues("parent").WithPriority(1).Build();
-        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open).WithParentIssues("parent").WithPriority(2).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Complete).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.GetNextIssuesAsync();
@@ -178,17 +121,32 @@ public class NextServiceTests
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_SeriesParent_SortsByPriorityThenTitle()
+    public async Task GetNextIssuesAsync_SeriesParent_SortsBySortOrder()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
-        var childA = new IssueBuilder().WithId("childA").WithTitle("A Task").WithStatus(IssueStatus.Open).WithParentIssues("parent").Build();
-        var childB = new IssueBuilder().WithId("childB").WithTitle("B Task").WithStatus(IssueStatus.Open).WithParentIssues("parent").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, childB, childA]);
+        // childB has lower sort order so should come first despite being added second
+        var childA = new IssueBuilder().WithId("childA").WithTitle("A Task").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
+        var childB = new IssueBuilder().WithId("childB").WithTitle("B Task").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, childA, childB]);
 
         var result = await _sut.GetNextIssuesAsync();
 
-        // Without priority, should sort by title - childA comes first
-        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "childA"]);
+        // childB should be actionable (lower sort order)
+        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "childB"]);
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_SeriesParent_ThirdChildActionableWhenFirstTwoComplete()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Complete).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Closed).WithParentIssueIdAndOrder("parent", "bbb").Build();
+        var child3 = new IssueBuilder().WithId("child3").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "ccc").Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2, child3]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child3"]);
     }
 
     #endregion
@@ -199,8 +157,8 @@ public class NextServiceTests
     public async Task GetNextIssuesAsync_ParallelParent_AllChildrenActionable()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
-        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open).WithParentIssues("parent").Build();
-        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open).WithParentIssues("parent").Build();
+        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.GetNextIssuesAsync();
@@ -209,18 +167,18 @@ public class NextServiceTests
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_ParallelParent_ChildWithBlockedDependencyNotActionable()
+    public async Task GetNextIssuesAsync_ParallelParent_RemainingChildrenActionableWhenSomeComplete()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
-        var blocker = new IssueBuilder().WithId("blocker").WithStatus(IssueStatus.Open).Build();
-        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open).WithParentIssues("parent").Build();
-        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open).WithParentIssues("parent").WithPreviousIssues("blocker").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, blocker, child1, child2]);
+        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Complete).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
+        var child3 = new IssueBuilder().WithId("child3").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "ccc").Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2, child3]);
 
         var result = await _sut.GetNextIssuesAsync();
 
-        // child2 blocked by blocker, but child1 is still actionable
-        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "blocker", "child1"]);
+        // child1 is complete, but child2 and child3 are still actionable
+        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child2", "child3"]);
     }
 
     #endregion
@@ -231,12 +189,12 @@ public class NextServiceTests
     public async Task GetNextIssuesAsync_NestedHierarchy_RespectsParentExecutionModes()
     {
         var grandparent = new IssueBuilder().WithId("grandparent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
-        var parent1 = new IssueBuilder().WithId("parent1").WithStatus(IssueStatus.Open).WithParentIssues("grandparent").WithExecutionMode(ExecutionMode.Series).Build();
-        var parent2 = new IssueBuilder().WithId("parent2").WithStatus(IssueStatus.Open).WithParentIssues("grandparent").WithExecutionMode(ExecutionMode.Parallel).Build();
-        var child1a = new IssueBuilder().WithId("child1a").WithStatus(IssueStatus.Open).WithParentIssues("parent1").WithPriority(1).Build();
-        var child1b = new IssueBuilder().WithId("child1b").WithStatus(IssueStatus.Open).WithParentIssues("parent1").WithPriority(2).Build();
-        var child2a = new IssueBuilder().WithId("child2a").WithStatus(IssueStatus.Open).WithParentIssues("parent2").Build();
-        var child2b = new IssueBuilder().WithId("child2b").WithStatus(IssueStatus.Open).WithParentIssues("parent2").Build();
+        var parent1 = new IssueBuilder().WithId("parent1").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("grandparent", "aaa").WithExecutionMode(ExecutionMode.Series).Build();
+        var parent2 = new IssueBuilder().WithId("parent2").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("grandparent", "bbb").WithExecutionMode(ExecutionMode.Parallel).Build();
+        var child1a = new IssueBuilder().WithId("child1a").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent1", "aaa").Build();
+        var child1b = new IssueBuilder().WithId("child1b").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent1", "bbb").Build();
+        var child2a = new IssueBuilder().WithId("child2a").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent2", "aaa").Build();
+        var child2b = new IssueBuilder().WithId("child2b").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent2", "bbb").Build();
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([grandparent, parent1, parent2, child1a, child1b, child2a, child2b]);
 
         var result = await _sut.GetNextIssuesAsync();
@@ -251,7 +209,7 @@ public class NextServiceTests
     public async Task GetNextIssuesAsync_OrphanChild_IsActionable()
     {
         // If a child's parent doesn't exist, the child should still be actionable
-        var orphan = new IssueBuilder().WithId("orphan").WithStatus(IssueStatus.Open).WithParentIssues("nonexistent").Build();
+        var orphan = new IssueBuilder().WithId("orphan").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("nonexistent", "aaa").Build();
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([orphan]);
 
         var result = await _sut.GetNextIssuesAsync();
@@ -267,13 +225,27 @@ public class NextServiceTests
     public async Task GetNextIssuesAsync_WithParentFilter_ReturnsOnlyDescendants()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
-        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open).WithParentIssues("parent").Build();
+        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
         var other = new IssueBuilder().WithId("other").WithStatus(IssueStatus.Open).Build();
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, other]);
 
         var result = await _sut.GetNextIssuesAsync(parentId: "parent");
 
         result.Select(i => i.Id).Should().BeEquivalentTo(["child1"]);
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_WithParentFilter_IncludesNestedDescendants()
+    {
+        var grandparent = new IssueBuilder().WithId("grandparent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("grandparent", "aaa").WithExecutionMode(ExecutionMode.Parallel).Build();
+        var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var other = new IssueBuilder().WithId("other").WithStatus(IssueStatus.Open).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([grandparent, parent, child, other]);
+
+        var result = await _sut.GetNextIssuesAsync(parentId: "grandparent");
+
+        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child"]);
     }
 
     #endregion
@@ -286,8 +258,14 @@ public class NextServiceTests
         // Issue with multiple parents - must pass series check for all parents
         var parent1 = new IssueBuilder().WithId("parent1").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
         var parent2 = new IssueBuilder().WithId("parent2").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
-        var sibling = new IssueBuilder().WithId("sibling").WithStatus(IssueStatus.Open).WithParentIssues("parent1").WithPriority(1).Build();
-        var multiParent = new IssueBuilder().WithId("multiParent").WithStatus(IssueStatus.Open).WithParentIssues("parent1", "parent2").WithPriority(2).Build();
+        var sibling = new IssueBuilder().WithId("sibling").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent1", "aaa").Build();
+        var multiParent = new IssueBuilder()
+            .WithId("multiParent")
+            .WithStatus(IssueStatus.Open)
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parent1", SortOrder = "bbb" },
+                new ParentIssueRef { ParentIssue = "parent2", SortOrder = "aaa" })
+            .Build();
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent1, parent2, sibling, multiParent]);
 
         var result = await _sut.GetNextIssuesAsync();
@@ -301,14 +279,27 @@ public class NextServiceTests
     {
         // Without explicit ExecutionMode, default should be Series
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).Build(); // No ExecutionMode set
-        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open).WithParentIssues("parent").WithPriority(1).Build();
-        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open).WithParentIssues("parent").WithPriority(2).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.GetNextIssuesAsync();
 
         // Default is Series, so only child1 should be actionable
         result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child1"]);
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_MultipleOpenIssuesWithNoParent_AllAreActionable()
+    {
+        var issue1 = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Open).Build();
+        var issue2 = new IssueBuilder().WithId("issue2").WithStatus(IssueStatus.Open).Build();
+        var issue3 = new IssueBuilder().WithId("issue3").WithStatus(IssueStatus.Open).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue1, issue2, issue3]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        result.Select(i => i.Id).Should().BeEquivalentTo(["issue1", "issue2", "issue3"]);
     }
 
     #endregion

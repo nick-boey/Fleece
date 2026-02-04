@@ -84,8 +84,7 @@ public sealed class NextCommand(INextService nextService, IIssueService issueSer
 
         foreach (var issue in issues)
         {
-            var groupDisplay = issue.Group ?? "-";
-            Console.WriteLine($"{issue.Id} {issue.Status.ToString().ToLowerInvariant()} {groupDisplay} {issue.Type.ToString().ToLowerInvariant()} {issue.Title}");
+            Console.WriteLine($"{issue.Id} {issue.Status.ToString().ToLowerInvariant()} {issue.Type.ToString().ToLowerInvariant()} {issue.Title}");
         }
     }
 }

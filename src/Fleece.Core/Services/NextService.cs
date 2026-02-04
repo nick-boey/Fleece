@@ -66,30 +66,13 @@ public sealed class NextService(IIssueService issueService) : INextService
     }
 
     /// <summary>
-    /// Checks if all PreviousIssues for this issue are done.
+    /// Checks if all preceding siblings (in series mode) are done.
+    /// This is now handled by IsAllowedByParentExecutionMode using sort order.
     /// </summary>
     private static bool ArePreviousIssuesDone(Issue issue, Dictionary<string, Issue> issueLookup)
     {
-        if (issue.PreviousIssues.Count == 0)
-        {
-            return true;
-        }
-
-        foreach (var prevId in issue.PreviousIssues)
-        {
-            // If previous issue doesn't exist, treat as done
-            if (!issueLookup.TryGetValue(prevId, out var prevIssue))
-            {
-                continue;
-            }
-
-            // If previous issue is not done, this issue is blocked
-            if (!prevIssue.Status.IsDone())
-            {
-                return false;
-            }
-        }
-
+        // In the new model, ordering is determined by SortOrder within ParentIssues.
+        // The IsAllowedByParentExecutionMode method handles the series ordering logic.
         return true;
     }
 
@@ -106,10 +89,10 @@ public sealed class NextService(IIssueService issueService) : INextService
         }
 
         // Check each parent - all parents must allow this issue
-        foreach (var parentId in issue.ParentIssues)
+        foreach (var parentRef in issue.ParentIssues)
         {
             // If parent doesn't exist, treat as parallel (allow)
-            if (!issueLookup.TryGetValue(parentId, out var parent))
+            if (!issueLookup.TryGetValue(parentRef.ParentIssue, out var parent))
             {
                 continue;
             }
@@ -132,19 +115,25 @@ public sealed class NextService(IIssueService issueService) : INextService
 
     /// <summary>
     /// Determines if the given issue is the first incomplete child of the parent (in sort order).
-    /// Sort order: Priority (ascending, null last) then Title (alphabetic).
+    /// Sort order is determined by the SortOrder field in the ParentIssueRef.
     /// </summary>
     private static bool IsFirstIncompleteChild(Issue issue, Issue parent, Dictionary<string, Issue> issueLookup)
     {
-        // Get all children of this parent
-        var children = issueLookup.Values
-            .Where(i => i.ParentIssues.Contains(parent.Id, StringComparer.OrdinalIgnoreCase))
-            .OrderBy(i => i.Priority ?? int.MaxValue)
-            .ThenBy(i => i.Title, StringComparer.OrdinalIgnoreCase)
+        // Get all children of this parent with their sort orders
+        var childrenWithSortOrder = issueLookup.Values
+            .Select(i => new
+            {
+                Issue = i,
+                ParentRef = i.ParentIssues.FirstOrDefault(p =>
+                    string.Equals(p.ParentIssue, parent.Id, StringComparison.OrdinalIgnoreCase))
+            })
+            .Where(x => x.ParentRef is not null)
+            .OrderBy(x => x.ParentRef!.SortOrder, StringComparer.Ordinal)
+            .Select(x => x.Issue)
             .ToList();
 
         // Find the first incomplete child
-        var firstIncomplete = children.FirstOrDefault(c => !c.Status.IsDone());
+        var firstIncomplete = childrenWithSortOrder.FirstOrDefault(c => !c.Status.IsDone());
 
         // This issue is allowed if it's the first incomplete child
         return firstIncomplete != null &&
@@ -164,7 +153,8 @@ public sealed class NextService(IIssueService issueService) : INextService
         {
             var currentId = toProcess.Dequeue();
             var children = allIssues
-                .Where(i => i.ParentIssues.Contains(currentId, StringComparer.OrdinalIgnoreCase))
+                .Where(i => i.ParentIssues.Any(p =>
+                    string.Equals(p.ParentIssue, currentId, StringComparison.OrdinalIgnoreCase)))
                 .Select(i => i.Id)
                 .ToList();
 
