@@ -8,7 +8,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class CreateCommand(IIssueService issueService, IStorageService storageService) : AsyncCommand<CreateSettings>
+public sealed class CreateCommand(IIssueService issueService, IStorageService storageService, IGitService gitService) : AsyncCommand<CreateSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, CreateSettings settings)
     {
@@ -128,6 +128,9 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 TableFormatter.RenderIssue(issue);
             }
 
+            // Handle git commit/push if requested
+            HandleGitCommitPush(settings, issue.Title);
+
             return 0;
         }
         finally
@@ -195,12 +198,41 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 TableFormatter.RenderIssue(issue);
             }
 
+            // Handle git commit/push if requested
+            HandleGitCommitPush(settings, issue.Title);
+
             return 0;
         }
         catch (ArgumentException ex) when (ex.ParamName == "workingBranchId")
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
             return 1;
+        }
+    }
+
+    private void HandleGitCommitPush(CreateSettings settings, string issueTitle)
+    {
+        if (!settings.Commit && !settings.Push)
+        {
+            return;
+        }
+
+        var commitMessage = $"Add issue: {issueTitle}";
+        var gitResult = settings.Push
+            ? gitService.CommitAndPushFleeceChanges(commitMessage)
+            : gitService.CommitFleeceChanges(commitMessage);
+
+        if (!gitResult.Success)
+        {
+            AnsiConsole.MarkupLine($"[yellow]Warning:[/] Issue created but git operation failed: {gitResult.ErrorMessage}");
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[dim]Changes committed to git[/]");
+            if (settings.Push)
+            {
+                AnsiConsole.MarkupLine("[dim]Pushed to remote[/]");
+            }
         }
     }
 }
