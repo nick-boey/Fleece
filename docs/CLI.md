@@ -29,7 +29,7 @@ When run with no arguments, opens your default editor with a YAML template for i
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--title` | `-t` | Issue title (used to generate ID) |
-| `--type` | | Issue type: task, bug, chore, feature |
+| `--type` | `-y` | Issue type: task, bug, chore, feature |
 
 **Optional Options:**
 | Option | Short | Description |
@@ -80,7 +80,7 @@ fleece list [options]
 |--------|-------|-------------|
 | `--all` | `-a` | Show all issues (including complete, closed, archived) |
 | `--status` | `-s` | Filter by status |
-| `--type` | `-t` | Filter by type |
+| `--type` | `-y` | Filter by type |
 | `--priority` | `-p` | Filter by priority |
 | `--group` | `-g` | Filter by group |
 | `--assigned` | | Filter by assignee |
@@ -125,7 +125,7 @@ Shows issues hierarchically, with child issues indented under their parents. Use
 |--------|-------|-------------|
 | `--all` | `-a` | Show all issues including complete, closed, archived |
 | `--status` | `-s` | Filter by status |
-| `--type` | `-t` | Filter by type |
+| `--type` | `-y` | Filter by type |
 | `--priority` | `-p` | Filter by priority |
 | `--group` | `-g` | Filter by group |
 | `--assigned` | | Filter by assignee |
@@ -178,7 +178,7 @@ When run with only an ID (no other options), opens your default editor with the 
 | `--title` | `-t` | New title (changes ID!) |
 | `--description` | `-d` | New description |
 | `--status` | `-s` | New status |
-| `--type` | | New type |
+| `--type` | `-y` | New type |
 | `--priority` | `-p` | New priority |
 | `--linked-pr` | | New PR number |
 | `--linked-issues` | | Replace linked issues |

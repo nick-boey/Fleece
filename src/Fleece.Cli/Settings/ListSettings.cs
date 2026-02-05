@@ -9,7 +9,7 @@ public sealed class ListSettings : CommandSettings
     [Description("Filter by status: open, progress, review, complete, archived, closed")]
     public string? Status { get; init; }
 
-    [CommandOption("-t|--type <TYPE>")]
+    [CommandOption("-y|--type <TYPE>")]
     [Description("Filter by type: task, bug, chore, feature")]
     public string? Type { get; init; }
 
