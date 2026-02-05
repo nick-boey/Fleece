@@ -31,7 +31,7 @@ public sealed class MigrateCommand(IMigrationService migrationService, IStorageS
             }
             else
             {
-                AnsiConsole.MarkupLine("[green]No migration needed. All issues have property timestamps.[/]");
+                AnsiConsole.MarkupLine("[green]No migration needed. All issues are up to date.[/]");
             }
 
             return 0;
@@ -46,7 +46,8 @@ public sealed class MigrateCommand(IMigrationService migrationService, IStorageS
                 totalIssues = result.TotalIssues,
                 migratedIssues = result.MigratedIssues,
                 alreadyMigratedIssues = result.AlreadyMigratedIssues,
-                wasMigrationNeeded = result.WasMigrationNeeded
+                wasMigrationNeeded = result.WasMigrationNeeded,
+                unknownPropertiesDeleted = result.UnknownPropertiesDeleted.OrderBy(p => p).ToArray()
             }));
         }
         else if (result.WasMigrationNeeded)
@@ -55,10 +56,16 @@ public sealed class MigrateCommand(IMigrationService migrationService, IStorageS
             AnsiConsole.MarkupLine($"  Total issues: {result.TotalIssues}");
             AnsiConsole.MarkupLine($"  Migrated: {result.MigratedIssues}");
             AnsiConsole.MarkupLine($"  Already migrated: {result.AlreadyMigratedIssues}");
+
+            if (result.UnknownPropertiesDeleted.Count > 0)
+            {
+                var properties = string.Join(", ", result.UnknownPropertiesDeleted.OrderBy(p => p));
+                AnsiConsole.MarkupLine($"  Unknown properties removed: {Markup.Escape(properties)}");
+            }
         }
         else
         {
-            AnsiConsole.MarkupLine("[green]No migration needed. All issues have property timestamps.[/]");
+            AnsiConsole.MarkupLine("[green]No migration needed. All issues are up to date.[/]");
         }
 
         return 0;
