@@ -22,8 +22,10 @@ public static class TaskGraphRenderer
     private const char Cross = '\u253C';      // ┼
 
     // Node markers
-    private const char ActionableMarker = 'o';
-    private const char BlockedMarker = 'x';
+    private const char ActionableMarker = '\u25CB';  // ○ open and up next
+    private const char OpenMarker = '\u25CC';        // ◌ open but not next
+    private const char CompleteMarker = '\u25CF';    // ● complete
+    private const char ClosedMarker = '\u2298';      // ⊘ deleted/archived
 
     /// <summary>
     /// Renders a task graph to the console.
@@ -66,7 +68,7 @@ public static class TaskGraphRenderer
             int gridCol = node.Lane * 2;
 
             // Place marker
-            grid[gridRow, gridCol] = node.IsActionable ? ActionableMarker : BlockedMarker;
+            grid[gridRow, gridCol] = GetNodeMarker(node);
         }
 
         // Find parent node for each node and draw connectors
@@ -107,7 +109,7 @@ public static class TaskGraphRenderer
             var node = graph.Nodes[i];
             int gridRow = i * 2;
             int gridCol = node.Lane * 2;
-            grid[gridRow, gridCol] = node.IsActionable ? ActionableMarker : BlockedMarker;
+            grid[gridRow, gridCol] = GetNodeMarker(node);
         }
 
         // Output the grid with issue titles
@@ -121,8 +123,9 @@ public static class TaskGraphRenderer
                 int nodeIndex = r / 2;
                 var node = graph.Nodes[nodeIndex];
                 var statusColor = GetStatusColor(node.Issue.Status);
+                var id = Markup.Escape(node.Issue.Id);
                 var title = Markup.Escape(node.Issue.Title);
-                AnsiConsole.MarkupLine($"{graphPart}  [{statusColor}]{title}[/]");
+                AnsiConsole.MarkupLine($"{graphPart}  [{statusColor}]{id} {title}[/]");
             }
             else
             {
@@ -274,6 +277,19 @@ public static class TaskGraphRenderer
         }
 
         return new string(chars).TrimEnd();
+    }
+
+    /// <summary>
+    /// Gets the marker character for a task graph node based on its status and actionability.
+    /// </summary>
+    private static char GetNodeMarker(TaskGraphNode node)
+    {
+        return node.Issue.Status switch
+        {
+            IssueStatus.Complete => CompleteMarker,
+            IssueStatus.Deleted or IssueStatus.Archived or IssueStatus.Closed => ClosedMarker,
+            _ => node.IsActionable ? ActionableMarker : OpenMarker
+        };
     }
 
     /// <summary>
