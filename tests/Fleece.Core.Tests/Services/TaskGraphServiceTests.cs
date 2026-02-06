@@ -560,6 +560,42 @@ public class TaskGraphServiceTests
     }
 
     [Test]
+    public async Task BuildGraphAsync_MultiParentIssue_AppearsOnlyOnce()
+    {
+        // Shared child has two parents (DAG). It should appear exactly once
+        // under whichever parent is traversed first, and not cause a duplicate key crash.
+        //
+        // parentA (series)   parentB (series)
+        //        \              /
+        //         shared-child
+        var parentA = new IssueBuilder().WithId("parentA").WithTitle("Parent A").WithStatus(IssueStatus.Open)
+            .WithExecutionMode(ExecutionMode.Series).Build();
+        var parentB = new IssueBuilder().WithId("parentB").WithTitle("Parent B").WithStatus(IssueStatus.Open)
+            .WithExecutionMode(ExecutionMode.Series).Build();
+        var sharedChild = new IssueBuilder().WithId("shared").WithTitle("Shared Child").WithStatus(IssueStatus.Open)
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parentA", SortOrder = "aaa" },
+                new ParentIssueRef { ParentIssue = "parentB", SortOrder = "aaa" })
+            .Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { parentA, parentB, sharedChild });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new List<Issue> { sharedChild });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // Shared child should appear exactly once (no duplicate key exception)
+        result.Nodes.Count(n => n.Issue.Id == "shared").Should().Be(1);
+
+        // All three issues should be present
+        result.Nodes.Should().HaveCount(3);
+
+        var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
+        nodeLookup.Should().ContainKey("shared");
+        nodeLookup.Should().ContainKey("parentA");
+        nodeLookup.Should().ContainKey("parentB");
+    }
+
+    [Test]
     public async Task BuildGraphAsync_InProgressIssue_IncludedButNotActionable()
     {
         var issue = new IssueBuilder().WithId("issue1").WithTitle("In Progress").WithStatus(IssueStatus.Progress).Build();

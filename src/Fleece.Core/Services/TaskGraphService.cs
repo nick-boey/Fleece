@@ -51,11 +51,12 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
 
         // Layout each root subtree
         var nodeList = new List<TaskGraphNode>();
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         int maxLane = 0;
 
         foreach (var root in rootIssues)
         {
-            var rootMax = LayoutSubtree(root, 0, nodeList, childrenOf, issueLookup, actionableIds);
+            var rootMax = LayoutSubtree(root, 0, nodeList, childrenOf, issueLookup, actionableIds, visited);
             maxLane = Math.Max(maxLane, rootMax);
         }
 
@@ -76,8 +77,15 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
         List<TaskGraphNode> nodeList,
         Dictionary<string, List<Issue>> childrenOf,
         Dictionary<string, Issue> issueLookup,
-        HashSet<string> actionableIds)
+        HashSet<string> actionableIds,
+        HashSet<string> visited)
     {
+        // Skip issues already placed by a previous parent traversal (DAG support)
+        if (!visited.Add(issue.Id))
+        {
+            return startLane;
+        }
+
         // Get incomplete children of this issue
         var incompleteChildren = GetIncompleteChildren(issue, childrenOf);
 
@@ -98,11 +106,11 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
 
         if (issue.ExecutionMode == ExecutionMode.Parallel)
         {
-            maxLane = LayoutParallelChildren(issue, startLane, incompleteChildren, nodeList, childrenOf, issueLookup, actionableIds);
+            maxLane = LayoutParallelChildren(issue, startLane, incompleteChildren, nodeList, childrenOf, issueLookup, actionableIds, visited);
         }
         else // Series (default)
         {
-            maxLane = LayoutSeriesChildren(issue, startLane, incompleteChildren, nodeList, childrenOf, issueLookup, actionableIds);
+            maxLane = LayoutSeriesChildren(issue, startLane, incompleteChildren, nodeList, childrenOf, issueLookup, actionableIds, visited);
         }
 
         // Place the parent issue itself at maxLane + 1
@@ -128,17 +136,25 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
         List<TaskGraphNode> nodeList,
         Dictionary<string, List<Issue>> childrenOf,
         Dictionary<string, Issue> issueLookup,
-        HashSet<string> actionableIds)
+        HashSet<string> actionableIds,
+        HashSet<string> visited)
     {
         int maxChildLane = startLane;
 
         foreach (var child in children)
         {
+            // Skip children already visited via another parent (DAG support)
+            if (visited.Contains(child.Id))
+            {
+                continue;
+            }
+
             var childIncomplete = GetIncompleteChildren(child, childrenOf);
 
             if (childIncomplete.Count == 0)
             {
-                // Leaf child
+                // Leaf child — mark visited and add node
+                visited.Add(child.Id);
                 nodeList.Add(new TaskGraphNode
                 {
                     Issue = child,
@@ -149,8 +165,8 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
             }
             else
             {
-                // Subtree child
-                var childMax = LayoutSubtree(child, startLane, nodeList, childrenOf, issueLookup, actionableIds);
+                // Subtree child — LayoutSubtree handles visited tracking
+                var childMax = LayoutSubtree(child, startLane, nodeList, childrenOf, issueLookup, actionableIds, visited);
                 maxChildLane = Math.Max(maxChildLane, childMax);
             }
         }
@@ -169,18 +185,28 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
         List<TaskGraphNode> nodeList,
         Dictionary<string, List<Issue>> childrenOf,
         Dictionary<string, Issue> issueLookup,
-        HashSet<string> actionableIds)
+        HashSet<string> actionableIds,
+        HashSet<string> visited)
     {
         int currentLane = startLane;
+        bool isFirstChild = true;
 
         for (int i = 0; i < children.Count; i++)
         {
             var child = children[i];
+
+            // Skip children already visited via another parent (DAG support)
+            if (visited.Contains(child.Id))
+            {
+                continue;
+            }
+
             var childIncomplete = GetIncompleteChildren(child, childrenOf);
 
             if (childIncomplete.Count == 0)
             {
-                // Leaf child: place at currentLane
+                // Leaf child: place at currentLane, mark visited
+                visited.Add(child.Id);
                 nodeList.Add(new TaskGraphNode
                 {
                     Issue = child,
@@ -192,11 +218,13 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
             else
             {
                 // Subtree child
-                // First child starts at currentLane; subsequent children start at currentLane + 1
-                int subtreeStart = (i == 0) ? currentLane : currentLane + 1;
-                var childMax = LayoutSubtree(child, subtreeStart, nodeList, childrenOf, issueLookup, actionableIds);
+                // First non-skipped child starts at currentLane; subsequent start at currentLane + 1
+                int subtreeStart = isFirstChild ? currentLane : currentLane + 1;
+                var childMax = LayoutSubtree(child, subtreeStart, nodeList, childrenOf, issueLookup, actionableIds, visited);
                 currentLane = childMax;
             }
+
+            isFirstChild = false;
         }
 
         return currentLane;
