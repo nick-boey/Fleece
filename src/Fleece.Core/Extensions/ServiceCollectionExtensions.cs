@@ -27,6 +27,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton<IValidationService, ValidationService>();
         services.AddSingleton<INextService, NextService>();
+        services.AddSingleton<ITaskGraphService, TaskGraphService>();
 
         return services;
     }

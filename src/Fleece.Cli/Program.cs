@@ -33,7 +33,8 @@ app.Configure(config =>
     config.AddCommand<TreeCommand>("tree")
         .WithDescription("Display issues in a tree view based on parent-child relationships")
         .WithExample("tree")
-        .WithExample("tree", "--status", "open");
+        .WithExample("tree", "--status", "open")
+        .WithExample("tree", "--task-graph");
 
     config.AddCommand<EditCommand>("edit")
         .WithDescription("Edit an existing issue. Run with only an ID to open an interactive editor with the issue's current values.")
