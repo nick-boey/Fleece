@@ -36,4 +36,8 @@ public sealed class TreeSettings : CommandSettings
     [CommandOption("-a|--all")]
     [Description("Show all issues including all statuses")]
     public bool All { get; init; }
+
+    [CommandOption("--task-graph")]
+    [Description("Display as a bottom-up task graph showing approximate task ordering")]
+    public bool TaskGraph { get; init; }
 }
