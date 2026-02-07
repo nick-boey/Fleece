@@ -9,7 +9,7 @@ public sealed class CreateSettings : CommandSettings
     [Description("Issue title (required)")]
     public string Title { get; init; } = null!;
 
-    [CommandOption("--type <TYPE>")]
+    [CommandOption("-y|--type <TYPE>")]
     [Description("Issue type: task, bug, chore, feature (required)")]
     public string Type { get; init; } = null!;
 

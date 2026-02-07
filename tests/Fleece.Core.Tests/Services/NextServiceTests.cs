@@ -104,7 +104,8 @@ public class NextServiceTests
         var result = await _sut.GetNextIssuesAsync();
 
         // In series mode, only the first child (by sort order) should be actionable
-        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child1"]);
+        // Parent is NOT actionable while it has incomplete children
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child1"]);
     }
 
     [Test]
@@ -117,7 +118,8 @@ public class NextServiceTests
 
         var result = await _sut.GetNextIssuesAsync();
 
-        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child2"]);
+        // Parent is NOT actionable while it has incomplete children
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child2"]);
     }
 
     [Test]
@@ -132,7 +134,8 @@ public class NextServiceTests
         var result = await _sut.GetNextIssuesAsync();
 
         // childB should be actionable (lower sort order)
-        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "childB"]);
+        // Parent is NOT actionable while it has incomplete children
+        result.Select(i => i.Id).Should().BeEquivalentTo(["childB"]);
     }
 
     [Test]
@@ -146,7 +149,8 @@ public class NextServiceTests
 
         var result = await _sut.GetNextIssuesAsync();
 
-        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child3"]);
+        // Parent is NOT actionable while it has incomplete children
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child3"]);
     }
 
     #endregion
@@ -163,7 +167,8 @@ public class NextServiceTests
 
         var result = await _sut.GetNextIssuesAsync();
 
-        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child1", "child2"]);
+        // Parent is NOT actionable while it has incomplete children
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child1", "child2"]);
     }
 
     [Test]
@@ -178,7 +183,8 @@ public class NextServiceTests
         var result = await _sut.GetNextIssuesAsync();
 
         // child1 is complete, but child2 and child3 are still actionable
-        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child2", "child3"]);
+        // Parent is NOT actionable while it has incomplete children
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child2", "child3"]);
     }
 
     #endregion
@@ -199,10 +205,10 @@ public class NextServiceTests
 
         var result = await _sut.GetNextIssuesAsync();
 
-        // grandparent is parallel, so parent1 and parent2 are both actionable
+        // All parents have incomplete children, so only leaf actionable issues are returned
         // parent1 is series, so only child1a is actionable (not child1b)
         // parent2 is parallel, so both child2a and child2b are actionable
-        result.Select(i => i.Id).Should().BeEquivalentTo(["grandparent", "parent1", "parent2", "child1a", "child2a", "child2b"]);
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child1a", "child2a", "child2b"]);
     }
 
     [Test]
@@ -245,7 +251,66 @@ public class NextServiceTests
 
         var result = await _sut.GetNextIssuesAsync(parentId: "grandparent");
 
-        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child"]);
+        // Parent has incomplete child, so only leaf descendants are returned
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child"]);
+    }
+
+    #endregion
+
+    #region Parent With Children Tests
+
+    [Test]
+    public async Task GetNextIssuesAsync_ParentWithOpenChildren_IsNotActionable()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        // Parent should NOT be actionable while it has open children
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child1", "child2"]);
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_ParentWithAllChildrenDone_IsActionable()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Complete).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Closed).WithParentIssueIdAndOrder("parent", "bbb").Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        // Parent IS actionable when all children are done
+        result.Select(i => i.Id).Should().BeEquivalentTo(["parent"]);
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_ParentWithMixOfDoneAndOpenChildren_IsNotActionable()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Complete).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        // Parent should NOT be actionable - child2 is still open
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child2"]);
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_ParentWithNoChildren_IsActionable()
+    {
+        // An issue with ExecutionMode set but no children is still actionable
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        result.Select(i => i.Id).Should().BeEquivalentTo(["parent"]);
     }
 
     #endregion
@@ -271,7 +336,8 @@ public class NextServiceTests
         var result = await _sut.GetNextIssuesAsync();
 
         // multiParent is blocked by sibling under parent1 (series mode)
-        result.Select(i => i.Id).Should().BeEquivalentTo(["parent1", "parent2", "sibling"]);
+        // Both parents have incomplete children, so they are NOT actionable
+        result.Select(i => i.Id).Should().BeEquivalentTo(["sibling"]);
     }
 
     [Test]
@@ -286,7 +352,8 @@ public class NextServiceTests
         var result = await _sut.GetNextIssuesAsync();
 
         // Default is Series, so only child1 should be actionable
-        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child1"]);
+        // Parent is NOT actionable while it has incomplete children
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child1"]);
     }
 
     [Test]

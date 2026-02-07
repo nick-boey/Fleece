@@ -50,6 +50,12 @@ public sealed class NextService(IIssueService issueService) : INextService
             return false;
         }
 
+        // Parent issues with incomplete children cannot be next for completion
+        if (HasIncompleteChildren(issue, issueLookup))
+        {
+            return false;
+        }
+
         // Check if all PreviousIssues are done
         if (!ArePreviousIssuesDone(issue, issueLookup))
         {
@@ -63,6 +69,18 @@ public sealed class NextService(IIssueService issueService) : INextService
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Checks if this issue has any incomplete (non-done) children.
+    /// A parent issue with incomplete children cannot be "next" for completion.
+    /// </summary>
+    private static bool HasIncompleteChildren(Issue issue, Dictionary<string, Issue> issueLookup)
+    {
+        return issueLookup.Values.Any(i =>
+            i.ParentIssues.Any(p =>
+                string.Equals(p.ParentIssue, issue.Id, StringComparison.OrdinalIgnoreCase)) &&
+            !i.Status.IsDone());
     }
 
     /// <summary>

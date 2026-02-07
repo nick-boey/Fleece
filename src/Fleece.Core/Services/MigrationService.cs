@@ -7,7 +7,8 @@ public sealed class MigrationService(IStorageService storage) : IMigrationServic
 {
     public async Task<MigrationResult> MigrateAsync(CancellationToken cancellationToken = default)
     {
-        var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
+        var loadResult = await storage.LoadIssuesWithDiagnosticsAsync(cancellationToken);
+        var issues = loadResult.Issues;
 
         if (issues.Count == 0)
         {
@@ -38,7 +39,13 @@ public sealed class MigrationService(IStorageService storage) : IMigrationServic
             }
         }
 
-        if (migratedCount > 0)
+        // Collect all unknown properties across all files
+        var unknownProperties = loadResult.Diagnostics
+            .SelectMany(d => d.UnknownProperties)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Save if any timestamp migration happened OR unknown properties need cleaning
+        if (migratedCount > 0 || unknownProperties.Count > 0)
         {
             await storage.SaveIssuesAsync(migratedIssues, cancellationToken);
         }
@@ -47,14 +54,20 @@ public sealed class MigrationService(IStorageService storage) : IMigrationServic
         {
             TotalIssues = issues.Count,
             MigratedIssues = migratedCount,
-            AlreadyMigratedIssues = alreadyMigratedCount
+            AlreadyMigratedIssues = alreadyMigratedCount,
+            UnknownPropertiesDeleted = unknownProperties
         };
     }
 
     public async Task<bool> IsMigrationNeededAsync(CancellationToken cancellationToken = default)
     {
-        var issues = await storage.LoadIssuesAsync(cancellationToken);
-        return issues.Any(NeedsMigration);
+        var loadResult = await storage.LoadIssuesWithDiagnosticsAsync(cancellationToken);
+
+        // Migration is needed if any issue lacks timestamps OR any file has unknown properties
+        var hasUnknownProperties = loadResult.Diagnostics.Any(d => d.UnknownProperties.Count > 0);
+        var needsTimestampMigration = loadResult.Issues.Any(NeedsMigration);
+
+        return needsTimestampMigration || hasUnknownProperties;
     }
 
     private static bool NeedsMigration(Issue issue)

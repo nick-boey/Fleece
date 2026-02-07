@@ -8,7 +8,7 @@ using System.Text.Json;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class TreeCommand(IIssueService issueService, IStorageService storageService) : AsyncCommand<TreeSettings>
+public sealed class TreeCommand(IIssueService issueService, IStorageService storageService, ITaskGraphService taskGraphService) : AsyncCommand<TreeSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, TreeSettings settings)
     {
@@ -39,6 +39,19 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
                 return 1;
             }
             type = parsedType;
+        }
+
+        if (settings.TaskGraph)
+        {
+            if (settings.Json)
+            {
+                AnsiConsole.MarkupLine("[red]Error:[/] --task-graph and --json cannot be used together");
+                return 1;
+            }
+
+            var graph = await taskGraphService.BuildGraphAsync();
+            TaskGraphRenderer.Render(graph);
+            return 0;
         }
 
         var issues = await issueService.FilterAsync(status, type, settings.Priority, settings.AssignedTo, settings.Tags, settings.LinkedPr, settings.All);

@@ -21,7 +21,7 @@ public sealed class EditSettings : CommandSettings
     [Description("New status: open, progress, review, complete, archived, closed")]
     public string? Status { get; init; }
 
-    [CommandOption("--type <TYPE>")]
+    [CommandOption("-y|--type <TYPE>")]
     [Description("New type: task, bug, chore, feature")]
     public string? Type { get; init; }
 

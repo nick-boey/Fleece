@@ -9,7 +9,7 @@ public sealed class TreeSettings : CommandSettings
     [Description("Filter by status: open, progress, review, complete, archived, closed")]
     public string? Status { get; init; }
 
-    [CommandOption("-t|--type <TYPE>")]
+    [CommandOption("-y|--type <TYPE>")]
     [Description("Filter by type: task, bug, chore, feature")]
     public string? Type { get; init; }
 
@@ -36,4 +36,8 @@ public sealed class TreeSettings : CommandSettings
     [CommandOption("-a|--all")]
     [Description("Show all issues including all statuses")]
     public bool All { get; init; }
+
+    [CommandOption("--task-graph")]
+    [Description("Display as a bottom-up task graph showing approximate task ordering")]
+    public bool TaskGraph { get; init; }
 }
