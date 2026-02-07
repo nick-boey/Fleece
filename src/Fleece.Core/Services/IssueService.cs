@@ -243,7 +243,7 @@ public sealed partial class IssueService(
         var existing = issues[existingIndex];
         var now = DateTimeOffset.UtcNow;
         var modifiedBy = gitConfigService.GetUserName();
-        var newId = title is not null ? idGenerator.Generate(title) : existing.Id;
+        var newId = existing.Id;
 
         var propertyChanges = new List<PropertyChange>();
 
