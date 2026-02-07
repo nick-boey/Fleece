@@ -31,4 +31,36 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Registers the Fleece in-memory cached issue service along with all core services.
+    /// The in-memory service provides fast reads from a ConcurrentDictionary cache,
+    /// queues writes for asynchronous persistence, and watches for external file changes.
+    /// </summary>
+    /// <param name="services">The service collection to add to.</param>
+    /// <param name="basePath">
+    /// The project base path containing the <c>.fleece/</c> directory.
+    /// Defaults to the current working directory if not specified.
+    /// </param>
+    public static IServiceCollection AddFleeceInMemoryService(this IServiceCollection services, string? basePath = null)
+    {
+        basePath ??= Directory.GetCurrentDirectory();
+
+        services.AddFleeceCore(basePath);
+
+        services.AddSingleton<IssueSerializationQueueService>();
+        services.AddSingleton<IIssueSerializationQueue>(sp =>
+        {
+            var queue = sp.GetRequiredService<IssueSerializationQueueService>();
+            queue.StartProcessing();
+            return queue;
+        });
+        services.AddSingleton<IFleeceInMemoryService>(sp =>
+            new FleeceInMemoryService(
+                sp.GetRequiredService<IIssueService>(),
+                sp.GetRequiredService<IIssueSerializationQueue>(),
+                basePath));
+
+        return services;
+    }
 }
