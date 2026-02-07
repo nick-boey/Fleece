@@ -281,6 +281,23 @@ public class IssueServiceTests
     }
 
     [Test]
+    public async Task UpdateAsync_PreservesOriginalId_WhenTitleChanges()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "abc123", Title = "Original Title", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+        _idGenerator.Generate("New Title").Returns("different_id");
+
+        var result = await _sut.UpdateAsync("abc123", title: "New Title");
+
+        result.Id.Should().Be("abc123");
+        result.Title.Should().Be("New Title");
+        _idGenerator.DidNotReceive().Generate(Arg.Any<string>());
+    }
+
+    [Test]
     public async Task UpdateAsync_ThrowsWhenNotFound()
     {
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
