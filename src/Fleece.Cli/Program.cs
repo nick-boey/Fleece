@@ -1,5 +1,6 @@
 using System.Reflection;
 using Fleece.Cli.Commands;
+using Fleece.Cli.Tui;
 using Fleece.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console.Cli;
@@ -8,7 +9,7 @@ var services = new ServiceCollection();
 services.AddFleeceCore();
 
 var registrar = new TypeRegistrar(services);
-var app = new CommandApp(registrar);
+var app = new CommandApp<TuiCommand>(registrar);
 
 // Get the version from the assembly, which is set during build via -p:Version=
 var version = Assembly.GetExecutingAssembly()
