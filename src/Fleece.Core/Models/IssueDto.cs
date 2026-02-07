@@ -18,6 +18,8 @@ public sealed record IssueDto
     public IReadOnlyList<string> Tags { get; init; } = [];
     public IReadOnlyList<Question> Questions { get; init; } = [];
     public string? CreatedBy { get; init; }
+    public string? WorkingBranchId { get; init; }
+    public ExecutionMode ExecutionMode { get; init; } = ExecutionMode.Series;
     public required DateTimeOffset LastUpdate { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
 
@@ -36,6 +38,8 @@ public sealed record IssueDto
         Tags = issue.Tags,
         Questions = issue.Questions,
         CreatedBy = issue.CreatedBy,
+        WorkingBranchId = issue.WorkingBranchId,
+        ExecutionMode = issue.ExecutionMode,
         LastUpdate = issue.LastUpdate,
         CreatedAt = issue.CreatedAt
     };
