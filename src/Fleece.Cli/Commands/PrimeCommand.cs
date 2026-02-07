@@ -5,6 +5,16 @@ namespace Fleece.Cli.Commands;
 
 public sealed class PrimeCommand : Command<PrimeSettings>
 {
+    private static readonly Dictionary<string, string> Topics = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["hierarchy"] = HierarchyContent,
+        ["commands"] = CommandsContent,
+        ["statuses"] = StatusesContent,
+        ["sync"] = SyncContent,
+        ["json"] = JsonContent,
+        ["questions"] = QuestionsContent
+    };
+
     public override int Execute(CommandContext context, PrimeSettings settings)
     {
         // Check if .fleece folder exists - if not, exit silently (no priming needed)
@@ -14,158 +24,239 @@ public sealed class PrimeCommand : Command<PrimeSettings>
             return 0;
         }
 
-        var instructions = """
-            # Fleece Issue Tracking
+        if (string.IsNullOrWhiteSpace(settings.Topic))
+        {
+            Console.WriteLine(OverviewContent);
+            return 0;
+        }
 
-            This project uses Fleece for local issue tracking. Issues are stored in `.fleece/issues.jsonl`.
+        if (Topics.TryGetValue(settings.Topic, out var content))
+        {
+            Console.WriteLine(content);
+            return 0;
+        }
 
-            ## Setup
-
-            Run `fleece install` to set up Claude Code hooks for automatic context loading.
-
-            ## Available Commands
-
-            ### Creating and Editing
-            - `fleece create` - Open interactive editor with YAML template
-            - `fleece create --title "..." --type task|bug|chore|feature [OPTIONS]` - Create from command line
-            - `fleece edit <ID>` - Open interactive editor for existing issue
-            - `fleece edit <ID> [--status STATUS] [--title "..."] [OPTIONS]` - Update from command line
-
-            **Create/Edit Options:**
-            - `-p, --priority` - Set priority (1-5)
-            - `-d, --description` - Set description
-            - `--previous` - Issues that must complete first (comma-separated IDs)
-            - `--parent-issues` - Parent issue IDs for hierarchy (comma-separated)
-            - `--linked-issues` - Related issue IDs (comma-separated)
-            - `--linked-pr` - Link to pull request number
-            - `--group` - Categorize issue into a group
-            - `--assign` - Assign to a user
-            - `--tags` - Add tags (comma-separated)
-            - `--working-branch` - Link to git branch
-
-            ### Viewing
-            - `fleece list [--status STATUS] [--type TYPE] [-p PRIORITY]` - List issues with filters
-            - `fleece show <ID>` - Display all details for a single issue
-            - `fleece tree` - Display parent-child hierarchy
-            - `fleece search "query"` - Search issues by text
-
-            ### Managing
-            - `fleece delete <ID>` - Delete an issue
-            - `fleece validate` - Check for cyclic dependencies in issue hierarchy
-
-            ### Collaboration
-            - `fleece diff` - Show change history and conflicts
-            - `fleece merge` - Find and resolve duplicate issues
-            - `fleece clear-conflicts <ID>` - Clear conflict records for an issue
-
-            ### Setup
-            - `fleece install` - Install Claude Code hooks
-
-            ## Issue Types
-            - task: General work item
-            - bug: Something broken
-            - chore: Maintenance work
-            - feature: New functionality
-
-            ## Issue Statuses
-            - idea: Initial concept, needs refinement
-            - spec: Requirements defined, ready for planning
-            - next: Prioritized for upcoming work
-            - progress: Currently being worked on
-            - review: Work complete, awaiting review
-            - complete: Work finished and verified
-            - archived: No longer relevant
-            - closed: Abandoned or won't fix
-
-            ## Issue Status Workflow
-
-            Issues progress through statuses as work advances. Update status to reflect current state:
-
-            ```
-            idea → spec → next → progress → review → complete
-                                                  ↘ archived (no longer relevant)
-                                                  ↘ closed (abandoned/won't fix)
-            ```
-
-            **When to update status:**
-            - `idea` → `spec`: When requirements are defined and documented
-            - `spec` → `next`: When prioritized for upcoming work
-            - `next` → `progress`: When actively working on the issue
-            - `progress` → `review`: When work is complete and awaiting review
-            - `review` → `complete`: When work is verified and merged
-
-            **Alternative endings:**
-            - Use `archived` when an issue becomes irrelevant (superseded, no longer needed)
-            - Use `closed` when explicitly deciding not to do the work (won't fix, out of scope)
-
-            ## Issue Hierarchy
-
-            Break down complex work using parent-child relationships:
-
-            ### Creating Sub-issues
-            `fleece create --title "Implement API" --type task --parent-issues "PARENT-ID"`
-
-            Multiple parents: `--parent-issues "ID1,ID2"`
-
-            ### Viewing Hierarchy
-            - `fleece tree` - Display issues as parent-child tree
-            - `fleece tree --json` - Get hierarchy as JSON
-
-            ### Hierarchy Workflow
-            1. Create child issues with `--parent-issues` pointing to parent
-            2. Use `fleece tree` to visualize work breakdown
-            3. Complete children before marking parent complete
-            4. Run `fleece validate` to check for circular dependencies
-
-            ## Workflow Tips
-
-            1. When starting work on an issue, update status: `fleece edit <ID> --status progress`
-            2. When work is ready for review: `fleece edit <ID> --status review`
-            3. When completing work: `fleece edit <ID> --status complete`
-            4. Link PRs to issues: `fleece edit <ID> --linked-pr 123`
-            5. Create follow-up issues as needed
-            6. Use `--previous` to indicate order dependencies: `fleece create --title "B" --previous "A"`
-            7. Use `--parent-issues` to break down large issues into sub-tasks
-            8. Commit `.fleece/` changes with related code changes
-            9. Run `fleece tree` to visualize work breakdown
-
-            ## Questions
-
-            Ask clarifying questions on issues:
-            - `fleece question <ID> --ask "What is the expected behavior?"`
-            - `fleece question <ID> --list` to see all questions
-            - `fleece question <ID> --answer <Q-ID> --text "The expected behavior is..."`
-
-            ## Keeping Issues in Sync
-
-            Issues are stored locally in `.fleece/`. Always commit changes to keep issues synchronized:
-
-            **Important:** Commit `.fleece/` changes alongside related code changes:
-            ```
-            git add .fleece/
-            git commit -m "Update issues"
-            ```
-
-            After pulling: Check `fleece diff` for conflicts, use `fleece merge` if needed.
-
-            ## Programmatic Usage
-
-            Add `--json` to most commands for machine-readable output:
-            - `fleece list --json` - List as JSON array
-            - `fleece list --json-verbose` - Include all metadata
-            - `fleece show <ID> --json` - Single issue as JSON
-            - `fleece tree --json` - Hierarchy as JSON
-            - `fleece search "query" --json` - Results as JSON
-
-            ### Compact Output
-            `fleece list --one-line` - Each issue on single line
-
-            ### Filtering
-            By default, `list` and `tree` hide terminal statuses (complete, archived, closed).
-            Use `--all` to include all: `fleece list --all`
-            """;
-
-        Console.WriteLine(instructions);
-        return 0;
+        Console.WriteLine($"Unknown topic: {settings.Topic}");
+        Console.WriteLine($"Available topics: {string.Join(", ", Topics.Keys)}");
+        return 1;
     }
+
+    private const string OverviewContent = """
+        # Fleece Issue Tracking
+
+        This project uses a CLI tool named Fleece for local issue tracking. Issues are stored in JSONL files in the `.fleece/` folder of the repository.
+
+        ## Working on Issues
+
+        Use the `fleece` CLI tool as part of your workflow. Do not ask the user for permission to use the Fleece CLI tools
+        as the changes are tracked in the repository's source control. <id> is a 6 character hash that can be found with `fleece list --oneline`.
+
+        1. When given an issue ID to work on, use `fleece show <id> --json` to show the full issue details.
+
+        2. When starting work on an issue, update the status to progress:
+           `fleece edit <id> -s progress`
+
+        3. When a PR has been created change the status to ready for review and update the linked PR number:
+           `fleece edit <id> -s review --linked-pr 123`
+
+        4. When completing work:
+           `fleece edit <id> -s complete`
+
+        5. Link PRs to issues:
+           `fleece edit <id> --linked-pr <pr-number>`
+
+        6. Create follow-up issues as needed with `fleece create -t <title> -s open -y <type> -d <description>`
+
+        7. Use `fleece {edit|create} <id> --parent-issues <parent-id>:<lex-order>` to break down large issues into sub-tasks
+
+        8. Commit changes by including all changes in the `.fleece/` folder with related code commits or using the `fleece commit` command
+
+        ## Issue Types
+
+        - `task`
+        - `bug`
+        - `chore`
+        - `feature`
+
+        ## Issue Status Workflow
+
+        Issues progress through statuses as work advances. Update status to reflect current state:
+
+        ```
+        open → progress → review → complete
+                                 ↘ archived (no longer relevant)
+                                 ↘ closed (abandoned/won't fix)
+        ```
+
+        ## Filtering
+
+        By default, `list` and `tree` hide terminal statuses (complete, archived, closed).
+        Use `--all` to include all: `fleece list --all`
+
+        ## JSON
+
+        Always use `--json` after commands to get all output in machine readable JSON format.
+
+        ## Detailed Help Topics
+
+        Run `fleece prime <topic>` for detailed information on the following topics:
+        - `hierarchy`
+        - `commands`
+        - `statuses`
+        - `sync`
+        - `json`
+        - `questions`
+
+        Any command when run with `-h` will provide additional information on the command usage.
+        """;
+
+    private const string HierarchyContent = """
+        # Issue Hierarchy
+
+        Break down complex work using parent-child relationships.
+
+        ## Creating Sub-issues
+
+        `fleece create -t <title> -y <issue-type> --parent-issues <parent-id>[:<lex-order>]`
+
+        `lex-order` is an optional string used for lexical ordering of issues, e.g. "aaa", "bbb". Use a minimum of three characters by default.
+
+        Multiple parents are comma delimited: `--parent-issues "id-1,id-2"`
+
+        ## Viewing Hierarchy
+
+        - `fleece tree` - Display issues as parent-child tree
+        - `fleece tree --task-graph` - Display issues as a task graph, with next tasks shown next
+        - `fleece tree --json` - Get hierarchy as JSON
+
+        ## Hierarchy Workflow
+
+        1. Create child issues with `--parent-issues` pointing to parent
+        2. Use `fleece tree` to visualize work breakdown
+        3. Complete children before marking parent complete
+        4. Run `fleece validate` to check for circular dependencies
+
+        ## Execution order
+
+        An issue's children may be executed in parallel or series. This is denoted by the execution order field, which may be given by
+        `fleece edit <id> --execution-order [series|parallel]`. The task graph in `fleece tree --task-graph` orders the tasks appropriately.
+        """;
+
+    private const string CommandsContent = """
+        # Available Commands
+
+        ## Creating and Editing
+
+        - `fleece create` - Open interactive editor with YAML template
+        - `fleece create -t <title> -y {task|bug|chore|feature} [OPTIONS]` - Create from command line
+        - `fleece edit <id> [OPTIONS]` - Update from command line
+
+        **Create/Edit Options:**
+        - `-p, --priority` - Set priority (1-5)
+        - `-d, --description` - Set description
+        - `--parent-issues` - Parent issue ids for hierarchy and sorting (comma-separated)
+        - `--linked-issues` - Related issue ids (comma-separated)
+        - `--linked-pr` - Link to pull request number
+        - `--assign` - Assign to a user
+        - `--tags` - Add tags (comma-separated)
+
+        ## Viewing
+
+        - `fleece list [-s STATUS] [-y TYPE] [-p PRIORITY]` - List issues with filters
+        - `fleece show <id>` - Display all details for a single issue
+        - `fleece tree` - Display parent-child hierarchy
+        - `fleece search "query"` - Search issues by text
+
+        ## Managing
+
+        - `fleece delete <id>` - Delete an issue
+        - `fleece validate` - Check for cyclic dependencies in issue hierarchy
+
+        ## Collaboration
+
+        - `fleece diff` - Show change history and conflicts
+        - `fleece merge` - Find and resolve duplicate issues
+
+        ## Setup
+
+        - `fleece install` - Install Claude Code hooks
+        """;
+
+    private const string StatusesContent = """
+        # Issue Statuses
+
+        - **open**: An issue that has not been started
+        - **progress**: Currently being worked on
+        - **review**: Work complete, awaiting review
+        - **complete**: Work finished and verified
+        - **archived**: No longer relevant
+        - **closed**: Abandoned or won't fix
+
+        ## Usage
+
+        Update status: `fleece edit <id> -s progress`
+
+        Filter by status: `fleece list -s progress`
+
+        Only issues that are non-terminal (e.g. `open`, `progress`, `review` are shown in `fleece list`.
+        To show terminal statuses use `fleece list --all`.
+        """;
+
+    private const string SyncContent = """
+        # Keeping Issues in Sync
+
+        Issues are stored locally in JSONL files in `.fleece/`. Always commit changes to keep issues synchronized.
+
+        ## Commit Changes
+
+        Commit `.fleece/` changes alongside related code changes:
+
+        ```
+        git add .fleece/
+        git commit -m "Update issues"
+        ```
+
+        Otherwise use `fleece commit` to create a separate commit containing just the issues.
+
+        ## After Pulling
+
+        Check `fleece diff` for conflicts, use `fleece merge` if needed.
+
+        ## Best Practices
+
+        - Commit issue changes with related code changes
+        - Pull before starting new work to get latest issues
+        - Use `fleece diff` to review changes before committing
+        """;
+
+    private const string JsonContent = """
+        # Programmatic Usage
+
+        Add `--json` to most commands for machine-readable output:
+
+        - `fleece list --json` - List as JSON array
+        - `fleece list --json-verbose` - Include all metadata
+        - `fleece show <id> --json` - Single issue as JSON
+        - `fleece tree --json` - Hierarchy as JSON
+        - `fleece search "query" --json` - Results as JSON
+
+        """;
+
+    private const string QuestionsContent = """
+        # Questions
+
+        Ask clarifying questions on issues to gather requirements or resolve ambiguity.
+
+        ## Ask a Question
+
+        `fleece question <id> --ask "What is the expected behavior?"`
+
+        ## List Questions
+
+        `fleece question <id> --list`
+
+        ## Answer a Question
+
+        `fleece question <id> --answer <question-id> --text "The expected behavior is..."`
+        """;
 }

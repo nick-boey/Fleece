@@ -75,7 +75,10 @@ app.Configure(config =>
         .WithDescription("Install Claude Code hooks");
 
     config.AddCommand<PrimeCommand>("prime")
-        .WithDescription("Print LLM instructions for issue tracking");
+        .WithDescription("Print LLM instructions for issue tracking")
+        .WithExample("prime")
+        .WithExample("prime", "workflow")
+        .WithExample("prime", "commands");
 
     config.AddCommand<QuestionCommand>("question")
         .WithDescription("Manage questions on an issue")
