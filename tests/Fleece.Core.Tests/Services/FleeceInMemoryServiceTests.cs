@@ -96,6 +96,109 @@ public class FleeceInMemoryServiceTests
 
     #endregion
 
+    #region File Watching
+
+    [Test]
+    public async Task FileWatcher_ReloadsCacheOnExternalFileChange()
+    {
+        // Arrange: create .fleece directory and construct a NEW service so the watcher is active
+        var watchBasePath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        var fleecePath = Path.Combine(watchBasePath, ".fleece");
+        Directory.CreateDirectory(fleecePath);
+        File.WriteAllText(Path.Combine(fleecePath, "issues.jsonl"), "");
+
+        var issueService = Substitute.For<IIssueService>();
+        var serializationQueue = Substitute.For<IIssueSerializationQueue>();
+
+        var issueV1 = new IssueBuilder().WithId("issue1").WithTitle("Original").Build();
+        var issueV2 = new IssueBuilder().WithId("issue1").WithTitle("ExternallyUpdated").Build();
+
+        var callCount = 0;
+        issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? Task.FromResult<IReadOnlyList<Issue>>([issueV1])
+                    : Task.FromResult<IReadOnlyList<Issue>>([issueV2]);
+            });
+
+        using var sut = new FleeceInMemoryService(issueService, serializationQueue, watchBasePath);
+
+        // Act: trigger initial cache load
+        var initial = await sut.GetIssueAsync("issue1");
+        initial!.Title.Should().Be("Original");
+
+        // Simulate an external file change to trigger the FileSystemWatcher
+        await File.WriteAllTextAsync(Path.Combine(fleecePath, "issues.jsonl"), "changed");
+
+        // Wait for debounce interval (500ms) + processing time
+        await Task.Delay(1500);
+
+        // Assert: cache should have been reloaded with the updated issue
+        var reloaded = await sut.GetIssueAsync("issue1");
+        reloaded!.Title.Should().Be("ExternallyUpdated");
+
+        // Cleanup
+        sut.Dispose();
+        if (Directory.Exists(watchBasePath))
+        {
+            Directory.Delete(watchBasePath, true);
+        }
+    }
+
+    [Test]
+    public async Task FileWatcher_DebouncesRapidChanges()
+    {
+        // Arrange: create .fleece directory so watcher is active
+        var watchBasePath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        var fleecePath = Path.Combine(watchBasePath, ".fleece");
+        Directory.CreateDirectory(fleecePath);
+        File.WriteAllText(Path.Combine(fleecePath, "issues.jsonl"), "");
+
+        var issueService = Substitute.For<IIssueService>();
+        var serializationQueue = Substitute.For<IIssueSerializationQueue>();
+
+        var getAllCallCount = 0;
+        var issue = new IssueBuilder().WithId("issue1").WithTitle("Test").Build();
+        issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                Interlocked.Increment(ref getAllCallCount);
+                return Task.FromResult<IReadOnlyList<Issue>>([issue]);
+            });
+
+        using var sut = new FleeceInMemoryService(issueService, serializationQueue, watchBasePath);
+
+        // Trigger initial load
+        await sut.GetIssueAsync("issue1");
+        getAllCallCount.Should().Be(1);
+
+        // Act: trigger multiple rapid file changes
+        for (var i = 0; i < 5; i++)
+        {
+            await File.WriteAllTextAsync(Path.Combine(fleecePath, "issues.jsonl"), $"change-{i}");
+            await Task.Delay(50); // Less than the 500ms debounce interval
+        }
+
+        // Wait for debounce interval + processing
+        await Task.Delay(1500);
+
+        // Assert: GetAllAsync should have been called at most a few times (initial + debounced reload)
+        // Not 6 times (1 initial + 5 for each file change)
+        // Initial load = 1, debounced reload(s) should add only 1-2 more
+        getAllCallCount.Should().BeLessThanOrEqualTo(4);
+
+        // Cleanup
+        sut.Dispose();
+        if (Directory.Exists(watchBasePath))
+        {
+            Directory.Delete(watchBasePath, true);
+        }
+    }
+
+    #endregion
+
     #region Read Operations
 
     [Test]
