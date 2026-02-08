@@ -10,5 +10,6 @@ public enum MenuChoice
     Search,
     NextActionable,
     CreateIssue,
+    ViewTaskGraph,
     Exit
 }

@@ -8,8 +8,12 @@ namespace Fleece.Cli.Tui.Screens;
 /// </summary>
 public enum DetailAction
 {
+    EditFields,
     ChangeStatus,
-    EditPriority,
+    Questions,
+    ViewHistory,
+    ViewTaskGraph,
+    DeleteIssue,
     BackToList,
     BackToMenu
 }
@@ -29,15 +33,23 @@ public sealed class IssueDetailScreen(IAnsiConsole console)
                 .Title("[bold]Choose an action:[/]")
                 .HighlightStyle(new Style(Color.Cyan1))
                 .AddChoices(
+                    "Edit Fields...",
                     "Change Status",
-                    "Edit Priority",
+                    "Questions...",
+                    "View History",
+                    "View Task Graph",
+                    "Delete Issue",
                     "Back to List",
                     "Back to Main Menu"));
 
         return choice switch
         {
+            "Edit Fields..." => DetailAction.EditFields,
             "Change Status" => DetailAction.ChangeStatus,
-            "Edit Priority" => DetailAction.EditPriority,
+            "Questions..." => DetailAction.Questions,
+            "View History" => DetailAction.ViewHistory,
+            "View Task Graph" => DetailAction.ViewTaskGraph,
+            "Delete Issue" => DetailAction.DeleteIssue,
             "Back to List" => DetailAction.BackToList,
             "Back to Main Menu" => DetailAction.BackToMenu,
             _ => DetailAction.BackToMenu
@@ -133,6 +145,7 @@ public sealed class IssueDetailScreen(IAnsiConsole console)
             lines.Add($"[bold]Tags:[/]     {string.Join(", ", issue.Tags.Select(Markup.Escape))}");
         }
 
+        lines.Add($"[bold]Mode:[/]     {issue.ExecutionMode}");
         lines.Add($"[bold]Updated:[/]  {issue.LastUpdate:yyyy-MM-dd HH:mm:ss}");
 
         // Questions section

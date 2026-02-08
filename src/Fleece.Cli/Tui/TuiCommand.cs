@@ -10,7 +10,10 @@ namespace Fleece.Cli.Tui;
 public sealed class TuiCommand(
     IIssueService issueService,
     IStorageService storageService,
-    INextService nextService) : AsyncCommand<TuiSettings>
+    INextService nextService,
+    IChangeService changeService,
+    ITaskGraphService taskGraphService,
+    IGitConfigService gitConfigService) : AsyncCommand<TuiSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, TuiSettings settings)
     {
@@ -31,7 +34,10 @@ public sealed class TuiCommand(
             return 0;
         }
 
-        var runner = new TuiRunner(issueService, storageService, nextService, AnsiConsole.Console);
+        var runner = new TuiRunner(
+            issueService, storageService, nextService,
+            changeService, taskGraphService, gitConfigService,
+            AnsiConsole.Console);
         return await runner.RunAsync();
     }
 }
