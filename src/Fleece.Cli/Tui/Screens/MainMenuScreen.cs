@@ -28,6 +28,7 @@ public sealed class MainMenuScreen(IIssueService issueService, IAnsiConsole cons
                     "Search Issues",
                     "Next Actionable Issues",
                     "Create Issue",
+                    "View Task Graph",
                     "Exit"));
 
         return choice switch
@@ -37,6 +38,7 @@ public sealed class MainMenuScreen(IIssueService issueService, IAnsiConsole cons
             "Search Issues" => MenuChoice.Search,
             "Next Actionable Issues" => MenuChoice.NextActionable,
             "Create Issue" => MenuChoice.CreateIssue,
+            "View Task Graph" => MenuChoice.ViewTaskGraph,
             "Exit" => MenuChoice.Exit,
             _ => MenuChoice.Exit
         };

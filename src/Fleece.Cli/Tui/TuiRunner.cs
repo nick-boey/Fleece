@@ -13,15 +13,24 @@ public sealed class TuiRunner(
     IIssueService issueService,
     IStorageService storageService,
     INextService nextService,
+    IChangeService changeService,
+    ITaskGraphService taskGraphService,
+    IGitConfigService gitConfigService,
     IAnsiConsole console)
 {
     public async Task<int> RunAsync(CancellationToken cancellationToken = default)
     {
+        // Initialize all screens
         var mainMenuScreen = new MainMenuScreen(issueService, console);
         var issueListScreen = new IssueListScreen(console);
         var issueDetailScreen = new IssueDetailScreen(console);
         var statusUpdateScreen = new StatusUpdateScreen(issueService, console);
         var filterScreen = new FilterScreen(console);
+        var editFieldsScreen = new EditFieldsScreen(issueService, console);
+        var questionScreen = new QuestionScreen(issueService, gitConfigService, console);
+        var changeHistoryScreen = new ChangeHistoryScreen(changeService, console);
+        var taskGraphScreen = new TaskGraphScreen(taskGraphService, console);
+        var deleteConfirmScreen = new DeleteConfirmScreen(issueService, console);
 
         var running = true;
 
@@ -38,31 +47,43 @@ public sealed class TuiRunner(
                     case MenuChoice.BrowseAll:
                         await BrowseIssuesAsync(
                             issueListScreen, issueDetailScreen, statusUpdateScreen,
-                            status: null, type: null, cancellationToken);
+                            editFieldsScreen, questionScreen, changeHistoryScreen,
+                            taskGraphScreen, deleteConfirmScreen,
+                            filter: null, cancellationToken);
                         break;
 
                     case MenuChoice.BrowseFiltered:
                         console.Clear();
-                        var (status, type) = filterScreen.Show();
+                        var filter = filterScreen.Show();
                         await BrowseIssuesAsync(
                             issueListScreen, issueDetailScreen, statusUpdateScreen,
-                            status, type, cancellationToken);
+                            editFieldsScreen, questionScreen, changeHistoryScreen,
+                            taskGraphScreen, deleteConfirmScreen,
+                            filter, cancellationToken);
                         break;
 
                     case MenuChoice.Search:
                         await SearchIssuesAsync(
                             issueListScreen, issueDetailScreen, statusUpdateScreen,
+                            editFieldsScreen, questionScreen, changeHistoryScreen,
+                            taskGraphScreen, deleteConfirmScreen,
                             cancellationToken);
                         break;
 
                     case MenuChoice.NextActionable:
                         await ShowNextIssuesAsync(
                             issueListScreen, issueDetailScreen, statusUpdateScreen,
+                            editFieldsScreen, questionScreen, changeHistoryScreen,
+                            taskGraphScreen, deleteConfirmScreen,
                             cancellationToken);
                         break;
 
                     case MenuChoice.CreateIssue:
                         await CreateIssueAsync(cancellationToken);
+                        break;
+
+                    case MenuChoice.ViewTaskGraph:
+                        await taskGraphScreen.ShowAsync(cancellationToken);
                         break;
 
                     case MenuChoice.Exit:
@@ -86,8 +107,12 @@ public sealed class TuiRunner(
         IssueListScreen issueListScreen,
         IssueDetailScreen issueDetailScreen,
         StatusUpdateScreen statusUpdateScreen,
-        IssueStatus? status,
-        IssueType? type,
+        EditFieldsScreen editFieldsScreen,
+        QuestionScreen questionScreen,
+        ChangeHistoryScreen changeHistoryScreen,
+        TaskGraphScreen taskGraphScreen,
+        DeleteConfirmScreen deleteConfirmScreen,
+        FilterCriteria? filter,
         CancellationToken cancellationToken)
     {
         var browsingList = true;
@@ -97,12 +122,16 @@ public sealed class TuiRunner(
 
             // Reload fresh data each time
             var issues = await issueService.FilterAsync(
-                status: status,
-                type: type,
-                includeTerminal: status?.IsTerminal() ?? false,
+                status: filter?.Status,
+                type: filter?.Type,
+                priority: filter?.Priority,
+                assignedTo: filter?.AssignedTo,
+                tags: filter?.Tags,
+                linkedPr: filter?.LinkedPr,
+                includeTerminal: filter?.Status?.IsTerminal() ?? false,
                 cancellationToken: cancellationToken);
 
-            var title = BuildFilterTitle(status, type);
+            var title = BuildFilterTitle(filter);
             var selected = issueListScreen.Show(issues, title);
 
             if (selected is null)
@@ -112,7 +141,10 @@ public sealed class TuiRunner(
             else
             {
                 var backToMenu = await ShowIssueDetailAsync(
-                    selected, issueDetailScreen, statusUpdateScreen, cancellationToken);
+                    selected, issueDetailScreen, statusUpdateScreen,
+                    editFieldsScreen, questionScreen, changeHistoryScreen,
+                    taskGraphScreen, deleteConfirmScreen,
+                    cancellationToken);
                 if (backToMenu)
                 {
                     browsingList = false;
@@ -125,6 +157,11 @@ public sealed class TuiRunner(
         IssueListScreen issueListScreen,
         IssueDetailScreen issueDetailScreen,
         StatusUpdateScreen statusUpdateScreen,
+        EditFieldsScreen editFieldsScreen,
+        QuestionScreen questionScreen,
+        ChangeHistoryScreen changeHistoryScreen,
+        TaskGraphScreen taskGraphScreen,
+        DeleteConfirmScreen deleteConfirmScreen,
         CancellationToken cancellationToken)
     {
         console.Clear();
@@ -153,7 +190,10 @@ public sealed class TuiRunner(
             else
             {
                 var backToMenu = await ShowIssueDetailAsync(
-                    selected, issueDetailScreen, statusUpdateScreen, cancellationToken);
+                    selected, issueDetailScreen, statusUpdateScreen,
+                    editFieldsScreen, questionScreen, changeHistoryScreen,
+                    taskGraphScreen, deleteConfirmScreen,
+                    cancellationToken);
                 if (backToMenu)
                 {
                     browsingList = false;
@@ -166,6 +206,11 @@ public sealed class TuiRunner(
         IssueListScreen issueListScreen,
         IssueDetailScreen issueDetailScreen,
         StatusUpdateScreen statusUpdateScreen,
+        EditFieldsScreen editFieldsScreen,
+        QuestionScreen questionScreen,
+        ChangeHistoryScreen changeHistoryScreen,
+        TaskGraphScreen taskGraphScreen,
+        DeleteConfirmScreen deleteConfirmScreen,
         CancellationToken cancellationToken)
     {
         var browsingList = true;
@@ -183,7 +228,10 @@ public sealed class TuiRunner(
             else
             {
                 var backToMenu = await ShowIssueDetailAsync(
-                    selected, issueDetailScreen, statusUpdateScreen, cancellationToken);
+                    selected, issueDetailScreen, statusUpdateScreen,
+                    editFieldsScreen, questionScreen, changeHistoryScreen,
+                    taskGraphScreen, deleteConfirmScreen,
+                    cancellationToken);
                 if (backToMenu)
                 {
                     browsingList = false;
@@ -199,6 +247,11 @@ public sealed class TuiRunner(
         Issue issue,
         IssueDetailScreen issueDetailScreen,
         StatusUpdateScreen statusUpdateScreen,
+        EditFieldsScreen editFieldsScreen,
+        QuestionScreen questionScreen,
+        ChangeHistoryScreen changeHistoryScreen,
+        TaskGraphScreen taskGraphScreen,
+        DeleteConfirmScreen deleteConfirmScreen,
         CancellationToken cancellationToken)
     {
         var currentIssue = issue;
@@ -219,15 +272,37 @@ public sealed class TuiRunner(
 
             switch (action)
             {
+                case DetailAction.EditFields:
+                    currentIssue = await editFieldsScreen.ShowAsync(currentIssue, cancellationToken);
+                    break;
+
                 case DetailAction.ChangeStatus:
                     console.WriteLine();
                     currentIssue = await statusUpdateScreen.ShowAsync(currentIssue, cancellationToken);
                     // Stay in detail view to see updated status
                     break;
 
-                case DetailAction.EditPriority:
+                case DetailAction.Questions:
+                    currentIssue = await questionScreen.ShowAsync(currentIssue, cancellationToken);
+                    break;
+
+                case DetailAction.ViewHistory:
+                    await changeHistoryScreen.ShowAsync(currentIssue, cancellationToken);
+                    break;
+
+                case DetailAction.ViewTaskGraph:
+                    await taskGraphScreen.ShowAsync(cancellationToken);
+                    break;
+
+                case DetailAction.DeleteIssue:
                     console.WriteLine();
-                    currentIssue = await EditPriorityAsync(currentIssue, cancellationToken);
+                    var deleted = await deleteConfirmScreen.ShowAsync(currentIssue, cancellationToken);
+                    if (deleted)
+                    {
+                        // Issue was deleted, go back to list
+                        viewingDetail = false;
+                        return false;
+                    }
                     break;
 
                 case DetailAction.BackToList:
@@ -243,47 +318,11 @@ public sealed class TuiRunner(
         return false;
     }
 
-    private async Task<Issue> EditPriorityAsync(Issue issue, CancellationToken cancellationToken)
-    {
-        var currentPri = issue.Priority?.ToString() ?? "none";
-
-        var input = console.Prompt(
-            new TextPrompt<string>($"[bold]Priority[/] (current: {currentPri}, enter 1-5 or 'none'):")
-                .PromptStyle(new Style(Color.Cyan1))
-                .AllowEmpty());
-
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            console.MarkupLine("[dim]Priority unchanged.[/]");
-            return issue;
-        }
-
-        int? newPriority;
-        if (input.Equals("none", StringComparison.OrdinalIgnoreCase))
-        {
-            // Clear priority by setting to 0 (or keep as-is — service decides)
-            console.MarkupLine("[dim]Priority clearing is not supported via update. Priority unchanged.[/]");
-            return issue;
-        }
-        else if (int.TryParse(input, out var parsed) && parsed is >= 1 and <= 5)
-        {
-            newPriority = parsed;
-        }
-        else
-        {
-            console.MarkupLine("[red]Invalid priority. Must be 1-5.[/]");
-            return issue;
-        }
-
-        var updated = await issueService.UpdateAsync(issue.Id, priority: newPriority, cancellationToken: cancellationToken);
-        console.MarkupLine($"[green]Priority updated to {newPriority}[/]");
-        return updated;
-    }
-
     private async Task CreateIssueAsync(CancellationToken cancellationToken)
     {
         console.Clear();
 
+        // Title (required)
         var title = console.Prompt(
             new TextPrompt<string>("[bold]Issue title:[/]")
                 .PromptStyle(new Style(Color.Cyan1)));
@@ -294,17 +333,20 @@ public sealed class TuiRunner(
             return;
         }
 
+        // Type (required)
         var type = console.Prompt(
             new SelectionPrompt<IssueType>()
                 .Title("[bold]Issue type:[/]")
                 .HighlightStyle(new Style(Color.Cyan1))
                 .AddChoices(Enum.GetValues<IssueType>()));
 
+        // Description (optional)
         var description = console.Prompt(
             new TextPrompt<string>("[bold]Description[/] (optional):")
                 .PromptStyle(new Style(Color.Cyan1))
                 .AllowEmpty());
 
+        // Priority (optional)
         var priInput = console.Prompt(
             new TextPrompt<string>("[bold]Priority 1-5[/] (optional):")
                 .PromptStyle(new Style(Color.Cyan1))
@@ -316,13 +358,96 @@ public sealed class TuiRunner(
             priority = priValue;
         }
 
+        // Status (optional, default Open)
+        var statusValues = Enum.GetValues<IssueStatus>().Where(s => s != IssueStatus.Deleted).ToList();
+        var status = console.Prompt(
+            new SelectionPrompt<IssueStatus>()
+                .Title("[bold]Initial status[/] (default: Open):")
+                .HighlightStyle(new Style(Color.Cyan1))
+                .AddChoices(statusValues));
+
+        // Assigned To (optional)
+        var assignedTo = console.Prompt(
+            new TextPrompt<string>("[bold]Assigned to[/] (optional):")
+                .PromptStyle(new Style(Color.Cyan1))
+                .AllowEmpty());
+
+        // Linked PR (optional)
+        var linkedPrInput = console.Prompt(
+            new TextPrompt<string>("[bold]Linked PR number[/] (optional):")
+                .PromptStyle(new Style(Color.Cyan1))
+                .AllowEmpty());
+
+        int? linkedPr = null;
+        if (!string.IsNullOrWhiteSpace(linkedPrInput) && int.TryParse(linkedPrInput, out var prValue) && prValue > 0)
+        {
+            linkedPr = prValue;
+        }
+
+        // Linked Issues (optional)
+        var linkedIssuesInput = console.Prompt(
+            new TextPrompt<string>("[bold]Linked issues[/] (comma-separated IDs, optional):")
+                .PromptStyle(new Style(Color.Cyan1))
+                .AllowEmpty());
+
+        IReadOnlyList<string>? linkedIssues = null;
+        if (!string.IsNullOrWhiteSpace(linkedIssuesInput))
+        {
+            linkedIssues = linkedIssuesInput.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        }
+
+        // Parent Issues (optional)
+        var parentIssuesInput = console.Prompt(
+            new TextPrompt<string>("[bold]Parent issues[/] (format: id1:sortOrder,id2:sortOrder, optional):")
+                .PromptStyle(new Style(Color.Cyan1))
+                .AllowEmpty());
+
+        IReadOnlyList<ParentIssueRef>? parentIssues = null;
+        if (!string.IsNullOrWhiteSpace(parentIssuesInput))
+        {
+            parentIssues = ParentIssueRef.ParseFromStrings(parentIssuesInput);
+        }
+
+        // Tags (optional)
+        var tagsInput = console.Prompt(
+            new TextPrompt<string>("[bold]Tags[/] (comma-separated, optional):")
+                .PromptStyle(new Style(Color.Cyan1))
+                .AllowEmpty());
+
+        IReadOnlyList<string>? tags = null;
+        if (!string.IsNullOrWhiteSpace(tagsInput))
+        {
+            tags = tagsInput.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        }
+
+        // Working Branch ID (optional)
+        var workingBranchId = console.Prompt(
+            new TextPrompt<string>("[bold]Working branch ID[/] (optional):")
+                .PromptStyle(new Style(Color.Cyan1))
+                .AllowEmpty());
+
+        // Execution Mode (optional)
+        var executionMode = console.Prompt(
+            new SelectionPrompt<ExecutionMode>()
+                .Title("[bold]Execution mode:[/]")
+                .HighlightStyle(new Style(Color.Cyan1))
+                .AddChoices(Enum.GetValues<ExecutionMode>()));
+
         await storageService.EnsureDirectoryExistsAsync(cancellationToken);
 
         var issue = await issueService.CreateAsync(
             title: title,
             type: type,
             description: string.IsNullOrWhiteSpace(description) ? null : description,
+            status: status,
             priority: priority,
+            linkedPr: linkedPr,
+            linkedIssues: linkedIssues,
+            parentIssues: parentIssues,
+            assignedTo: string.IsNullOrWhiteSpace(assignedTo) ? null : assignedTo,
+            tags: tags,
+            workingBranchId: string.IsNullOrWhiteSpace(workingBranchId) ? null : workingBranchId,
+            executionMode: executionMode,
             cancellationToken: cancellationToken);
 
         console.MarkupLine($"[green]Created issue[/] [bold]{issue.Id}[/]");
@@ -330,17 +455,40 @@ public sealed class TuiRunner(
         console.Input.ReadKey(intercept: true);
     }
 
-    private static string BuildFilterTitle(IssueStatus? status, IssueType? type)
+    private static string BuildFilterTitle(FilterCriteria? filter)
     {
+        if (filter is null)
+        {
+            return "Issues";
+        }
+
         var parts = new List<string> { "Issues" };
-        if (status.HasValue)
+
+        if (filter.Status.HasValue)
         {
-            parts.Add($"status={status.Value}");
+            parts.Add($"status={filter.Status.Value}");
         }
-        if (type.HasValue)
+        if (filter.Type.HasValue)
         {
-            parts.Add($"type={type.Value}");
+            parts.Add($"type={filter.Type.Value}");
         }
+        if (filter.Priority.HasValue)
+        {
+            parts.Add($"priority={filter.Priority.Value}");
+        }
+        if (!string.IsNullOrEmpty(filter.AssignedTo))
+        {
+            parts.Add($"assigned={filter.AssignedTo}");
+        }
+        if (filter.Tags is { Count: > 0 })
+        {
+            parts.Add($"tags={string.Join("+", filter.Tags)}");
+        }
+        if (filter.LinkedPr.HasValue)
+        {
+            parts.Add($"pr=#{filter.LinkedPr.Value}");
+        }
+
         return string.Join(" ", parts);
     }
 }
