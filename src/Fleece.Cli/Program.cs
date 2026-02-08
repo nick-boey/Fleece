@@ -5,17 +5,25 @@ using Fleece.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console.Cli;
 
-var services = new ServiceCollection();
-services.AddFleeceCore();
-
-var registrar = new TypeRegistrar(services);
-var app = new CommandApp<TuiCommand>(registrar);
-
 // Get the version from the assembly, which is set during build via -p:Version=
 var version = Assembly.GetExecutingAssembly()
     .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
     ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
     ?? "1.0.0";
+
+// Handle --version/-v before Spectre.Console.Cli, since CommandApp<TuiCommand>
+// doesn't intercept --version properly when a default command is set.
+if (args.Length == 1 && args[0] is "--version" or "-v")
+{
+    Console.WriteLine(version);
+    return 0;
+}
+
+var services = new ServiceCollection();
+services.AddFleeceCore();
+
+var registrar = new TypeRegistrar(services);
+var app = new CommandApp<TuiCommand>(registrar);
 
 app.Configure(config =>
 {
