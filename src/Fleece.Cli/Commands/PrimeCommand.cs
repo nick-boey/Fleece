@@ -12,7 +12,9 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         ["statuses"] = StatusesContent,
         ["sync"] = SyncContent,
         ["json"] = JsonContent,
-        ["questions"] = QuestionsContent
+        ["questions"] = QuestionsContent,
+        ["next"] = NextContent,
+        ["tree"] = TreeContent
     };
 
     public override int Execute(CommandContext context, PrimeSettings settings)
@@ -88,6 +90,17 @@ public sealed class PrimeCommand : Command<PrimeSettings>
                                  ↘ closed (abandoned/won't fix)
         ```
 
+        ## Task Hierarchy
+
+        Issues can be organized into parent-child hierarchies to break down complex work. Use `fleece tree` to view the
+        hierarchy and `fleece tree --task-graph` to see the task graph with approximate execution ordering.
+
+        - `fleece tree` - Display issues as parent-child tree
+        - `fleece tree --task-graph` - Display issues as a task graph, showing execution order and next tasks
+        - `fleece next` - Find issues that can be worked on next based on dependencies and execution mode
+
+        Use `fleece create -t <title> -y <type> --parent-issues <parent-id>:<lex-order>` to create sub-tasks.
+
         ## Filtering
 
         By default, `list` and `tree` hide terminal statuses (complete, archived, closed).
@@ -106,6 +119,8 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `sync`
         - `json`
         - `questions`
+        - `next`
+        - `tree`
 
         Any command when run with `-h` will provide additional information on the command usage.
         """;
@@ -165,6 +180,8 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `fleece list [-s STATUS] [-y TYPE] [-p PRIORITY]` - List issues with filters
         - `fleece show <id>` - Display all details for a single issue
         - `fleece tree` - Display parent-child hierarchy
+        - `fleece tree --task-graph` - Display task graph with execution ordering
+        - `fleece next` - Find issues ready to be worked on next
         - `fleece search "query"` - Search issues by text
 
         ## Managing
@@ -258,5 +275,47 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         ## Answer a Question
 
         `fleece question <id> --answer <question-id> --text "The expected behavior is..."`
+        """;
+
+    private const string NextContent = """
+        # Next Issues
+
+        Find issues that are ready to be worked on based on dependencies, execution mode, and status.
+
+        ## Usage
+
+        - `fleece next` - Show all actionable issues
+        - `fleece next --parent <id>` - Show next issues only under a specific parent
+        - `fleece next --json` - Output as JSON
+
+        ## How It Works
+
+        The `next` command evaluates the task graph to find issues that are unblocked and ready for work.
+        It considers parent-child relationships, execution mode (series/parallel), and current status
+        to determine which issues can be picked up next.
+        """;
+
+    private const string TreeContent = """
+        # Tree View
+
+        Display issues in a tree view based on parent-child relationships.
+
+        ## Usage
+
+        - `fleece tree` - Display issues as parent-child tree
+        - `fleece tree --task-graph` - Display as a task graph showing approximate execution ordering
+        - `fleece tree --json` - Get hierarchy as JSON
+
+        ## Filtering
+
+        - `fleece tree -s <status>` - Filter by status
+        - `fleece tree -y <type>` - Filter by type
+        - `fleece tree -a` - Show all issues including terminal statuses
+
+        ## Task Graph
+
+        The `--task-graph` flag displays issues in a bottom-up task graph that shows the approximate
+        ordering of tasks based on their dependencies and execution mode (series/parallel). This is
+        useful for understanding what needs to be done and in what order.
         """;
 }
