@@ -49,13 +49,50 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
                 return 1;
             }
 
+            if (!string.IsNullOrWhiteSpace(settings.Id))
+            {
+                AnsiConsole.MarkupLine("[red]Error:[/] --task-graph cannot be used with an issue ID");
+                return 1;
+            }
+
             var graph = await taskGraphService.BuildGraphAsync();
             TaskGraphRenderer.Render(graph);
             return 0;
         }
 
+        // Resolve optional root issue ID
+        Issue? rootIssue = null;
+        if (!string.IsNullOrWhiteSpace(settings.Id))
+        {
+            var matches = await issueService.ResolveByPartialIdAsync(settings.Id);
+
+            if (matches.Count == 0)
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
+                return 1;
+            }
+
+            if (matches.Count > 1)
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.Id}':");
+                foreach (var match in matches)
+                {
+                    AnsiConsole.MarkupLine($"  {match.Id} {Markup.Escape(match.Title)}");
+                }
+                return 1;
+            }
+
+            rootIssue = matches[0];
+        }
+
         var issues = await issueService.FilterAsync(status, type, settings.Priority, settings.AssignedTo, settings.Tags, settings.LinkedPr, settings.All);
         var issueList = issues.ToList();
+
+        // When a root issue is specified, constrain to the root + its transitive descendants
+        if (rootIssue is not null)
+        {
+            issueList = ScopeToDescendants(rootIssue, issueList);
+        }
 
         if (settings.Json)
         {
@@ -67,6 +104,49 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Returns a list containing the root issue and all its transitive descendants from the given issue list.
+    /// The root issue is always included even if it wasn't in the original filtered list.
+    /// </summary>
+    private static List<Issue> ScopeToDescendants(Issue rootIssue, List<Issue> filteredIssues)
+    {
+        var lookup = filteredIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+        var descendantIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var queue = new Queue<string>();
+        queue.Enqueue(rootIssue.Id);
+
+        while (queue.Count > 0)
+        {
+            var parentId = queue.Dequeue();
+            foreach (var issue in filteredIssues)
+            {
+                if (descendantIds.Contains(issue.Id))
+                {
+                    continue;
+                }
+                if (issue.ParentIssues?.Any(p => p.ParentIssue.Equals(parentId, StringComparison.OrdinalIgnoreCase)) ?? false)
+                {
+                    descendantIds.Add(issue.Id);
+                    queue.Enqueue(issue.Id);
+                }
+            }
+        }
+
+        // Always include the root issue itself
+        var result = new List<Issue>();
+        if (!lookup.ContainsKey(rootIssue.Id))
+        {
+            result.Add(rootIssue);
+        }
+        else
+        {
+            result.Add(lookup[rootIssue.Id]);
+        }
+
+        result.AddRange(filteredIssues.Where(i => descendantIds.Contains(i.Id)));
+        return result;
     }
 
     private static void RenderTree(List<Issue> issues)
@@ -153,17 +233,13 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
             IssueStatus.Closed => "dim",
             _ => "white"
         };
-        var typeIcon = issue.Type switch
-        {
-            IssueType.Bug => "\ud83d\udc1b",
-            IssueType.Feature => "\u2728",
-            IssueType.Task => "\u2611\ufe0f",
-            IssueType.Chore => "\ud83e\uddf9",
-            _ => "\u2022"
-        };
+        var typeLabel = issue.Type.ToString().ToLowerInvariant();
+        var statusLabel = issue.Status.ToString().ToLowerInvariant();
 
         var priorityStr = issue.Priority.HasValue ? $"[dim]P{issue.Priority}[/] " : "";
-        AnsiConsole.MarkupLine($"{prefix}{connector2}[{statusColor}]{typeIcon}[/] [{statusColor}]{issue.Id}[/] {priorityStr}{Markup.Escape(issue.Title)}");
+        var typeTag = Markup.Escape($"[{typeLabel}]");
+        var statusTag = Markup.Escape($"[{statusLabel}]");
+        AnsiConsole.MarkupLine($"{prefix}{connector2}[{statusColor}]{issue.Id}[/] [{statusColor}]{typeTag}[/] [{statusColor}]{statusTag}[/] {priorityStr}{Markup.Escape(issue.Title)}");
 
         // Find children (issues that have this issue as a parent), sorted by SortOrder
         var children = allIssues

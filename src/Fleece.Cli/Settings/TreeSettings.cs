@@ -5,6 +5,10 @@ namespace Fleece.Cli.Settings;
 
 public sealed class TreeSettings : CommandSettings
 {
+    [CommandArgument(0, "[ID]")]
+    [Description("Optional issue ID to use as tree root (shows children of this issue)")]
+    public string? Id { get; init; }
+
     [CommandOption("-s|--status <STATUS>")]
     [Description("Filter by status: open, progress, review, complete, archived, closed")]
     public string? Status { get; init; }

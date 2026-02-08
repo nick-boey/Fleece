@@ -42,6 +42,7 @@ app.Configure(config =>
     config.AddCommand<TreeCommand>("tree")
         .WithDescription("Display issues in a tree view based on parent-child relationships")
         .WithExample("tree")
+        .WithExample("tree", "abc123")
         .WithExample("tree", "--status", "open")
         .WithExample("tree", "--task-graph");
 
