@@ -259,6 +259,10 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
             type = issue.Type.ToString().ToLowerInvariant(),
             status = issue.Status.ToString().ToLowerInvariant(),
             priority = issue.Priority,
+            executionMode = issue.ExecutionMode.ToString().ToLowerInvariant(),
+            assignedTo = issue.AssignedTo,
+            linkedPR = issue.LinkedPR,
+            tags = issue.Tags,
             children = children.Select(c => BuildJsonNode(c, issueLookup, rendered, allIssues)).ToList()
         };
     }
