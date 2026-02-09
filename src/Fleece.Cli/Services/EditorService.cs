@@ -55,7 +55,6 @@ public sealed class EditorService
         var filePath = Path.Combine(TemplateDirectory, fileName);
 
         var linkedIssuesStr = issue.LinkedIssues.Count > 0 ? string.Join(", ", issue.LinkedIssues) : "";
-        var parentIssuesStr = issue.ParentIssues.Count > 0 ? string.Join(", ", issue.ParentIssues.Select(p => p.ParentIssue)) : "";
         var tagsStr = issue.Tags.Count > 0 ? string.Join(", ", issue.Tags) : "";
 
         var template = $"""
@@ -76,7 +75,6 @@ public sealed class EditorService
             workingBranchId: {EscapeYamlValue(issue.WorkingBranchId)}  # Git branch name for this issue
             linkedPr: {(issue.LinkedPR.HasValue ? issue.LinkedPR.Value.ToString() : "")}
             linkedIssues: {linkedIssuesStr}  # Comma-separated issue IDs
-            parentIssues: {parentIssuesStr}  # Comma-separated issue IDs with optional sort order (e.g., abc123,def456:bbb)
             """;
 
         File.WriteAllText(filePath, template);

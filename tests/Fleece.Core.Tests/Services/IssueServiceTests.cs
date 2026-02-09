@@ -789,4 +789,20 @@ public class IssueServiceTests
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("a");
     }
+
+    [Test]
+    public async Task FilterAsync_FiltersByTag_WhenIssueTagsIsNull()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = null!, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["backend"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(tags: ["backend"]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("b");
+    }
 }
