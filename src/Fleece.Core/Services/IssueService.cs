@@ -61,6 +61,22 @@ public sealed partial class IssueService(
         }
 
         var id = idGenerator.Generate(title);
+
+        // Check for tombstone collision and retry with salt if needed
+        var tombstones = await storage.LoadTombstonesAsync(cancellationToken);
+        var tombstoneIds = tombstones.Select(t => t.IssueId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        const int maxSaltRetries = 10;
+        for (var salt = 1; salt <= maxSaltRetries && tombstoneIds.Contains(id); salt++)
+        {
+            id = idGenerator.Generate(title, salt);
+        }
+
+        if (tombstoneIds.Contains(id))
+        {
+            throw new InvalidOperationException(
+                $"Cannot generate a unique ID for title '{title}'. All salted variants collide with tombstoned issue IDs.");
+        }
+
         var now = DateTimeOffset.UtcNow;
         var createdBy = gitConfigService.GetUserName();
         var issue = new Issue

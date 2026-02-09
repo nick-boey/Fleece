@@ -101,4 +101,49 @@ public class Sha256IdGeneratorTests
         result.Should().HaveLength(6);
         result.Should().MatchRegex("^[0-9A-Za-z]{6}$");
     }
+
+    [Test]
+    public void GenerateWithSalt_ProducesDifferentIdThanUnsalted()
+    {
+        var unsalted = _sut.Generate("Test issue", 0);
+        var salted = _sut.Generate("Test issue", 1);
+
+        salted.Should().NotBe(unsalted);
+    }
+
+    [Test]
+    public void GenerateWithZeroSalt_MatchesUnsaltedGenerate()
+    {
+        var unsalted = _sut.Generate("Test issue");
+        var zeroSalt = _sut.Generate("Test issue", 0);
+
+        zeroSalt.Should().Be(unsalted);
+    }
+
+    [Test]
+    public void GenerateWithSalt_IsDeterministic()
+    {
+        var result1 = _sut.Generate("Test issue", 5);
+        var result2 = _sut.Generate("Test issue", 5);
+
+        result1.Should().Be(result2);
+    }
+
+    [Test]
+    public void GenerateWithSalt_DifferentSaltsProduceDifferentIds()
+    {
+        var salt1 = _sut.Generate("Test issue", 1);
+        var salt2 = _sut.Generate("Test issue", 2);
+
+        salt1.Should().NotBe(salt2);
+    }
+
+    [Test]
+    public void GenerateWithSalt_ReturnsSixCharBase62()
+    {
+        var result = _sut.Generate("Test issue", 3);
+
+        result.Should().HaveLength(6);
+        result.Should().MatchRegex("^[0-9A-Za-z]{6}$");
+    }
 }

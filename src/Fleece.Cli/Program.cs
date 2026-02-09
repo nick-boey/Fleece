@@ -55,6 +55,12 @@ app.Configure(config =>
         .WithDescription("Delete an issue by ID")
         .WithExample("delete", "abc123");
 
+    config.AddCommand<CleanCommand>("clean")
+        .WithDescription("Permanently remove deleted issues and create tombstone records")
+        .WithExample("clean")
+        .WithExample("clean", "--dry-run")
+        .WithExample("clean", "--include-complete", "--include-archived");
+
     config.AddCommand<ShowCommand>("show")
         .WithDescription("Show all details of an issue")
         .WithExample("show", "abc123")
