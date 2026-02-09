@@ -37,10 +37,6 @@ public sealed class EditSettings : CommandSettings
     [Description("Replace linked issue IDs (comma-separated)")]
     public string? LinkedIssues { get; init; }
 
-    [CommandOption("--parent-issues <ISSUES>")]
-    [Description("Replace parent issue IDs with optional sort order (e.g., abc123,def456:bbb)")]
-    public string? ParentIssues { get; init; }
-
     [CommandOption("-a|--assign <USER>")]
     [Description("New assignee username")]
     public string? AssignedTo { get; init; }
