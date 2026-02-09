@@ -124,7 +124,7 @@ public sealed class ListCommand(IStorageService storageService) : AsyncCommand<L
 
         foreach (var issue in issues)
         {
-            Console.WriteLine($"{issue.Id} {issue.Status.ToString().ToLowerInvariant()} {issue.Type.ToString().ToLowerInvariant()} {issue.Title}");
+            Console.WriteLine(IssueLineFormatter.FormatPlainText(issue));
         }
     }
 }
