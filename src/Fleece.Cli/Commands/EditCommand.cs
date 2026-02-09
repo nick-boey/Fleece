@@ -71,13 +71,6 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
             linkedIssues = settings.LinkedIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
-        IReadOnlyList<ParentIssueRef>? parentIssues = null;
-        if (!string.IsNullOrWhiteSpace(settings.ParentIssues))
-        {
-            var parsed = ParentIssueRef.ParseFromStrings(settings.ParentIssues);
-            parentIssues = parsed.Count > 0 ? parsed : [];
-        }
-
         IReadOnlyList<string>? tags = null;
         if (!string.IsNullOrWhiteSpace(settings.Tags))
         {
@@ -106,7 +99,6 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 priority: settings.Priority,
                 linkedPr: settings.LinkedPr,
                 linkedIssues: linkedIssues,
-                parentIssues: parentIssues,
                 assignedTo: settings.AssignedTo,
                 tags: tags,
                 workingBranchId: settings.WorkingBranchId,
@@ -144,7 +136,6 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         !settings.Priority.HasValue &&
         !settings.LinkedPr.HasValue &&
         string.IsNullOrWhiteSpace(settings.LinkedIssues) &&
-        string.IsNullOrWhiteSpace(settings.ParentIssues) &&
         string.IsNullOrWhiteSpace(settings.AssignedTo) &&
         string.IsNullOrWhiteSpace(settings.Tags) &&
         string.IsNullOrWhiteSpace(settings.WorkingBranchId) &&
@@ -219,8 +210,6 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 linkedIssues = [];
             }
 
-            var parentIssues = ParentIssueRef.ParseFromStrings(template.ParentIssues);
-
             IReadOnlyList<string>? tags = null;
             if (!string.IsNullOrWhiteSpace(template.Tags))
             {
@@ -240,7 +229,6 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 priority: template.Priority,
                 linkedPr: template.LinkedPr,
                 linkedIssues: linkedIssues,
-                parentIssues: parentIssues,
                 assignedTo: template.AssignedTo,
                 tags: tags,
                 workingBranchId: template.WorkingBranchId);
