@@ -11,6 +11,16 @@ public interface IValidationService
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Validation result containing any detected cycles.</returns>
     Task<DependencyValidationResult> ValidateDependencyCyclesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Checks whether adding a parent-child edge from <paramref name="parentId"/> to
+    /// <paramref name="childId"/> would create a cycle in the dependency graph.
+    /// </summary>
+    /// <param name="parentId">The full ID of the proposed parent issue.</param>
+    /// <param name="childId">The full ID of the proposed child issue.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>True if the proposed edge would create a cycle; otherwise false.</returns>
+    Task<bool> WouldCreateCycleAsync(string parentId, string childId, CancellationToken ct = default);
 }
 
 /// <summary>

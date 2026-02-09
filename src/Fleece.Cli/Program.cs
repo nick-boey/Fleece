@@ -55,6 +55,12 @@ app.Configure(config =>
         .WithDescription("Delete an issue by ID")
         .WithExample("delete", "abc123");
 
+    config.AddCommand<CleanCommand>("clean")
+        .WithDescription("Permanently remove deleted issues and create tombstone records")
+        .WithExample("clean")
+        .WithExample("clean", "--dry-run")
+        .WithExample("clean", "--include-complete", "--include-archived");
+
     config.AddCommand<ShowCommand>("show")
         .WithDescription("Show all details of an issue")
         .WithExample("show", "abc123")
@@ -106,6 +112,13 @@ app.Configure(config =>
         .WithExample("commit")
         .WithExample("commit", "-m", "Add new issues")
         .WithExample("commit", "--push");
+
+    config.AddCommand<DependencyCommand>("dependency")
+        .WithDescription("Add or remove parent-child dependency between issues")
+        .WithExample("dependency", "--parent", "abc123", "--child", "def456")
+        .WithExample("dependency", "--parent", "abc123", "--child", "def456", "--remove")
+        .WithExample("dependency", "--parent", "abc123", "--child", "def456", "--first")
+        .WithExample("dependency", "--parent", "abc123", "--child", "def456", "--after", "ghi789");
 
     config.AddCommand<NextCommand>("next")
         .WithDescription("Find issues that can be worked on next based on dependencies and execution mode")

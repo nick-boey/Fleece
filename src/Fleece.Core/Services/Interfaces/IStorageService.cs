@@ -43,4 +43,24 @@ public interface IStorageService
     /// </summary>
     /// <returns>Result containing issues and parsing diagnostics per file.</returns>
     Task<LoadIssuesResult> LoadIssuesWithDiagnosticsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Loads all tombstones from all tombstone files.
+    /// </summary>
+    Task<IReadOnlyList<Tombstone>> LoadTombstonesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Saves tombstones, replacing all existing tombstone files with a single consolidated file.
+    /// </summary>
+    Task SaveTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Appends tombstones to the existing tombstone file.
+    /// </summary>
+    Task AppendTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets all tombstone files in the fleece directory.
+    /// </summary>
+    Task<IReadOnlyList<string>> GetAllTombstoneFilesAsync(CancellationToken cancellationToken = default);
 }

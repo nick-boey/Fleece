@@ -64,9 +64,9 @@ public static class TableFormatter
         AnsiConsole.MarkupLine($"[dim]{issues.Count} issue(s)[/]");
     }
 
-    public static void RenderIssue(Issue issue)
+    public static void RenderIssue(Issue issue, IssueShowDto? context = null)
     {
-        var panel = new Panel(BuildIssueContent(issue))
+        var panel = new Panel(BuildIssueContent(issue, context))
         {
             Header = new PanelHeader($"[bold]{issue.Id}[/] - {Markup.Escape(issue.Title)}"),
             Border = BoxBorder.Rounded
@@ -75,7 +75,7 @@ public static class TableFormatter
         AnsiConsole.Write(panel);
     }
 
-    private static string BuildIssueContent(Issue issue)
+    private static string BuildIssueContent(Issue issue, IssueShowDto? context = null)
     {
         var lines = new List<string>
         {
@@ -113,7 +113,29 @@ public static class TableFormatter
             lines.Add($"[bold]Linked Issues:[/] {string.Join(", ", issue.LinkedIssues)}");
         }
 
-        if (issue.ParentIssues?.Count > 0)
+        if (context?.Parents.Count > 0)
+        {
+            lines.Add("");
+            lines.Add("[bold]Parent Issues:[/]");
+            foreach (var pc in context.Parents)
+            {
+                lines.Add($"  {IssueLineFormatter.FormatMarkup(pc.Parent)}");
+                lines.Add($"    [dim]Execution Mode:[/] {pc.ExecutionMode.ToString().ToLowerInvariant()}");
+                if (pc.ExecutionMode == ExecutionMode.Series && pc.Position.HasValue)
+                {
+                    lines.Add($"    [dim]Position:[/] {pc.Position} of {pc.TotalSiblings}");
+                    if (pc.PreviousSibling is not null)
+                    {
+                        lines.Add($"    [dim]Previous:[/] {IssueLineFormatter.FormatMarkup(pc.PreviousSibling)}");
+                    }
+                    if (pc.NextSibling is not null)
+                    {
+                        lines.Add($"    [dim]Next:[/]     {IssueLineFormatter.FormatMarkup(pc.NextSibling)}");
+                    }
+                }
+            }
+        }
+        else if (issue.ParentIssues?.Count > 0)
         {
             lines.Add($"[bold]Parent Issues:[/] {string.Join(", ", issue.ParentIssues.Select(p => p.ParentIssue))}");
         }
@@ -126,6 +148,21 @@ public static class TableFormatter
         if (issue.Tags?.Count > 0)
         {
             lines.Add($"[bold]Tags:[/] {string.Join(", ", issue.Tags.Select(Markup.Escape))}");
+        }
+
+        if (context?.Children.Count > 0)
+        {
+            var modeLabel = context.ExecutionMode.ToString().ToLowerInvariant();
+            lines.Add("");
+            lines.Add($"[bold]Children:[/] ({modeLabel})");
+            for (var i = 0; i < context.Children.Count; i++)
+            {
+                var child = context.Children[i];
+                var prefix = context.ExecutionMode == ExecutionMode.Series
+                    ? $"  {i + 1}. "
+                    : "  - ";
+                lines.Add($"{prefix}{IssueLineFormatter.FormatMarkup(child)}");
+            }
         }
 
         if (!string.IsNullOrEmpty(issue.CreatedBy))

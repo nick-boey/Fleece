@@ -13,6 +13,8 @@ public sealed class JsonlStorageService : IStorageService
     private const string IssuesFilePattern = "issues*.jsonl";
     private const string ChangesFileName = "changes.jsonl";
     private const string ChangesFilePattern = "changes*.jsonl";
+    private const string TombstonesFileName = "tombstones.jsonl";
+    private const string TombstonesFilePattern = "tombstones*.jsonl";
     private const int HashLength = 6;
 
     private readonly string _basePath;
@@ -30,6 +32,7 @@ public sealed class JsonlStorageService : IStorageService
     private string FleeceDirectoryPath => Path.Combine(_basePath, FleeceDirectory);
     private string IssuesFilePath => Path.Combine(FleeceDirectoryPath, IssuesFileName);
     private string ChangesFilePath => Path.Combine(FleeceDirectoryPath, ChangesFileName);
+    private string TombstonesFilePath => Path.Combine(FleeceDirectoryPath, TombstonesFileName);
 
     public async Task EnsureDirectoryExistsAsync(CancellationToken cancellationToken = default)
     {
@@ -317,6 +320,121 @@ public sealed class JsonlStorageService : IStorageService
         return files;
     }
 
+    public async Task<IReadOnlyList<Tombstone>> LoadTombstonesAsync(CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            var allTombstones = new List<Tombstone>();
+            var files = GetAllTombstoneFilesInternal();
+
+            foreach (var file in files)
+            {
+                var content = await File.ReadAllTextAsync(file, cancellationToken);
+                var tombstones = _serializer.DeserializeTombstones(content);
+                allTombstones.AddRange(tombstones);
+            }
+
+            // Deduplicate by IssueId, keeping newest CleanedAt
+            return allTombstones
+                .GroupBy(t => t.IssueId, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderByDescending(t => t.CleanedAt).First())
+                .ToList();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task SaveTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureDirectoryExistsAsync(cancellationToken);
+
+            var hash = GetCurrentIssuesHashInternal();
+            var fileName = string.IsNullOrEmpty(hash) ? TombstonesFileName : $"tombstones_{hash}.jsonl";
+            var filePath = Path.Combine(FleeceDirectoryPath, fileName);
+
+            // Delete old tombstone files before writing new one
+            var existingFiles = GetAllTombstoneFilesInternal();
+            foreach (var file in existingFiles)
+            {
+                File.Delete(file);
+            }
+
+            var lines = tombstones.Select(_serializer.SerializeTombstone);
+            await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task AppendTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureDirectoryExistsAsync(cancellationToken);
+
+            // Load existing tombstones, add new ones, and save
+            var existingTombstones = new List<Tombstone>();
+            var existingFiles = GetAllTombstoneFilesInternal();
+
+            foreach (var file in existingFiles)
+            {
+                var content = await File.ReadAllTextAsync(file, cancellationToken);
+                var existing = _serializer.DeserializeTombstones(content);
+                existingTombstones.AddRange(existing);
+            }
+
+            existingTombstones.AddRange(tombstones);
+
+            var hash = GetCurrentIssuesHashInternal();
+            var fileName = string.IsNullOrEmpty(hash) ? TombstonesFileName : $"tombstones_{hash}.jsonl";
+            var filePath = Path.Combine(FleeceDirectoryPath, fileName);
+
+            // Delete old tombstone files before writing new one
+            foreach (var file in existingFiles)
+            {
+                File.Delete(file);
+            }
+
+            var lines = existingTombstones.Select(_serializer.SerializeTombstone);
+            await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public Task<IReadOnlyList<string>> GetAllTombstoneFilesAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<IReadOnlyList<string>>(GetAllTombstoneFilesInternal());
+    }
+
+    private IReadOnlyList<string> GetAllTombstoneFilesInternal()
+    {
+        if (!Directory.Exists(FleeceDirectoryPath))
+        {
+            return [];
+        }
+
+        var files = Directory.GetFiles(FleeceDirectoryPath, TombstonesFilePattern);
+
+        if (files.Length == 0 && File.Exists(TombstonesFilePath))
+        {
+            return [TombstonesFilePath];
+        }
+
+        return files;
+    }
+
     private string? GetCurrentIssuesHashInternal()
     {
         var issueFiles = GetAllIssueFilesInternal();
@@ -339,6 +457,7 @@ public sealed class JsonlStorageService : IStorageService
     {
         var issueFiles = GetAllIssueFilesInternal();
         var changesFiles = GetAllChangesFilesInternal();
+        var tombstoneFiles = GetAllTombstoneFilesInternal();
 
         var messages = new List<string>();
 
@@ -352,6 +471,12 @@ public sealed class JsonlStorageService : IStorageService
         {
             var fileNames = changesFiles.Select(Path.GetFileName);
             messages.Add($"Multiple unmerged changes files found: {string.Join(", ", fileNames)}");
+        }
+
+        if (tombstoneFiles.Count > 1)
+        {
+            var fileNames = tombstoneFiles.Select(Path.GetFileName);
+            messages.Add($"Multiple unmerged tombstone files found: {string.Join(", ", fileNames)}");
         }
 
         if (messages.Count > 0)

@@ -223,23 +223,7 @@ public sealed class TreeCommand(IIssueService issueService, IStorageService stor
 
         // Render the current issue
         var connector2 = isRoot ? "" : (isLast ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ");
-        var statusColor = issue.Status switch
-        {
-            IssueStatus.Open => "cyan",
-            IssueStatus.Progress => "blue",
-            IssueStatus.Review => "purple",
-            IssueStatus.Complete => "green",
-            IssueStatus.Archived => "dim",
-            IssueStatus.Closed => "dim",
-            _ => "white"
-        };
-        var typeLabel = issue.Type.ToString().ToLowerInvariant();
-        var statusLabel = issue.Status.ToString().ToLowerInvariant();
-
-        var priorityStr = issue.Priority.HasValue ? $"[dim]P{issue.Priority}[/] " : "";
-        var typeTag = Markup.Escape($"[{typeLabel}]");
-        var statusTag = Markup.Escape($"[{statusLabel}]");
-        AnsiConsole.MarkupLine($"{prefix}{connector2}[{statusColor}]{issue.Id}[/] [{statusColor}]{typeTag}[/] [{statusColor}]{statusTag}[/] {priorityStr}{Markup.Escape(issue.Title)}");
+        AnsiConsole.MarkupLine($"{prefix}{connector2}{IssueLineFormatter.FormatMarkup(issue)}");
 
         // Find children (issues that have this issue as a parent), sorted by SortOrder
         var children = allIssues
