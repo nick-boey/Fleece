@@ -15,6 +15,7 @@ namespace Fleece.Cli.Tests.Commands;
 [TestFixture]
 public class ListCommandTests
 {
+    private IIssueService _issueService = null!;
     private IStorageService _storageService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
@@ -25,11 +26,14 @@ public class ListCommandTests
     [SetUp]
     public void SetUp()
     {
+        _issueService = Substitute.For<IIssueService>();
         _storageService = Substitute.For<IStorageService>();
         _storageService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
             .Returns((false, string.Empty));
+        _storageService.LoadIssuesWithDiagnosticsAsync(Arg.Any<CancellationToken>())
+            .Returns(new LoadIssuesResult());
 
-        _command = new ListCommand(_storageService);
+        _command = new ListCommand(_issueService, _storageService);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;
@@ -67,8 +71,11 @@ public class ListCommandTests
             .WithType(IssueType.Bug)
             .Build();
 
-        _storageService.LoadIssuesWithDiagnosticsAsync(Arg.Any<CancellationToken>())
-            .Returns(new LoadIssuesResult { Issues = new List<Issue> { issue1, issue2 } });
+        _issueService.FilterAsync(
+                Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+                Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { issue1, issue2 });
 
         var settings = new ListSettings { OneLine = true, All = true };
 
@@ -101,8 +108,11 @@ public class ListCommandTests
             .WithType(IssueType.Feature)
             .Build();
 
-        _storageService.LoadIssuesWithDiagnosticsAsync(Arg.Any<CancellationToken>())
-            .Returns(new LoadIssuesResult { Issues = new List<Issue> { issue } });
+        _issueService.FilterAsync(
+                Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+                Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { issue });
 
         var settings = new ListSettings { OneLine = true, All = true };
 
@@ -125,8 +135,11 @@ public class ListCommandTests
             .WithType(IssueType.Chore)
             .Build();
 
-        _storageService.LoadIssuesWithDiagnosticsAsync(Arg.Any<CancellationToken>())
-            .Returns(new LoadIssuesResult { Issues = new List<Issue> { issue } });
+        _issueService.FilterAsync(
+                Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+                Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { issue });
 
         var settings = new ListSettings { OneLine = true, All = true };
 
@@ -143,8 +156,11 @@ public class ListCommandTests
     [Test]
     public async Task ExecuteAsync_OneLine_EmptyList_ShowsNoIssuesMessage()
     {
-        _storageService.LoadIssuesWithDiagnosticsAsync(Arg.Any<CancellationToken>())
-            .Returns(new LoadIssuesResult { Issues = new List<Issue>() });
+        _issueService.FilterAsync(
+                Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+                Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue>());
 
         var settings = new ListSettings { OneLine = true, All = true };
 
