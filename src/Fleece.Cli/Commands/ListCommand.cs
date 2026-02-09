@@ -94,7 +94,7 @@ public sealed class ListCommand(IIssueService issueService, IStorageService stor
 
         foreach (var issue in issues)
         {
-            Console.WriteLine($"{issue.Id} {issue.Status.ToString().ToLowerInvariant()} {issue.Type.ToString().ToLowerInvariant()} {issue.Title}");
+            Console.WriteLine(IssueLineFormatter.FormatPlainText(issue));
         }
     }
 }

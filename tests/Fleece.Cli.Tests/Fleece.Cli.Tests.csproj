@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Fleece.Cli\Fleece.Cli.csproj" />
+    <ProjectReference Include="..\Fleece.Core.Tests\Fleece.Core.Tests.csproj" />
   </ItemGroup>
 
 </Project>

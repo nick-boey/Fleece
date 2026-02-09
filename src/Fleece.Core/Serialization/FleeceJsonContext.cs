@@ -24,6 +24,11 @@ namespace Fleece.Core.Serialization;
 [JsonSerializable(typeof(IReadOnlyList<PropertyChange>))]
 [JsonSerializable(typeof(IReadOnlyList<Question>))]
 [JsonSerializable(typeof(IReadOnlyList<ParentIssueRef>))]
+[JsonSerializable(typeof(IssueSummaryDto))]
+[JsonSerializable(typeof(ParentContextDto))]
+[JsonSerializable(typeof(IssueShowDto))]
+[JsonSerializable(typeof(IReadOnlyList<IssueSummaryDto>))]
+[JsonSerializable(typeof(IReadOnlyList<ParentContextDto>))]
 public partial class FleeceJsonContext : JsonSerializerContext
 {
 }

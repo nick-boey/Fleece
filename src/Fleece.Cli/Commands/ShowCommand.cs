@@ -38,13 +38,20 @@ public sealed class ShowCommand(IIssueService issueService, IStorageService stor
         {
             JsonFormatter.RenderIssue(issue, verbose: true);
         }
-        else if (settings.Json)
-        {
-            JsonFormatter.RenderIssue(issue, verbose: false);
-        }
         else
         {
-            TableFormatter.RenderIssue(issue);
+            // Build hierarchy context for enriched output
+            var allIssues = await issueService.GetAllAsync();
+            var showContext = IssueHierarchyHelper.BuildShowContext(issue, allIssues);
+
+            if (settings.Json)
+            {
+                JsonFormatter.RenderIssueShow(showContext);
+            }
+            else
+            {
+                TableFormatter.RenderIssue(issue, showContext);
+            }
         }
 
         return 0;
