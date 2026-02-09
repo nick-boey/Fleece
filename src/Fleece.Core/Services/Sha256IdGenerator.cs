@@ -10,11 +10,18 @@ public sealed class Sha256IdGenerator : IIdGenerator
     private const int IdLength = 6;
     private const int BytesToUse = 5;
 
-    public string Generate(string title)
+    public string Generate(string title) => Generate(title, 0);
+
+    public string Generate(string title, int salt)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
 
         var normalized = title.Trim().ToLowerInvariant();
+        if (salt > 0)
+        {
+            normalized = $"{normalized}:{salt}";
+        }
+
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
 
         return ToBase62(hash.AsSpan(0, BytesToUse));

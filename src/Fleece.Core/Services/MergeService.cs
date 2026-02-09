@@ -94,6 +94,14 @@ public sealed class MergeService(
             var allChanges = existingChanges.ToList();
             allChanges.AddRange(changeRecords);
             await storage.SaveChangesAsync(allChanges, cancellationToken);
+
+            // Consolidate tombstone files if multiple exist
+            var tombstoneFiles = await storage.GetAllTombstoneFilesAsync(cancellationToken);
+            if (tombstoneFiles.Count > 1)
+            {
+                var allTombstones = await storage.LoadTombstonesAsync(cancellationToken);
+                await storage.SaveTombstonesAsync(allTombstones, cancellationToken);
+            }
         }
 
         return changeRecords;

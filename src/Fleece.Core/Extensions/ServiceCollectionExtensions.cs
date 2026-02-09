@@ -28,6 +28,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IValidationService, ValidationService>();
         services.AddSingleton<INextService, NextService>();
         services.AddSingleton<ITaskGraphService, TaskGraphService>();
+        services.AddSingleton<ICleanService, CleanService>();
 
         return services;
     }

@@ -25,6 +25,8 @@ public class IssueServiceTests
         _gitConfigService = Substitute.For<IGitConfigService>();
         _changeService = Substitute.For<IChangeService>();
         _gitConfigService.GetUserName().Returns("Test User");
+        _storage.LoadTombstonesAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<Tombstone>>([]));
         _sut = new IssueService(_storage, _idGenerator, _gitConfigService, _changeService);
     }
 
@@ -788,5 +790,86 @@ public class IssueServiceTests
 
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task CreateAsync_GeneratesSaltedId_OnTombstoneCollision()
+    {
+        var tombstones = new List<Tombstone>
+        {
+            new()
+            {
+                IssueId = "abc123",
+                OriginalTitle = "Old issue",
+                CleanedAt = DateTimeOffset.UtcNow,
+                CleanedBy = "user"
+            }
+        };
+        _storage.LoadTombstonesAsync(Arg.Any<CancellationToken>())
+            .Returns(tombstones);
+
+        _idGenerator.Generate("Test Issue").Returns("abc123");
+        _idGenerator.Generate("Test Issue", 1).Returns("def456");
+
+        var result = await _sut.CreateAsync("Test Issue", IssueType.Task);
+
+        result.Id.Should().Be("def456");
+        _idGenerator.Received(1).Generate("Test Issue", 1);
+    }
+
+    [Test]
+    public async Task CreateAsync_ThrowsAfterMaxSaltRetries()
+    {
+        // All salted IDs also collide with tombstones
+        var tombstoneIds = new List<string> { "id0000" };
+        for (var i = 1; i <= 10; i++)
+        {
+            tombstoneIds.Add($"id{i:D4}");
+        }
+
+        var tombstones = tombstoneIds.Select(id => new Tombstone
+        {
+            IssueId = id,
+            OriginalTitle = "Old issue",
+            CleanedAt = DateTimeOffset.UtcNow,
+            CleanedBy = "user"
+        }).ToList();
+
+        _storage.LoadTombstonesAsync(Arg.Any<CancellationToken>())
+            .Returns(tombstones);
+
+        _idGenerator.Generate("Test Issue").Returns("id0000");
+        for (var i = 1; i <= 10; i++)
+        {
+            _idGenerator.Generate("Test Issue", i).Returns($"id{i:D4}");
+        }
+
+        var act = async () => await _sut.CreateAsync("Test Issue", IssueType.Task);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Cannot generate a unique ID*");
+    }
+
+    [Test]
+    public async Task CreateAsync_UsesUnsaltedId_WhenNoTombstoneCollision()
+    {
+        _storage.LoadTombstonesAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Tombstone>
+            {
+                new()
+                {
+                    IssueId = "other1",
+                    OriginalTitle = "Other issue",
+                    CleanedAt = DateTimeOffset.UtcNow,
+                    CleanedBy = "user"
+                }
+            });
+
+        _idGenerator.Generate("Test Issue").Returns("abc123");
+
+        var result = await _sut.CreateAsync("Test Issue", IssueType.Task);
+
+        result.Id.Should().Be("abc123");
+        _idGenerator.DidNotReceive().Generate("Test Issue", Arg.Any<int>());
     }
 }

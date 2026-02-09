@@ -9,8 +9,11 @@ public interface IJsonlSerializer
     Issue? DeserializeIssue(string line);
     string SerializeChange(ChangeRecord change);
     ChangeRecord? DeserializeChange(string line);
+    string SerializeTombstone(Tombstone tombstone);
+    Tombstone? DeserializeTombstone(string line);
     IReadOnlyList<Issue> DeserializeIssues(string content);
     IReadOnlyList<ChangeRecord> DeserializeChanges(string content);
+    IReadOnlyList<Tombstone> DeserializeTombstones(string content);
 }
 
 public sealed class JsonlSerializer : IJsonlSerializer
@@ -59,6 +62,28 @@ public sealed class JsonlSerializer : IJsonlSerializer
         }
     }
 
+    public string SerializeTombstone(Tombstone tombstone)
+    {
+        return JsonSerializer.Serialize(tombstone, FleeceJsonContext.Default.Tombstone);
+    }
+
+    public Tombstone? DeserializeTombstone(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize(line, FleeceJsonContext.Default.Tombstone);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     public IReadOnlyList<Issue> DeserializeIssues(string content)
     {
         if (string.IsNullOrWhiteSpace(content))
@@ -97,5 +122,25 @@ public sealed class JsonlSerializer : IJsonlSerializer
         }
 
         return changes;
+    }
+
+    public IReadOnlyList<Tombstone> DeserializeTombstones(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return [];
+        }
+
+        var tombstones = new List<Tombstone>();
+        foreach (var line in content.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var tombstone = DeserializeTombstone(line.Trim());
+            if (tombstone is not null)
+            {
+                tombstones.Add(tombstone);
+            }
+        }
+
+        return tombstones;
     }
 }
