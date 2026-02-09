@@ -23,6 +23,52 @@ public class ValidationService : IValidationService
         return new DependencyValidationResult(cycles.Count == 0, cycles);
     }
 
+    /// <inheritdoc />
+    public async Task<bool> WouldCreateCycleAsync(string parentId, string childId, CancellationToken ct = default)
+    {
+        // Self-reference is always a cycle
+        if (string.Equals(parentId, childId, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // BFS from parentId following existing parent edges.
+        // If we can reach childId, then adding childId -> parentId would create a cycle.
+        var issues = await _issueService.GetAllAsync(ct);
+        var parentMap = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var issue in issues)
+        {
+            parentMap[issue.Id] = (issue.ParentIssues ?? []).Select(p => p.ParentIssue).ToList();
+        }
+
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var queue = new Queue<string>();
+        queue.Enqueue(parentId);
+        visited.Add(parentId);
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (parentMap.TryGetValue(current, out var parents))
+            {
+                foreach (var parent in parents)
+                {
+                    if (string.Equals(parent, childId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+
+                    if (visited.Add(parent))
+                    {
+                        queue.Enqueue(parent);
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Detects cycles in the ParentIssues dependency graph using DFS.
     /// </summary>

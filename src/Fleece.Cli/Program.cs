@@ -107,6 +107,13 @@ app.Configure(config =>
         .WithExample("commit", "-m", "Add new issues")
         .WithExample("commit", "--push");
 
+    config.AddCommand<DependencyCommand>("dependency")
+        .WithDescription("Add or remove parent-child dependency between issues")
+        .WithExample("dependency", "--parent", "abc123", "--child", "def456")
+        .WithExample("dependency", "--parent", "abc123", "--child", "def456", "--remove")
+        .WithExample("dependency", "--parent", "abc123", "--child", "def456", "--first")
+        .WithExample("dependency", "--parent", "abc123", "--child", "def456", "--after", "ghi789");
+
     config.AddCommand<NextCommand>("next")
         .WithDescription("Find issues that can be worked on next based on dependencies and execution mode")
         .WithExample("next")
