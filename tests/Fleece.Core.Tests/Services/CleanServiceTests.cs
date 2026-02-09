@@ -119,7 +119,6 @@ public class CleanServiceTests
         result.CleanedTombstones.Should().HaveCount(1);
         var tombstone = result.CleanedTombstones[0];
         tombstone.IssueId.Should().Be("del001");
-        tombstone.OriginalTitle.Should().Be("My deleted issue");
         tombstone.CleanedBy.Should().Be("Test User");
         tombstone.CleanedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
     }
@@ -340,7 +339,6 @@ public class CleanServiceTests
         var existingTombstone = new Tombstone
         {
             IssueId = "del001",
-            OriginalTitle = "Previous deleted issue",
             CleanedAt = DateTimeOffset.UtcNow.AddDays(-1),
             CleanedBy = "Old User"
         };

@@ -82,7 +82,6 @@ public class CleanIntegrationTests
         // Assert: result shows the deleted issue
         result.CleanedTombstones.Should().HaveCount(1);
         result.CleanedTombstones[0].IssueId.Should().Be(issue.Id);
-        result.CleanedTombstones[0].OriginalTitle.Should().Be("Issue to clean");
 
         // Assert: disk still has the original issue (not cleaned)
         var issuesOnDisk = await _storageService.LoadIssuesAsync();
@@ -134,7 +133,6 @@ public class CleanIntegrationTests
         // Assert: result reports the cleaned issue
         result.CleanedTombstones.Should().HaveCount(1);
         result.CleanedTombstones[0].IssueId.Should().Be(issue.Id);
-        result.CleanedTombstones[0].OriginalTitle.Should().Be("Doomed issue");
         result.CleanedTombstones[0].CleanedBy.Should().Be("test-user");
         result.CleanedTombstones[0].CleanedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
 
@@ -146,7 +144,6 @@ public class CleanIntegrationTests
         var tombstones = await _storageService.LoadTombstonesAsync();
         tombstones.Should().HaveCount(1);
         tombstones[0].IssueId.Should().Be(issue.Id);
-        tombstones[0].OriginalTitle.Should().Be("Doomed issue");
 
         // Assert: tombstone file physically exists
         var tombstoneFiles = await _storageService.GetAllTombstoneFilesAsync();
@@ -300,7 +297,6 @@ public class CleanIntegrationTests
         var tombstone1 = new Tombstone
         {
             IssueId = "tomb01",
-            OriginalTitle = "First tombstoned issue",
             CleanedAt = DateTimeOffset.UtcNow.AddDays(-2),
             CleanedBy = "user-a"
         };
@@ -308,7 +304,6 @@ public class CleanIntegrationTests
         var tombstone2 = new Tombstone
         {
             IssueId = "tomb02",
-            OriginalTitle = "Second tombstoned issue",
             CleanedAt = DateTimeOffset.UtcNow.AddDays(-1),
             CleanedBy = "user-b"
         };

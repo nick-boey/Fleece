@@ -55,14 +55,12 @@ public sealed class CleanCommand(ICleanService cleanService, IStorageService sto
             var table = new Table();
             table.Border(TableBorder.Rounded);
             table.AddColumn(new TableColumn("Issue ID").Centered());
-            table.AddColumn(new TableColumn("Title"));
             table.AddColumn(new TableColumn("Cleaned By"));
 
             foreach (var tombstone in result.CleanedTombstones)
             {
                 table.AddRow(
                     $"[bold]{tombstone.IssueId}[/]",
-                    Markup.Escape(tombstone.OriginalTitle),
                     Markup.Escape(tombstone.CleanedBy));
             }
 

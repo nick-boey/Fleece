@@ -58,7 +58,6 @@ public sealed class CleanService(
         var newTombstones = toClean.Select(i => new Tombstone
         {
             IssueId = i.Id,
-            OriginalTitle = i.Title,
             CleanedAt = now,
             CleanedBy = cleanedBy
         }).ToList();

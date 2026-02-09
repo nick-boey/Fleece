@@ -800,7 +800,6 @@ public class IssueServiceTests
             new()
             {
                 IssueId = "abc123",
-                OriginalTitle = "Old issue",
                 CleanedAt = DateTimeOffset.UtcNow,
                 CleanedBy = "user"
             }
@@ -830,7 +829,6 @@ public class IssueServiceTests
         var tombstones = tombstoneIds.Select(id => new Tombstone
         {
             IssueId = id,
-            OriginalTitle = "Old issue",
             CleanedAt = DateTimeOffset.UtcNow,
             CleanedBy = "user"
         }).ToList();
@@ -859,7 +857,6 @@ public class IssueServiceTests
                 new()
                 {
                     IssueId = "other1",
-                    OriginalTitle = "Other issue",
                     CleanedAt = DateTimeOffset.UtcNow,
                     CleanedBy = "user"
                 }
