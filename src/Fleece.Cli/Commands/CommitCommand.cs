@@ -55,6 +55,10 @@ public sealed class CommitCommand(IGitService gitService) : Command<CommitSettin
         }
 
         var message = settings.Message ?? DefaultCommitMessage;
+        if (!settings.Ci)
+        {
+            message += " [skip ci]";
+        }
 
         // Commit (and optionally push)
         var result = settings.Push
@@ -81,7 +85,7 @@ public sealed class CommitCommand(IGitService gitService) : Command<CommitSettin
         }
         else
         {
-            AnsiConsole.MarkupLine($"[green]Committed:[/] {message}");
+            AnsiConsole.MarkupLine($"[green]Committed:[/] {Markup.Escape(message)}");
             if (settings.Push)
             {
                 AnsiConsole.MarkupLine("[green]Pushed to remote[/]");
