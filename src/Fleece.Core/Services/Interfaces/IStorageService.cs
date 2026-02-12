@@ -7,9 +7,6 @@ public interface IStorageService
     Task<IReadOnlyList<Issue>> LoadIssuesAsync(CancellationToken cancellationToken = default);
     Task SaveIssuesAsync(IReadOnlyList<Issue> issues, CancellationToken cancellationToken = default);
     Task AppendIssueAsync(Issue issue, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<ChangeRecord>> LoadChangesAsync(CancellationToken cancellationToken = default);
-    Task SaveChangesAsync(IReadOnlyList<ChangeRecord> changes, CancellationToken cancellationToken = default);
-    Task AppendChangeAsync(ChangeRecord change, CancellationToken cancellationToken = default);
     Task EnsureDirectoryExistsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -33,7 +30,7 @@ public interface IStorageService
     Task<string> SaveIssuesWithHashAsync(IReadOnlyList<Issue> issues, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Checks if there are multiple unmerged issue or changes files.
+    /// Checks if there are multiple unmerged issue or tombstone files.
     /// </summary>
     /// <returns>A tuple indicating if multiple files exist and an error message to display.</returns>
     Task<(bool HasMultiple, string Message)> HasMultipleUnmergedFilesAsync(CancellationToken cancellationToken = default);

@@ -7,8 +7,7 @@ namespace Fleece.Core.Services;
 public sealed partial class IssueService(
     IStorageService storage,
     IIdGenerator idGenerator,
-    IGitConfigService gitConfigService,
-    IChangeService changeService) : IIssueService
+    IGitConfigService gitConfigService) : IIssueService
 {
     // Regex pattern for invalid Git branch name characters
     // Valid: alphanumeric, hyphen, underscore, forward slash (not at start/end), dot (not at start, not consecutive)
@@ -126,71 +125,6 @@ public sealed partial class IssueService(
 
         await storage.AppendIssueAsync(issue, cancellationToken);
 
-        // Record creation change
-        var propertyChanges = new List<PropertyChange>
-        {
-            new() { PropertyName = "Title", OldValue = null, NewValue = title, Timestamp = now },
-            new() { PropertyName = "Status", OldValue = null, NewValue = status.ToString(), Timestamp = now },
-            new() { PropertyName = "Type", OldValue = null, NewValue = type.ToString(), Timestamp = now }
-        };
-
-        if (description is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "Description", OldValue = null, NewValue = description, Timestamp = now });
-        }
-
-        if (priority is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "Priority", OldValue = null, NewValue = priority.ToString(), Timestamp = now });
-        }
-
-        if (linkedPr is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "LinkedPR", OldValue = null, NewValue = linkedPr.ToString(), Timestamp = now });
-        }
-
-        if (linkedIssues is not null && linkedIssues.Count > 0)
-        {
-            propertyChanges.Add(new() { PropertyName = "LinkedIssues", OldValue = null, NewValue = string.Join(",", linkedIssues), Timestamp = now });
-        }
-
-        if (parentIssues is not null && parentIssues.Count > 0)
-        {
-            propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = null, NewValue = string.Join(",", parentIssues.Select(p => p.ParentIssue)), Timestamp = now });
-        }
-
-        if (assignedTo is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "AssignedTo", OldValue = null, NewValue = assignedTo, Timestamp = now });
-        }
-
-        if (tags is not null && tags.Count > 0)
-        {
-            propertyChanges.Add(new() { PropertyName = "Tags", OldValue = null, NewValue = string.Join(",", tags), Timestamp = now });
-        }
-
-        if (workingBranchId is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "WorkingBranchId", OldValue = null, NewValue = workingBranchId, Timestamp = now });
-        }
-
-        if (executionMode is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "ExecutionMode", OldValue = null, NewValue = executionMode.ToString(), Timestamp = now });
-        }
-
-        var changeRecord = new ChangeRecord
-        {
-            ChangeId = Guid.NewGuid(),
-            IssueId = id,
-            Type = ChangeType.Created,
-            ChangedBy = createdBy ?? "unknown",
-            ChangedAt = now,
-            PropertyChanges = propertyChanges
-        };
-
-        await changeService.AddAsync(changeRecord, cancellationToken);
-
         return issue;
     }
 
@@ -261,8 +195,6 @@ public sealed partial class IssueService(
         var modifiedBy = gitConfigService.GetUserName();
         var newId = existing.Id;
 
-        var propertyChanges = new List<PropertyChange>();
-
         var updated = new Issue
         {
             Id = newId,
@@ -308,85 +240,8 @@ public sealed partial class IssueService(
             CreatedAt = existing.CreatedAt
         };
 
-        // Record property changes
-        if (title is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "Title", OldValue = existing.Title, NewValue = title, Timestamp = now });
-        }
-
-        if (description is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "Description", OldValue = existing.Description, NewValue = description, Timestamp = now });
-        }
-
-        if (status is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "Status", OldValue = existing.Status.ToString(), NewValue = status.ToString(), Timestamp = now });
-        }
-
-        if (type is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "Type", OldValue = existing.Type.ToString(), NewValue = type.ToString(), Timestamp = now });
-        }
-
-        if (priority is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "Priority", OldValue = existing.Priority?.ToString(), NewValue = priority.ToString(), Timestamp = now });
-        }
-
-        if (linkedPr is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "LinkedPR", OldValue = existing.LinkedPR?.ToString(), NewValue = linkedPr.ToString(), Timestamp = now });
-        }
-
-        if (linkedIssues is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "LinkedIssues", OldValue = string.Join(",", existing.LinkedIssues ?? []), NewValue = string.Join(",", linkedIssues), Timestamp = now });
-        }
-
-        if (parentIssues is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "ParentIssues", OldValue = string.Join(",", existing.ParentIssues?.Select(p => p.ParentIssue) ?? []), NewValue = string.Join(",", parentIssues.Select(p => p.ParentIssue)), Timestamp = now });
-        }
-
-        if (assignedTo is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "AssignedTo", OldValue = existing.AssignedTo, NewValue = assignedTo, Timestamp = now });
-        }
-
-        if (tags is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "Tags", OldValue = string.Join(",", existing.Tags ?? []), NewValue = string.Join(",", tags), Timestamp = now });
-        }
-
-        if (workingBranchId is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "WorkingBranchId", OldValue = existing.WorkingBranchId, NewValue = workingBranchId, Timestamp = now });
-        }
-
-        if (executionMode is not null)
-        {
-            propertyChanges.Add(new() { PropertyName = "ExecutionMode", OldValue = existing.ExecutionMode.ToString(), NewValue = executionMode.ToString(), Timestamp = now });
-        }
-
         issues[existingIndex] = updated;
         await storage.SaveIssuesAsync(issues, cancellationToken);
-
-        // Record update change if there were any property changes
-        if (propertyChanges.Count > 0)
-        {
-            var changeRecord = new ChangeRecord
-            {
-                ChangeId = Guid.NewGuid(),
-                IssueId = newId,
-                Type = ChangeType.Updated,
-                ChangedBy = modifiedBy ?? "unknown",
-                ChangedAt = now,
-                PropertyChanges = propertyChanges
-            };
-
-            await changeService.AddAsync(changeRecord, cancellationToken);
-        }
 
         return updated;
     }
@@ -414,28 +269,6 @@ public sealed partial class IssueService(
 
         issues[existingIndex] = deleted;
         await storage.SaveIssuesAsync(issues, cancellationToken);
-
-        // Record deletion change
-        var changeRecord = new ChangeRecord
-        {
-            ChangeId = Guid.NewGuid(),
-            IssueId = id,
-            Type = ChangeType.Deleted,
-            ChangedBy = modifiedBy ?? "unknown",
-            ChangedAt = now,
-            PropertyChanges =
-            [
-                new PropertyChange
-                {
-                    PropertyName = "Status",
-                    OldValue = existing.Status.ToString(),
-                    NewValue = IssueStatus.Deleted.ToString(),
-                    Timestamp = now
-                }
-            ]
-        };
-
-        await changeService.AddAsync(changeRecord, cancellationToken);
 
         return true;
     }
@@ -513,28 +346,6 @@ public sealed partial class IssueService(
 
         issues[existingIndex] = updated;
         await storage.SaveIssuesAsync(issues, cancellationToken);
-
-        // Record change
-        var changeRecord = new ChangeRecord
-        {
-            ChangeId = Guid.NewGuid(),
-            IssueId = id,
-            Type = ChangeType.Updated,
-            ChangedBy = modifiedBy ?? "unknown",
-            ChangedAt = now,
-            PropertyChanges =
-            [
-                new PropertyChange
-                {
-                    PropertyName = "Questions",
-                    OldValue = $"{(existing.Questions?.Count ?? 0)} question(s)",
-                    NewValue = $"{questions.Count} question(s)",
-                    Timestamp = now
-                }
-            ]
-        };
-
-        await changeService.AddAsync(changeRecord, cancellationToken);
 
         return updated;
     }

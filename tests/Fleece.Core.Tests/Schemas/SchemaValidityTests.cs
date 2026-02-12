@@ -10,20 +10,17 @@ namespace Fleece.Core.Tests.Schemas;
 public class SchemaValidityTests
 {
     private JsonDocument _issueSchema = null!;
-    private JsonDocument _changeRecordSchema = null!;
 
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
         _issueSchema = LoadEmbeddedSchema("issue.schema.json");
-        _changeRecordSchema = LoadEmbeddedSchema("change-record.schema.json");
     }
 
     [OneTimeTearDown]
     public void OneTimeTearDown()
     {
         _issueSchema.Dispose();
-        _changeRecordSchema.Dispose();
     }
 
     [Test]
@@ -39,22 +36,6 @@ public class SchemaValidityTests
             .Should().BeGreaterThan(0);
 
         _issueSchema.RootElement.TryGetProperty("properties", out _)
-            .Should().BeTrue();
-    }
-
-    [Test]
-    public void ChangeRecordSchema_IsValidJsonSchema()
-    {
-        _changeRecordSchema.RootElement.GetProperty("$schema").GetString()
-            .Should().Be("http://json-schema.org/draft-07/schema#");
-
-        _changeRecordSchema.RootElement.GetProperty("type").GetString()
-            .Should().Be("object");
-
-        _changeRecordSchema.RootElement.GetProperty("required").GetArrayLength()
-            .Should().BeGreaterThan(0);
-
-        _changeRecordSchema.RootElement.TryGetProperty("properties", out _)
             .Should().BeTrue();
     }
 
@@ -90,37 +71,6 @@ public class SchemaValidityTests
     }
 
     [Test]
-    public void ChangeRecordSchema_ContainsAllModelProperties()
-    {
-        var schemaProperties = _changeRecordSchema.RootElement.GetProperty("properties");
-
-        var changeRecordProperties = typeof(ChangeRecord).GetProperties()
-            .Select(ToCamelCase)
-            .ToHashSet();
-
-        foreach (var prop in changeRecordProperties)
-        {
-            schemaProperties.TryGetProperty(prop, out _)
-                .Should().BeTrue($"Schema should contain property '{prop}'");
-        }
-    }
-
-    [Test]
-    public void ChangeRecordSchema_DoesNotHaveExtraProperties()
-    {
-        var schemaProperties = _changeRecordSchema.RootElement.GetProperty("properties")
-            .EnumerateObject()
-            .Select(p => p.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var changeRecordProperties = typeof(ChangeRecord).GetProperties()
-            .Select(ToCamelCase)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        schemaProperties.Should().BeEquivalentTo(changeRecordProperties);
-    }
-
-    [Test]
     public void IssueSchema_IssueStatusEnum_MatchesCSharpEnum()
     {
         var schemaStatuses = _issueSchema.RootElement
@@ -153,22 +103,6 @@ public class SchemaValidityTests
     }
 
     [Test]
-    public void ChangeRecordSchema_ChangeTypeEnum_MatchesCSharpEnum()
-    {
-        var schemaChangeTypes = _changeRecordSchema.RootElement
-            .GetProperty("$defs")
-            .GetProperty("changeType")
-            .GetProperty("enum")
-            .EnumerateArray()
-            .Select(e => e.GetString()!)
-            .ToHashSet();
-
-        var csharpChangeTypes = Enum.GetNames<ChangeType>().ToHashSet();
-
-        schemaChangeTypes.Should().BeEquivalentTo(csharpChangeTypes);
-    }
-
-    [Test]
     public void IssueSchema_QuestionDefinition_MatchesCSharpModel()
     {
         var questionDef = _issueSchema.RootElement
@@ -189,26 +123,6 @@ public class SchemaValidityTests
     }
 
     [Test]
-    public void ChangeRecordSchema_PropertyChangeDefinition_MatchesCSharpModel()
-    {
-        var propertyChangeDef = _changeRecordSchema.RootElement
-            .GetProperty("$defs")
-            .GetProperty("propertyChange")
-            .GetProperty("properties");
-
-        var propertyChangeProperties = typeof(PropertyChange).GetProperties()
-            .Select(ToCamelCase)
-            .ToHashSet();
-
-        var schemaPropertyChangeProps = propertyChangeDef
-            .EnumerateObject()
-            .Select(p => p.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        schemaPropertyChangeProps.Should().BeEquivalentTo(propertyChangeProperties);
-    }
-
-    [Test]
     public void IssueSchema_RequiredFields_AreCorrect()
     {
         var requiredFields = _issueSchema.RootElement
@@ -226,35 +140,9 @@ public class SchemaValidityTests
     }
 
     [Test]
-    public void ChangeRecordSchema_RequiredFields_AreCorrect()
-    {
-        var requiredFields = _changeRecordSchema.RootElement
-            .GetProperty("required")
-            .EnumerateArray()
-            .Select(e => e.GetString()!)
-            .ToHashSet();
-
-        // These are the required properties from the C# model
-        requiredFields.Should().Contain("changeId");
-        requiredFields.Should().Contain("issueId");
-        requiredFields.Should().Contain("type");
-        requiredFields.Should().Contain("changedBy");
-        requiredFields.Should().Contain("changedAt");
-    }
-
-    [Test]
     public void IssueSchema_HasAdditionalPropertiesFalse()
     {
         _issueSchema.RootElement
-            .GetProperty("additionalProperties")
-            .GetBoolean()
-            .Should().BeFalse();
-    }
-
-    [Test]
-    public void ChangeRecordSchema_HasAdditionalPropertiesFalse()
-    {
-        _changeRecordSchema.RootElement
             .GetProperty("additionalProperties")
             .GetBoolean()
             .Should().BeFalse();

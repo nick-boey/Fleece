@@ -17,7 +17,6 @@ public sealed class CleanService(
     {
         var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
         var existingTombstones = await storage.LoadTombstonesAsync(cancellationToken);
-        var changes = (await storage.LoadChangesAsync(cancellationToken)).ToList();
 
         // Build target status set
         var targetStatuses = new HashSet<IssueStatus> { IssueStatus.Deleted };
@@ -45,8 +44,7 @@ public sealed class CleanService(
             return new CleanResult
             {
                 CleanedTombstones = [],
-                StrippedReferences = [],
-                RemovedChangeRecords = 0
+                StrippedReferences = []
             };
         }
 
@@ -137,19 +135,10 @@ public sealed class CleanService(
             }
         }
 
-        // Remove change records for cleaned issue IDs
-        var removedChangeRecords = changes.Count(c => cleanedIds.Contains(c.IssueId));
-        var remainingChanges = changes
-            .Where(c => !cleanedIds.Contains(c.IssueId))
-            .ToList();
-
         if (!dryRun)
         {
             // Save remaining issues
             await storage.SaveIssuesAsync(toKeep, cancellationToken);
-
-            // Save remaining changes
-            await storage.SaveChangesAsync(remainingChanges, cancellationToken);
 
             // Merge new tombstones with existing
             var allTombstones = existingTombstones.ToList();
@@ -167,8 +156,7 @@ public sealed class CleanService(
         return new CleanResult
         {
             CleanedTombstones = newTombstones,
-            StrippedReferences = strippedReferences,
-            RemovedChangeRecords = removedChangeRecords
+            StrippedReferences = strippedReferences
         };
     }
 }

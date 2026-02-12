@@ -7,12 +7,9 @@ public interface IJsonlSerializer
 {
     string SerializeIssue(Issue issue);
     Issue? DeserializeIssue(string line);
-    string SerializeChange(ChangeRecord change);
-    ChangeRecord? DeserializeChange(string line);
     string SerializeTombstone(Tombstone tombstone);
     Tombstone? DeserializeTombstone(string line);
     IReadOnlyList<Issue> DeserializeIssues(string content);
-    IReadOnlyList<ChangeRecord> DeserializeChanges(string content);
     IReadOnlyList<Tombstone> DeserializeTombstones(string content);
 }
 
@@ -33,28 +30,6 @@ public sealed class JsonlSerializer : IJsonlSerializer
         try
         {
             return JsonSerializer.Deserialize(line, FleeceJsonContext.Default.Issue);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    public string SerializeChange(ChangeRecord change)
-    {
-        return JsonSerializer.Serialize(change, FleeceJsonContext.Default.ChangeRecord);
-    }
-
-    public ChangeRecord? DeserializeChange(string line)
-    {
-        if (string.IsNullOrWhiteSpace(line))
-        {
-            return null;
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize(line, FleeceJsonContext.Default.ChangeRecord);
         }
         catch (JsonException)
         {
@@ -102,26 +77,6 @@ public sealed class JsonlSerializer : IJsonlSerializer
         }
 
         return issues;
-    }
-
-    public IReadOnlyList<ChangeRecord> DeserializeChanges(string content)
-    {
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            return [];
-        }
-
-        var changes = new List<ChangeRecord>();
-        foreach (var line in content.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var change = DeserializeChange(line.Trim());
-            if (change is not null)
-            {
-                changes.Add(change);
-            }
-        }
-
-        return changes;
     }
 
     public IReadOnlyList<Tombstone> DeserializeTombstones(string content)

@@ -29,7 +29,6 @@ public class CleanIntegrationTests
     // Real components
     private JsonlStorageService _storageService = null!;
     private IssueService _issueService = null!;
-    private ChangeService _changeService = null!;
     private CleanService _cleanService = null!;
     private MergeService _mergeService = null!;
     private Sha256IdGenerator _idGenerator = null!;
@@ -52,8 +51,7 @@ public class CleanIntegrationTests
 
         _idGenerator = new Sha256IdGenerator();
         _storageService = new JsonlStorageService(_tempDir, serializer, schemaValidator);
-        _changeService = new ChangeService(_storageService);
-        _issueService = new IssueService(_storageService, _idGenerator, _gitConfigService, _changeService);
+        _issueService = new IssueService(_storageService, _idGenerator, _gitConfigService);
         _cleanService = new CleanService(_storageService, _gitConfigService);
         _mergeService = new MergeService(_storageService, _gitConfigService, serializer);
     }
@@ -472,58 +470,6 @@ public class CleanIntegrationTests
 
     #endregion
 
-    #region Clean removes orphaned change records
-
-    [Test]
-    public async Task Clean_RemovesChangeRecordsForDeletedIssue()
-    {
-        // Arrange: create, update, and delete an issue (generates change records)
-        var issue = await _issueService.CreateAsync("Issue with history", IssueType.Task);
-        await _issueService.UpdateAsync(issue.Id, title: "Updated title");
-        await _issueService.DeleteAsync(issue.Id);
-
-        // Verify we have change records for this issue
-        var changesBefore = await _storageService.LoadChangesAsync();
-        var issueChanges = changesBefore.Count(c => c.IssueId == issue.Id);
-        issueChanges.Should().BeGreaterThanOrEqualTo(3, "should have create + update + delete records");
-
-        // Act
-        var result = await _cleanService.CleanAsync();
-
-        // Assert: result reports removed change records
-        result.RemovedChangeRecords.Should().BeGreaterThanOrEqualTo(3);
-
-        // Assert: on disk, no change records remain for the deleted issue
-        var changesAfter = await _storageService.LoadChangesAsync();
-        changesAfter.Where(c => c.IssueId == issue.Id).Should().BeEmpty();
-    }
-
-    [Test]
-    public async Task Clean_PreservesChangeRecordsForSurvivingIssues()
-    {
-        // Arrange
-        var keepIssue = await _issueService.CreateAsync("Keep me", IssueType.Task);
-        var deleteIssue = await _issueService.CreateAsync("Delete me", IssueType.Bug);
-        await _issueService.UpdateAsync(keepIssue.Id, title: "Keep me updated");
-        await _issueService.DeleteAsync(deleteIssue.Id);
-
-        var changesBefore = await _storageService.LoadChangesAsync();
-        var keepChanges = changesBefore.Count(c => c.IssueId == keepIssue.Id);
-        keepChanges.Should().BeGreaterThanOrEqualTo(2, "should have create + update records");
-
-        // Act
-        await _cleanService.CleanAsync();
-
-        // Assert: change records for kept issue are preserved
-        var changesAfter = await _storageService.LoadChangesAsync();
-        changesAfter.Where(c => c.IssueId == keepIssue.Id).Should().HaveCountGreaterThanOrEqualTo(2);
-
-        // Assert: change records for deleted issue are gone
-        changesAfter.Where(c => c.IssueId == deleteIssue.Id).Should().BeEmpty();
-    }
-
-    #endregion
-
     #region Full end-to-end workflow
 
     [Test]
@@ -554,7 +500,6 @@ public class CleanIntegrationTests
         var cleanResult = await _cleanService.CleanAsync();
         cleanResult.CleanedTombstones.Should().HaveCount(1);
         cleanResult.StrippedReferences.Should().HaveCount(1);
-        cleanResult.RemovedChangeRecords.Should().BeGreaterThan(0);
 
         // Issue1 is removed, issue3 no longer references it
         var issuesAfterClean = await _storageService.LoadIssuesAsync();
@@ -602,7 +547,6 @@ public class CleanIntegrationTests
         // Assert
         result.CleanedTombstones.Should().BeEmpty();
         result.StrippedReferences.Should().BeEmpty();
-        result.RemovedChangeRecords.Should().Be(0);
 
         var issuesAfter = await _storageService.LoadIssuesAsync();
         issuesAfter.Should().HaveCount(issuesBefore.Count);

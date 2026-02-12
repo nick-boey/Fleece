@@ -1,4 +1,3 @@
-using Fleece.Cli.Output;
 using Fleece.Cli.Settings;
 using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
@@ -15,30 +14,20 @@ public sealed class MergeCommand(IMergeService mergeService) : AsyncCommand<Merg
             AnsiConsole.MarkupLine("[yellow]Dry run mode - no changes will be made[/]");
         }
 
-        var changes = await mergeService.FindAndResolveDuplicatesAsync(settings.DryRun);
+        var mergedCount = await mergeService.FindAndResolveDuplicatesAsync(settings.DryRun);
 
-        if (changes.Count == 0)
+        if (mergedCount == 0)
         {
             AnsiConsole.MarkupLine("[green]No duplicates found. Issues are already consolidated.[/]");
             return 0;
         }
 
-        if (settings.Json)
-        {
-            JsonFormatter.RenderChanges(changes);
-        }
-        else
-        {
-            AnsiConsole.MarkupLine($"[yellow]Merged {changes.Count} issue(s) with property-level resolution[/]");
-            AnsiConsole.WriteLine();
-            TableFormatter.RenderChanges(changes);
+        AnsiConsole.MarkupLine($"[yellow]Merged {mergedCount} issue(s) with property-level resolution[/]");
 
-            if (!settings.DryRun)
-            {
-                AnsiConsole.WriteLine();
-                AnsiConsole.MarkupLine("[green]Merge complete! Issues consolidated into single file.[/]");
-                AnsiConsole.MarkupLine("[dim]Change details logged to changes.jsonl[/]");
-            }
+        if (!settings.DryRun)
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[green]Merge complete! Issues consolidated into single file.[/]");
         }
 
         return 0;

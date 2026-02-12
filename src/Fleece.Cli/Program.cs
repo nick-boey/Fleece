@@ -71,10 +71,7 @@ app.Configure(config =>
         .WithExample("search", "login");
 
     config.AddCommand<DiffCommand>("diff")
-        .WithDescription("Show change history or compare two JSONL files")
-        .WithExample("diff")
-        .WithExample("diff", "abc123")
-        .WithExample("diff", "--user", "john")
+        .WithDescription("Compare two JSONL issue files")
         .WithExample("diff", "file1.jsonl", "file2.jsonl");
 
     config.AddCommand<MergeCommand>("merge")

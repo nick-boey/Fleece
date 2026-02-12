@@ -46,7 +46,7 @@ public class MergeServiceTests
 
         var result = await _sut.FindAndResolveDuplicatesAsync();
 
-        result.Should().BeEmpty();
+        result.Should().Be(0);
     }
 
     [Test]
@@ -64,9 +64,7 @@ public class MergeServiceTests
 
         var result = await _sut.FindAndResolveDuplicatesAsync();
 
-        result.Should().HaveCount(1);
-        result[0].IssueId.Should().Be("abc123");
-        result[0].Type.Should().Be(ChangeType.Merged);
+        result.Should().Be(1);
     }
 
     [Test]
@@ -92,27 +90,6 @@ public class MergeServiceTests
     }
 
     [Test]
-    public async Task FindAndResolveDuplicatesAsync_AddsChangeRecord()
-    {
-        var older = DateTimeOffset.UtcNow.AddHours(-1);
-        var newer = DateTimeOffset.UtcNow;
-
-        var issues = new List<Issue>
-        {
-            new IssueBuilder().WithId("abc123").WithTitle("Old").WithLastUpdate(older).Build(),
-            new IssueBuilder().WithId("abc123").WithTitle("New").WithLastUpdate(newer).Build()
-        };
-        SetupStorageMock(issues);
-
-        await _sut.FindAndResolveDuplicatesAsync();
-
-        await _storage.Received(1).SaveChangesAsync(
-            Arg.Is<IReadOnlyList<ChangeRecord>>(changes =>
-                changes.Any(c => c.IssueId == "abc123" && c.Type == ChangeType.Merged)),
-            Arg.Any<CancellationToken>());
-    }
-
-    [Test]
     public async Task FindAndResolveDuplicatesAsync_HandlesMultipleDuplicates()
     {
         var time1 = DateTimeOffset.UtcNow.AddHours(-2);
@@ -129,9 +106,8 @@ public class MergeServiceTests
 
         var result = await _sut.FindAndResolveDuplicatesAsync();
 
-        // Property-level merge combines all into one merged result, so only 1 change record
-        result.Should().HaveCount(1);
-        await _storage.Received(1).SaveChangesAsync(Arg.Any<IReadOnlyList<ChangeRecord>>(), Arg.Any<CancellationToken>());
+        // Property-level merge combines all into one merged result
+        result.Should().Be(1);
     }
 
     [Test]
@@ -147,40 +123,5 @@ public class MergeServiceTests
 
         // Still saves once because we have files to consolidate
         await _storage.Received(1).SaveIssuesWithHashAsync(Arg.Any<IReadOnlyList<Issue>>(), Arg.Any<CancellationToken>());
-        // Changes should also be consolidated even when there are no issue duplicates
-        await _storage.Received(1).SaveChangesAsync(Arg.Any<IReadOnlyList<ChangeRecord>>(), Arg.Any<CancellationToken>());
-    }
-
-    [Test]
-    public async Task FindAndResolveDuplicatesAsync_AlwaysConsolidatesChanges()
-    {
-        // Arrange: Single issue with no duplicates, but changes exist
-        var issues = new List<Issue>
-        {
-            new IssueBuilder().WithId("a").WithTitle("A").Build()
-        };
-        SetupStorageMock(issues);
-
-        var existingChanges = new List<ChangeRecord>
-        {
-            new()
-            {
-                ChangeId = Guid.NewGuid(),
-                IssueId = "a",
-                Type = ChangeType.Created,
-                ChangedBy = "user",
-                ChangedAt = DateTimeOffset.UtcNow.AddHours(-1),
-                PropertyChanges = []
-            }
-        };
-        _storage.LoadChangesAsync(Arg.Any<CancellationToken>()).Returns(existingChanges);
-
-        // Act
-        await _sut.FindAndResolveDuplicatesAsync();
-
-        // Assert: Changes should be consolidated even without issue duplicates
-        await _storage.Received(1).SaveChangesAsync(
-            Arg.Is<IReadOnlyList<ChangeRecord>>(changes => changes.Count == 1),
-            Arg.Any<CancellationToken>());
     }
 }
