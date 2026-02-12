@@ -11,7 +11,7 @@ namespace Fleece.Core.Tests.Services;
 /// <summary>
 /// Integration tests for <see cref="FleeceInMemoryService"/> wired against real
 /// <see cref="IssueService"/>, <see cref="JsonlStorageService"/>,
-/// <see cref="IssueSerializationQueueService"/>, and <see cref="ChangeService"/>
+/// and <see cref="IssueSerializationQueueService"/>
 /// — with actual JSONL files on disk.
 ///
 /// Only <see cref="IIdGenerator"/> and <see cref="IGitConfigService"/> are mocked
@@ -26,7 +26,6 @@ public class FleeceInMemoryServiceIntegrationTests
     // Real components
     private JsonlStorageService _storageService = null!;
     private IssueService _issueService = null!;
-    private ChangeService _changeService = null!;
     private IssueSerializationQueueService _queueService = null!;
     private FleeceInMemoryService _sut = null!;
 
@@ -56,8 +55,7 @@ public class FleeceInMemoryServiceIntegrationTests
         var schemaValidator = new SchemaValidator();
 
         _storageService = new JsonlStorageService(_tempDir, serializer, schemaValidator);
-        _changeService = new ChangeService(_storageService);
-        _issueService = new IssueService(_storageService, _idGenerator, _gitConfigService, _changeService);
+        _issueService = new IssueService(_storageService, _idGenerator, _gitConfigService);
 
         _queueService = new IssueSerializationQueueService();
         _queueService.StartProcessing();
@@ -359,8 +357,7 @@ public class FleeceInMemoryServiceIntegrationTests
         var serializer = new JsonlSerializer();
         var schemaValidator = new SchemaValidator();
         var storage = new JsonlStorageService(emptyDir, serializer, schemaValidator);
-        var changeService = new ChangeService(storage);
-        var issueService = new IssueService(storage, _idGenerator, _gitConfigService, changeService);
+        var issueService = new IssueService(storage, _idGenerator, _gitConfigService);
 
         var queue = new IssueSerializationQueueService();
         queue.StartProcessing();
@@ -561,58 +558,6 @@ public class FleeceInMemoryServiceIntegrationTests
         await _sut.ListIssuesAsync();
 
         _sut.IsLoaded.Should().BeTrue();
-    }
-
-    #endregion
-
-    #region Category G: Change Record Verification
-
-    [Test]
-    public async Task Create_WritesCreatedChangeRecordToDisk()
-    {
-        var issue = await _sut.CreateIssueAsync("Change test", IssueType.Task, description: "A desc");
-
-        var changes = await _storageService.LoadChangesAsync();
-        changes.Should().ContainSingle();
-        changes[0].IssueId.Should().Be(issue.Id);
-        changes[0].Type.Should().Be(ChangeType.Created);
-        changes[0].ChangedBy.Should().Be("test-user");
-        changes[0].PropertyChanges.Should().Contain(pc => pc.PropertyName == "Title" && pc.NewValue == "Change test");
-        changes[0].PropertyChanges.Should().Contain(pc => pc.PropertyName == "Description" && pc.NewValue == "A desc");
-    }
-
-    [Test]
-    public async Task Update_WritesUpdatedChangeRecordWithPropertyChanges()
-    {
-        var issue = await _sut.CreateIssueAsync("Before", IssueType.Task);
-        await _sut.UpdateIssueAsync(issue.Id, title: "After", status: IssueStatus.Progress);
-
-        var changes = await _storageService.LoadChangesAsync();
-
-        // Should have at least 2 change records: create + update
-        changes.Should().HaveCountGreaterThanOrEqualTo(2);
-
-        var updateChange = changes.FirstOrDefault(c => c.Type == ChangeType.Updated);
-        updateChange.Should().NotBeNull();
-        updateChange!.IssueId.Should().Be(issue.Id);
-        updateChange.PropertyChanges.Should().Contain(pc => pc.PropertyName == "Title" && pc.OldValue == "Before" && pc.NewValue == "After");
-        updateChange.PropertyChanges.Should().Contain(pc => pc.PropertyName == "Status" && pc.NewValue == "Progress");
-    }
-
-    [Test]
-    public async Task Delete_WritesDeletedChangeRecord()
-    {
-        var issue = await _sut.CreateIssueAsync("To delete", IssueType.Task);
-        await _sut.DeleteIssueAsync(issue.Id);
-
-        var changes = await _storageService.LoadChangesAsync();
-
-        var deleteChange = changes.FirstOrDefault(c => c.Type == ChangeType.Deleted);
-        deleteChange.Should().NotBeNull();
-        deleteChange!.IssueId.Should().Be(issue.Id);
-        deleteChange.ChangedBy.Should().Be("test-user");
-        deleteChange.PropertyChanges.Should().Contain(pc =>
-            pc.PropertyName == "Status" && pc.NewValue == "Deleted");
     }
 
     #endregion

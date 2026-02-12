@@ -23,8 +23,6 @@ public class CleanServiceTests
         _gitConfigService.GetUserName().Returns("Test User");
         _storage.LoadTombstonesAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IReadOnlyList<Tombstone>>([]));
-        _storage.LoadChangesAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IReadOnlyList<ChangeRecord>>([]));
         _sut = new CleanService(_storage, _gitConfigService);
     }
 
@@ -125,90 +123,6 @@ public class CleanServiceTests
     }
 
     [Test]
-    public async Task CleanAsync_RemovesChangeRecordsForCleanedIssues()
-    {
-        var deletedIssue = new IssueBuilder().WithId("del001").WithStatus(IssueStatus.Deleted).Build();
-        var openIssue = new IssueBuilder().WithId("opn001").WithStatus(IssueStatus.Open).Build();
-
-        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>())
-            .Returns([deletedIssue, openIssue]);
-
-        var changes = new List<ChangeRecord>
-        {
-            new()
-            {
-                ChangeId = Guid.NewGuid(),
-                IssueId = "del001",
-                Type = ChangeType.Created,
-                ChangedBy = "user",
-                ChangedAt = DateTimeOffset.UtcNow
-            },
-            new()
-            {
-                ChangeId = Guid.NewGuid(),
-                IssueId = "del001",
-                Type = ChangeType.Deleted,
-                ChangedBy = "user",
-                ChangedAt = DateTimeOffset.UtcNow
-            },
-            new()
-            {
-                ChangeId = Guid.NewGuid(),
-                IssueId = "opn001",
-                Type = ChangeType.Created,
-                ChangedBy = "user",
-                ChangedAt = DateTimeOffset.UtcNow
-            }
-        };
-        _storage.LoadChangesAsync(Arg.Any<CancellationToken>())
-            .Returns(changes);
-
-        var result = await _sut.CleanAsync();
-
-        result.RemovedChangeRecords.Should().Be(2);
-    }
-
-    [Test]
-    public async Task CleanAsync_PreservesChangeRecordsForRemainingIssues()
-    {
-        var deletedIssue = new IssueBuilder().WithId("del001").WithStatus(IssueStatus.Deleted).Build();
-        var openIssue = new IssueBuilder().WithId("opn001").WithStatus(IssueStatus.Open).Build();
-
-        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>())
-            .Returns([deletedIssue, openIssue]);
-
-        var keptChange = new ChangeRecord
-        {
-            ChangeId = Guid.NewGuid(),
-            IssueId = "opn001",
-            Type = ChangeType.Created,
-            ChangedBy = "user",
-            ChangedAt = DateTimeOffset.UtcNow
-        };
-
-        _storage.LoadChangesAsync(Arg.Any<CancellationToken>())
-            .Returns(new List<ChangeRecord>
-            {
-                new()
-                {
-                    ChangeId = Guid.NewGuid(),
-                    IssueId = "del001",
-                    Type = ChangeType.Created,
-                    ChangedBy = "user",
-                    ChangedAt = DateTimeOffset.UtcNow
-                },
-                keptChange
-            });
-
-        await _sut.CleanAsync();
-
-        await _storage.Received(1).SaveChangesAsync(
-            Arg.Is<IReadOnlyList<ChangeRecord>>(c =>
-                c.Count == 1 && c[0].IssueId == "opn001"),
-            Arg.Any<CancellationToken>());
-    }
-
-    [Test]
     public async Task CleanAsync_StripsLinkedIssuesReferences()
     {
         var deletedIssue = new IssueBuilder().WithId("del001").WithStatus(IssueStatus.Deleted).Build();
@@ -305,8 +219,6 @@ public class CleanServiceTests
 
         await _storage.DidNotReceive().SaveIssuesAsync(
             Arg.Any<IReadOnlyList<Issue>>(), Arg.Any<CancellationToken>());
-        await _storage.DidNotReceive().SaveChangesAsync(
-            Arg.Any<IReadOnlyList<ChangeRecord>>(), Arg.Any<CancellationToken>());
         await _storage.DidNotReceive().SaveTombstonesAsync(
             Arg.Any<IReadOnlyList<Tombstone>>(), Arg.Any<CancellationToken>());
     }
@@ -323,7 +235,6 @@ public class CleanServiceTests
 
         result.CleanedTombstones.Should().BeEmpty();
         result.StrippedReferences.Should().BeEmpty();
-        result.RemovedChangeRecords.Should().Be(0);
 
         await _storage.DidNotReceive().SaveIssuesAsync(
             Arg.Any<IReadOnlyList<Issue>>(), Arg.Any<CancellationToken>());

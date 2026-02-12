@@ -8,8 +8,8 @@ Fleece is a local-first issue tracking system with two main components:
 
 ### Fleece.Core (Library)
 The core library (`src/Fleece.Core/`) contains all business logic and is designed for external consumption:
-- **Services**: `IIssueService`, `IStorageService`, `IChangeService`, etc.
-- **Models**: `Issue`, `ChangeRecord`, enums like `IssueStatus`, `IssueType`
+- **Services**: `IIssueService`, `IStorageService`, `ICleanService`, etc.
+- **Models**: `Issue`, `Tombstone`, enums like `IssueStatus`, `IssueType`
 - **Serialization**: JSON handling for issue storage
 
 ### Fleece.Cli (CLI Application)
@@ -67,13 +67,12 @@ dotnet test tests/Fleece.Core.Tests
 
 ### Clean Command and Tombstones
 
-The `fleece clean` command permanently removes soft-deleted issues (status `Deleted`) from `issues_{hash}.jsonl` and writes tombstone records to `tombstones_{hash}.jsonl`. Tombstone files are merged alongside issue and change files during `fleece merge`.
+The `fleece clean` command permanently removes soft-deleted issues (status `Deleted`) from `issues_{hash}.jsonl` and writes tombstone records to `tombstones_{hash}.jsonl`. Tombstone files are merged alongside issue files during `fleece merge`.
 
 Key details:
 - **Tombstone records** store `IssueId`, `OriginalTitle`, `CleanedAt`, and `CleanedBy`. The title is preserved because IDs are derived from titles via SHA256, so collision detection requires knowing what was tombstoned.
 - **ID collision prevention**: When `CreateAsync` generates an ID that matches a tombstoned issue, it retries with an incrementing salt (appended to the normalized title before hashing), up to 10 attempts.
 - **Reference stripping**: By default, `clean` removes dangling `LinkedIssues` and `ParentIssues` references from remaining issues. Use `--no-strip-refs` to skip this.
-- **Change record cleanup**: All `ChangeRecord` entries for cleaned issue IDs are removed.
 - **Optional flags**: `--include-complete`, `--include-closed`, `--include-archived` extend cleaning beyond just `Deleted` issues.
 - **Core service**: `ICleanService` / `CleanService` contains all business logic. The CLI `CleanCommand` is a thin wrapper.
 

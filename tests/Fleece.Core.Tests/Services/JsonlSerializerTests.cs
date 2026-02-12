@@ -163,43 +163,4 @@ public class JsonlSerializerTests
         deserialized.LastUpdate.Should().Be(original.LastUpdate);
     }
 
-    [Test]
-    public void SerializeChange_ReturnsValidJson()
-    {
-        var change = new ChangeRecord
-        {
-            ChangeId = Guid.Parse("12345678-1234-1234-1234-123456789012"),
-            IssueId = "abc123",
-            Type = ChangeType.Created,
-            ChangedBy = "Test User",
-            ChangedAt = new DateTimeOffset(2024, 6, 15, 12, 0, 0, TimeSpan.Zero),
-            PropertyChanges =
-            [
-                new PropertyChange
-                {
-                    PropertyName = "Title",
-                    OldValue = null,
-                    NewValue = "Test Issue",
-                    Timestamp = new DateTimeOffset(2024, 6, 15, 12, 0, 0, TimeSpan.Zero)
-                }
-            ]
-        };
-
-        var result = _sut.SerializeChange(change);
-
-        result.Should().Contain("\"changeId\"");
-        result.Should().Contain("\"issueId\":\"abc123\"");
-        result.Should().NotContain("\n");
-    }
-
-    [Test]
-    public void DeserializeChanges_ParsesMultipleLines()
-    {
-        var content = "{\"changeId\":\"12345678-1234-1234-1234-123456789012\",\"issueId\":\"abc123\",\"type\":\"Created\",\"changedBy\":\"Test User\",\"changedAt\":\"2024-01-15T12:00:00+00:00\",\"propertyChanges\":[]}";
-
-        var result = _sut.DeserializeChanges(content);
-
-        result.Should().HaveCount(1);
-        result[0].IssueId.Should().Be("abc123");
-    }
 }
