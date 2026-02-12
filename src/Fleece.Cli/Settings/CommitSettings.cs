@@ -9,6 +9,10 @@ public sealed class CommitSettings : CommandSettings
     [Description("Commit message (default: 'Update fleece issues')")]
     public string? Message { get; init; }
 
+    [CommandOption("--ci")]
+    [Description("Allow CI to run (omits [skip ci] from commit message)")]
+    public bool Ci { get; init; }
+
     [CommandOption("--push")]
     [Description("Push to remote after committing")]
     public bool Push { get; init; }

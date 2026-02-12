@@ -111,7 +111,8 @@ app.Configure(config =>
         .WithDescription("Commit fleece changes to git")
         .WithExample("commit")
         .WithExample("commit", "-m", "Add new issues")
-        .WithExample("commit", "--push");
+        .WithExample("commit", "--push")
+        .WithExample("commit", "--ci");
 
     config.AddCommand<DependencyCommand>("dependency")
         .WithDescription("Add or remove parent-child dependency between issues")
