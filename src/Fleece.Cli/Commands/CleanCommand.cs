@@ -87,11 +87,6 @@ public sealed class CleanCommand(ICleanService cleanService, IStorageService sto
                 AnsiConsole.Write(refTable);
             }
 
-            if (result.RemovedChangeRecords > 0)
-            {
-                AnsiConsole.MarkupLine($"[dim]Removed {result.RemovedChangeRecords} change record(s)[/]");
-            }
-
             if (!settings.DryRun)
             {
                 AnsiConsole.WriteLine();

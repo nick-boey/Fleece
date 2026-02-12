@@ -11,8 +11,6 @@ public sealed class JsonlStorageService : IStorageService
     private const string FleeceDirectory = ".fleece";
     private const string IssuesFileName = "issues.jsonl";
     private const string IssuesFilePattern = "issues*.jsonl";
-    private const string ChangesFileName = "changes.jsonl";
-    private const string ChangesFilePattern = "changes*.jsonl";
     private const string TombstonesFileName = "tombstones.jsonl";
     private const string TombstonesFilePattern = "tombstones*.jsonl";
     private const int HashLength = 6;
@@ -31,7 +29,6 @@ public sealed class JsonlStorageService : IStorageService
 
     private string FleeceDirectoryPath => Path.Combine(_basePath, FleeceDirectory);
     private string IssuesFilePath => Path.Combine(FleeceDirectoryPath, IssuesFileName);
-    private string ChangesFilePath => Path.Combine(FleeceDirectoryPath, ChangesFileName);
     private string TombstonesFilePath => Path.Combine(FleeceDirectoryPath, TombstonesFileName);
 
     public async Task EnsureDirectoryExistsAsync(CancellationToken cancellationToken = default)
@@ -134,99 +131,6 @@ public sealed class JsonlStorageService : IStorageService
         }
     }
 
-    public async Task<IReadOnlyList<ChangeRecord>> LoadChangesAsync(CancellationToken cancellationToken = default)
-    {
-        await _lock.WaitAsync(cancellationToken);
-        try
-        {
-            var allChanges = new List<ChangeRecord>();
-            var files = GetAllChangesFilesInternal();
-
-            foreach (var file in files)
-            {
-                var content = await File.ReadAllTextAsync(file, cancellationToken);
-                var changes = _serializer.DeserializeChanges(content);
-                allChanges.AddRange(changes);
-            }
-
-            // Deduplicate by ChangeId, keeping newest
-            return allChanges
-                .GroupBy(c => c.ChangeId)
-                .Select(g => g.OrderByDescending(c => c.ChangedAt).First())
-                .ToList();
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-
-    public async Task SaveChangesAsync(IReadOnlyList<ChangeRecord> changes, CancellationToken cancellationToken = default)
-    {
-        await _lock.WaitAsync(cancellationToken);
-        try
-        {
-            await EnsureDirectoryExistsAsync(cancellationToken);
-
-            var hash = GetCurrentIssuesHashInternal();
-            var fileName = string.IsNullOrEmpty(hash) ? ChangesFileName : $"changes_{hash}.jsonl";
-            var filePath = Path.Combine(FleeceDirectoryPath, fileName);
-
-            // Delete old changes files before writing new one
-            var existingFiles = GetAllChangesFilesInternal();
-            foreach (var file in existingFiles)
-            {
-                File.Delete(file);
-            }
-
-            var lines = changes.Select(_serializer.SerializeChange);
-            await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-
-    public async Task AppendChangeAsync(ChangeRecord change, CancellationToken cancellationToken = default)
-    {
-        await _lock.WaitAsync(cancellationToken);
-        try
-        {
-            await EnsureDirectoryExistsAsync(cancellationToken);
-
-            // Load existing changes, add new one, and save with current hash
-            var existingChanges = new List<ChangeRecord>();
-            var existingFiles = GetAllChangesFilesInternal();
-
-            foreach (var file in existingFiles)
-            {
-                var content = await File.ReadAllTextAsync(file, cancellationToken);
-                var changes = _serializer.DeserializeChanges(content);
-                existingChanges.AddRange(changes);
-            }
-
-            existingChanges.Add(change);
-
-            var hash = GetCurrentIssuesHashInternal();
-            var fileName = string.IsNullOrEmpty(hash) ? ChangesFileName : $"changes_{hash}.jsonl";
-            var filePath = Path.Combine(FleeceDirectoryPath, fileName);
-
-            // Delete old changes files before writing new one
-            foreach (var file in existingFiles)
-            {
-                File.Delete(file);
-            }
-
-            var lines = existingChanges.Select(_serializer.SerializeChange);
-            await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-
     public Task<IReadOnlyList<string>> GetAllIssueFilesAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult<IReadOnlyList<string>>(GetAllIssueFilesInternal());
@@ -296,25 +200,6 @@ public sealed class JsonlStorageService : IStorageService
         if (files.Length == 0 && File.Exists(IssuesFilePath))
         {
             return [IssuesFilePath];
-        }
-
-        return files;
-    }
-
-    private IReadOnlyList<string> GetAllChangesFilesInternal()
-    {
-        if (!Directory.Exists(FleeceDirectoryPath))
-        {
-            return [];
-        }
-
-        // Get all files matching changes*.jsonl pattern
-        var files = Directory.GetFiles(FleeceDirectoryPath, ChangesFilePattern);
-
-        // Also check for legacy changes.jsonl (without hash)
-        if (files.Length == 0 && File.Exists(ChangesFilePath))
-        {
-            return [ChangesFilePath];
         }
 
         return files;
@@ -456,7 +341,6 @@ public sealed class JsonlStorageService : IStorageService
     public Task<(bool HasMultiple, string Message)> HasMultipleUnmergedFilesAsync(CancellationToken cancellationToken = default)
     {
         var issueFiles = GetAllIssueFilesInternal();
-        var changesFiles = GetAllChangesFilesInternal();
         var tombstoneFiles = GetAllTombstoneFilesInternal();
 
         var messages = new List<string>();
@@ -465,12 +349,6 @@ public sealed class JsonlStorageService : IStorageService
         {
             var fileNames = issueFiles.Select(Path.GetFileName);
             messages.Add($"Multiple unmerged issue files found: {string.Join(", ", fileNames)}");
-        }
-
-        if (changesFiles.Count > 1)
-        {
-            var fileNames = changesFiles.Select(Path.GetFileName);
-            messages.Add($"Multiple unmerged changes files found: {string.Join(", ", fileNames)}");
         }
 
         if (tombstoneFiles.Count > 1)

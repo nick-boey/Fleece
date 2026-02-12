@@ -21,7 +21,6 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<ISchemaValidator>()));
         services.AddSingleton<IGitConfigService, GitConfigService>();
         services.AddSingleton<IGitService>(sp => new GitService(basePath));
-        services.AddSingleton<IChangeService, ChangeService>();
         services.AddSingleton<IIssueService, IssueService>();
         services.AddSingleton<IMergeService, MergeService>();
         services.AddSingleton<IMigrationService, MigrationService>();

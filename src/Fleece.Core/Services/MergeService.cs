@@ -11,7 +11,7 @@ public sealed class MergeService(
 {
     private readonly IssueMerger _merger = new();
 
-    public async Task<IReadOnlyList<ChangeRecord>> FindAndResolveDuplicatesAsync(bool dryRun = false, CancellationToken cancellationToken = default)
+    public async Task<int> FindAndResolveDuplicatesAsync(bool dryRun = false, CancellationToken cancellationToken = default)
     {
         // Load all issues from all issue files
         var allIssues = new List<Issue>();
@@ -23,7 +23,7 @@ public sealed class MergeService(
             allIssues.AddRange(issues);
         }
 
-        var changeRecords = new List<ChangeRecord>();
+        var mergedCount = 0;
         var currentUser = gitConfigService.GetUserName();
 
         // Group by ID to find duplicates
@@ -38,36 +38,15 @@ public sealed class MergeService(
             {
                 // Merge all versions using property-level merging
                 var merged = versions[0];
-                var allPropertyChanges = new List<PropertyChange>();
 
                 for (var i = 1; i < versions.Count; i++)
                 {
                     var mergeResult = _merger.Merge(merged, versions[i], currentUser);
                     merged = mergeResult.MergedIssue;
-
-                    if (mergeResult.HadConflicts)
-                    {
-                        allPropertyChanges.AddRange(mergeResult.PropertyChanges);
-                    }
                 }
 
                 mergedIssues.Add(merged);
-
-                // Record merge change with property-level details
-                if (allPropertyChanges.Count > 0)
-                {
-                    var changeRecord = new ChangeRecord
-                    {
-                        ChangeId = Guid.NewGuid(),
-                        IssueId = group.Key,
-                        Type = ChangeType.Merged,
-                        ChangedBy = currentUser ?? "unknown",
-                        ChangedAt = DateTimeOffset.UtcNow,
-                        PropertyChanges = allPropertyChanges
-                    };
-
-                    changeRecords.Add(changeRecord);
-                }
+                mergedCount++;
             }
             else
             {
@@ -87,14 +66,6 @@ public sealed class MergeService(
             // Save consolidated issues with new hash
             await storage.SaveIssuesWithHashAsync(mergedIssues, cancellationToken);
 
-            // Consolidate change records after issues have been saved with new hash
-            // Load all existing changes, add any new merge records, and save
-            // This ensures the changes file has the same hash as the issues file
-            var existingChanges = await storage.LoadChangesAsync(cancellationToken);
-            var allChanges = existingChanges.ToList();
-            allChanges.AddRange(changeRecords);
-            await storage.SaveChangesAsync(allChanges, cancellationToken);
-
             // Consolidate tombstone files if multiple exist
             var tombstoneFiles = await storage.GetAllTombstoneFilesAsync(cancellationToken);
             if (tombstoneFiles.Count > 1)
@@ -104,7 +75,7 @@ public sealed class MergeService(
             }
         }
 
-        return changeRecords;
+        return mergedCount;
     }
 
     public async Task<IReadOnlyList<(Issue, Issue)>> CompareFilesAsync(

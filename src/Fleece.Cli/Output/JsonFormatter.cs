@@ -41,10 +41,4 @@ public static class JsonFormatter
         var json = JsonSerializer.Serialize(showContext, FleeceJsonContext.Default.IssueShowDto);
         Console.WriteLine(json);
     }
-
-    public static void RenderChanges(IReadOnlyList<ChangeRecord> changes)
-    {
-        var json = JsonSerializer.Serialize(changes, FleeceJsonContext.Default.IReadOnlyListChangeRecord);
-        Console.WriteLine(json);
-    }
 }

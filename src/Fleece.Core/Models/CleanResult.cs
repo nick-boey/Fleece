@@ -4,7 +4,6 @@ public sealed record CleanResult
 {
     public required IReadOnlyList<Tombstone> CleanedTombstones { get; init; }
     public required IReadOnlyList<StrippedReference> StrippedReferences { get; init; }
-    public required int RemovedChangeRecords { get; init; }
 }
 
 public sealed record StrippedReference
