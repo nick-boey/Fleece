@@ -322,6 +322,165 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
     }
 
     /// <inheritdoc />
+    public async Task<Issue?> UpdateIssueFullAsync(
+        string issueId,
+        string? title = null,
+        string? description = null,
+        IssueStatus? status = null,
+        IssueType? type = null,
+        int? priority = null,
+        string? assignedTo = null,
+        int? linkedPr = null,
+        IReadOnlyList<string>? linkedIssues = null,
+        IReadOnlyList<ParentIssueRef>? parentIssues = null,
+        IReadOnlyList<string>? tags = null,
+        string? workingBranchId = null,
+        ExecutionMode? executionMode = null,
+        CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await EnsureCacheLoadedAsync(ct);
+
+        // Check cache first
+        _cacheLock.EnterReadLock();
+        try
+        {
+            if (!_cache.ContainsKey(issueId))
+            {
+                return null;
+            }
+        }
+        finally
+        {
+            _cacheLock.ExitReadLock();
+        }
+
+        Issue updated;
+        try
+        {
+            updated = await _issueService.UpdateAsync(
+                id: issueId,
+                title: title,
+                description: description,
+                status: status,
+                type: type,
+                priority: priority,
+                linkedPr: linkedPr,
+                linkedIssues: linkedIssues,
+                parentIssues: parentIssues,
+                assignedTo: assignedTo,
+                tags: tags,
+                workingBranchId: workingBranchId,
+                executionMode: executionMode,
+                cancellationToken: ct);
+        }
+        catch (KeyNotFoundException)
+        {
+            _cacheLock.EnterWriteLock();
+            try
+            {
+                _cache.TryRemove(issueId, out _);
+            }
+            finally
+            {
+                _cacheLock.ExitWriteLock();
+            }
+
+            return null;
+        }
+
+        // Update cache with the new issue (which may have a new ID if title changed)
+        _cacheLock.EnterWriteLock();
+        try
+        {
+            // If title changed, the ID changes — remove the old entry
+            if (title is not null && !string.Equals(updated.Id, issueId, StringComparison.OrdinalIgnoreCase))
+            {
+                _cache.TryRemove(issueId, out _);
+            }
+
+            _cache[updated.Id] = updated;
+        }
+        finally
+        {
+            _cacheLock.ExitWriteLock();
+        }
+
+        await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
+            IssueId: updated.Id,
+            Type: WriteOperationType.Update,
+            WriteAction: async _ => await Task.CompletedTask,
+            QueuedAt: DateTimeOffset.UtcNow
+        ), ct);
+
+        return updated;
+    }
+
+    /// <inheritdoc />
+    public async Task<Issue?> UpdateQuestionsAsync(
+        string issueId,
+        IReadOnlyList<Question> questions,
+        CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await EnsureCacheLoadedAsync(ct);
+
+        // Check cache first
+        _cacheLock.EnterReadLock();
+        try
+        {
+            if (!_cache.ContainsKey(issueId))
+            {
+                return null;
+            }
+        }
+        finally
+        {
+            _cacheLock.ExitReadLock();
+        }
+
+        Issue updated;
+        try
+        {
+            updated = await _issueService.UpdateQuestionsAsync(issueId, questions, ct);
+        }
+        catch (KeyNotFoundException)
+        {
+            _cacheLock.EnterWriteLock();
+            try
+            {
+                _cache.TryRemove(issueId, out _);
+            }
+            finally
+            {
+                _cacheLock.ExitWriteLock();
+            }
+
+            return null;
+        }
+
+        // Update cache
+        _cacheLock.EnterWriteLock();
+        try
+        {
+            _cache[updated.Id] = updated;
+        }
+        finally
+        {
+            _cacheLock.ExitWriteLock();
+        }
+
+        await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
+            IssueId: updated.Id,
+            Type: WriteOperationType.Update,
+            WriteAction: async _ => await Task.CompletedTask,
+            QueuedAt: DateTimeOffset.UtcNow
+        ), ct);
+
+        return updated;
+    }
+
+    /// <inheritdoc />
     public async Task<bool> DeleteIssueAsync(string issueId, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
