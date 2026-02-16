@@ -147,6 +147,8 @@ public sealed class NextService(IIssueService issueService) : INextService
             })
             .Where(x => x.ParentRef is not null)
             .OrderBy(x => x.ParentRef!.SortOrder, StringComparer.Ordinal)
+            .ThenBy(x => x.Issue.Priority ?? 99)
+            .ThenBy(x => x.Issue.Title, StringComparer.Ordinal)
             .Select(x => x.Issue)
             .ToList();
 
