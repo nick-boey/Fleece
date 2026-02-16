@@ -20,7 +20,7 @@ if (args.Length == 1 && args[0] is "--version" or "-v")
 }
 
 var services = new ServiceCollection();
-services.AddFleeceCore();
+services.AddFleeceInMemoryService();
 
 var registrar = new TypeRegistrar(services);
 var app = new CommandApp<TuiCommand>(registrar);

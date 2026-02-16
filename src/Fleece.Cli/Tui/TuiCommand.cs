@@ -8,9 +8,8 @@ namespace Fleece.Cli.Tui;
 /// Default command that launches the interactive TUI when fleece is run with no arguments.
 /// </summary>
 public sealed class TuiCommand(
-    IIssueService issueService,
-    IStorageService storageService,
-    INextService nextService) : AsyncCommand<TuiSettings>
+    IFleeceInMemoryService inMemoryService,
+    IStorageService storageService) : AsyncCommand<TuiSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, TuiSettings settings)
     {
@@ -31,7 +30,7 @@ public sealed class TuiCommand(
             return 0;
         }
 
-        var runner = new TuiRunner(issueService, storageService, nextService, AnsiConsole.Console);
-        return await runner.RunAsync();
+        var app = new TuiApp(inMemoryService);
+        return await app.RunAsync();
     }
 }
