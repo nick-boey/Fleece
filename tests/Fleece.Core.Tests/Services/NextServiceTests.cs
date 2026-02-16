@@ -313,6 +313,61 @@ public class NextServiceTests
         result.Select(i => i.Id).Should().BeEquivalentTo(["parent"]);
     }
 
+    [Test]
+    public async Task GetNextIssuesAsync_SeriesParent_SameSortOrderBreaksTieByPriority()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        // Both children have same sort order, but child2 has higher priority (lower number)
+        var child1 = new IssueBuilder().WithId("child1").WithTitle("Zebra").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").WithPriority(3).Build();
+        var child2 = new IssueBuilder().WithId("child2").WithTitle("Alpha").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").WithPriority(1).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        // child2 should be first (higher priority = lower number)
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child2"]);
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_SeriesParent_SameSortOrderAndPriorityBreaksTieByTitle()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithTitle("Zebra Task").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").WithPriority(2).Build();
+        var child2 = new IssueBuilder().WithId("child2").WithTitle("Alpha Task").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").WithPriority(2).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        // child2 should be first (alphabetically earlier title)
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child2"]);
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_DeepSeriesChain_OnlyDeepestLeafIsActionable()
+    {
+        // Simulates: parent (series) -> child with subtree vs leaf sibling
+        // Only the deepest leaf in the first subtree should be actionable
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var subtreeChild = new IssueBuilder().WithId("subtreeChild").WithTitle("A - Subtree").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").WithPriority(2).Build();
+        var leafSibling = new IssueBuilder().WithId("leafSibling").WithTitle("B - Leaf").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").WithPriority(3).Build();
+        var deepLeaf = new IssueBuilder().WithId("deepLeaf").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("subtreeChild", "aaa").Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, subtreeChild, leafSibling, deepLeaf]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        // subtreeChild is first child (higher priority) but has incomplete children -> not actionable
+        // leafSibling is blocked because subtreeChild comes first in series
+        // deepLeaf is the only actionable issue
+        result.Select(i => i.Id).Should().BeEquivalentTo(["deepLeaf"]);
+    }
+
     #endregion
 
     #region Edge Cases
