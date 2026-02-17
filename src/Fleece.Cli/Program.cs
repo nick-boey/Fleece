@@ -1,9 +1,12 @@
 using System.Reflection;
+using System.Text;
 using Fleece.Cli.Commands;
 using Fleece.Cli.Tui;
 using Fleece.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console.Cli;
+
+Console.OutputEncoding = Encoding.UTF8;
 
 // Get the version from the assembly, which is set during build via -p:Version=
 var version = Assembly.GetExecutingAssembly()
