@@ -728,4 +728,100 @@ public class TaskGraphServiceTests
     }
 
     #endregion
+
+    #region ParentExecutionMode Tests
+
+    [Test]
+    public async Task BuildGraphAsync_RootIssue_HasNullParentExecutionMode()
+    {
+        var issue = new IssueBuilder().WithId("issue1").WithTitle("Root Issue").WithStatus(IssueStatus.Open).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { issue });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new List<Issue> { issue });
+
+        var result = await _sut.BuildGraphAsync();
+
+        result.Nodes.Should().ContainSingle();
+        result.Nodes[0].ParentExecutionMode.Should().BeNull();
+    }
+
+    [Test]
+    public async Task BuildGraphAsync_SeriesParentChildren_HaveSeriesParentExecutionMode()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithTitle("Parent").WithStatus(IssueStatus.Open)
+            .WithExecutionMode(ExecutionMode.Series).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithTitle("Child 1").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithTitle("Child 2").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "bbb").Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { parent, child1, child2 });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new List<Issue> { child1 });
+
+        var result = await _sut.BuildGraphAsync();
+
+        var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
+        nodeLookup["child1"].ParentExecutionMode.Should().Be(ExecutionMode.Series);
+        nodeLookup["child2"].ParentExecutionMode.Should().Be(ExecutionMode.Series);
+        nodeLookup["parent"].ParentExecutionMode.Should().BeNull(); // root
+    }
+
+    [Test]
+    public async Task BuildGraphAsync_ParallelParentChildren_HaveParallelParentExecutionMode()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithTitle("Parent").WithStatus(IssueStatus.Open)
+            .WithExecutionMode(ExecutionMode.Parallel).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithTitle("Child 1").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithTitle("Child 2").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "bbb").Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { parent, child1, child2 });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new List<Issue> { child1, child2 });
+
+        var result = await _sut.BuildGraphAsync();
+
+        var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
+        nodeLookup["child1"].ParentExecutionMode.Should().Be(ExecutionMode.Parallel);
+        nodeLookup["child2"].ParentExecutionMode.Should().Be(ExecutionMode.Parallel);
+        nodeLookup["parent"].ParentExecutionMode.Should().BeNull(); // root
+    }
+
+    [Test]
+    public async Task BuildGraphAsync_NestedHierarchy_CorrectParentExecutionModes()
+    {
+        // Root (series)
+        //   - SubtreeParent (parallel)
+        //     - SubChild1 (leaf)
+        //     - SubChild2 (leaf)
+        //   - LeafChild
+        var root = new IssueBuilder().WithId("root").WithTitle("Root").WithStatus(IssueStatus.Open)
+            .WithExecutionMode(ExecutionMode.Series).Build();
+        var subtreeParent = new IssueBuilder().WithId("sub-parent").WithTitle("Sub Parent").WithStatus(IssueStatus.Open)
+            .WithExecutionMode(ExecutionMode.Parallel)
+            .WithParentIssueIdAndOrder("root", "aaa").Build();
+        var subChild1 = new IssueBuilder().WithId("sub-child1").WithTitle("Sub Child 1").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("sub-parent", "aaa").Build();
+        var subChild2 = new IssueBuilder().WithId("sub-child2").WithTitle("Sub Child 2").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("sub-parent", "bbb").Build();
+        var leafChild = new IssueBuilder().WithId("leaf").WithTitle("Leaf").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("root", "bbb").Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { root, subtreeParent, subChild1, subChild2, leafChild });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new List<Issue> { subChild1, subChild2 });
+
+        var result = await _sut.BuildGraphAsync();
+
+        var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
+        // Grandchildren under parallel parent
+        nodeLookup["sub-child1"].ParentExecutionMode.Should().Be(ExecutionMode.Parallel);
+        nodeLookup["sub-child2"].ParentExecutionMode.Should().Be(ExecutionMode.Parallel);
+        // SubtreeParent is child of series root
+        nodeLookup["sub-parent"].ParentExecutionMode.Should().Be(ExecutionMode.Series);
+        // LeafChild is child of series root
+        nodeLookup["leaf"].ParentExecutionMode.Should().Be(ExecutionMode.Series);
+        // Root has no parent
+        nodeLookup["root"].ParentExecutionMode.Should().BeNull();
+    }
+
+    #endregion
 }

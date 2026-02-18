@@ -25,6 +25,13 @@ public sealed record TaskGraphNode
     /// Whether this issue is currently actionable (same as fleece next).
     /// </summary>
     public required bool IsActionable { get; init; }
+
+    /// <summary>
+    /// The execution mode of this node's parent in the graph.
+    /// Null for root nodes (no parent in graph).
+    /// Used by the renderer to determine connection style (series = vertical-first, parallel = horizontal-first).
+    /// </summary>
+    public ExecutionMode? ParentExecutionMode { get; init; }
 }
 
 /// <summary>

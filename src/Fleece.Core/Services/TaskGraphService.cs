@@ -57,7 +57,7 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
 
         foreach (var root in rootIssues)
         {
-            var rootMax = LayoutSubtree(root, 0, nodeList, childrenOf, issueLookup, actionableIds, visited);
+            var rootMax = LayoutSubtree(root, 0, nodeList, childrenOf, issueLookup, actionableIds, visited, parentExecutionMode: null);
             maxLane = Math.Max(maxLane, rootMax);
         }
 
@@ -79,7 +79,8 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
         Dictionary<string, List<Issue>> childrenOf,
         Dictionary<string, Issue> issueLookup,
         HashSet<string> actionableIds,
-        HashSet<string> visited)
+        HashSet<string> visited,
+        ExecutionMode? parentExecutionMode)
     {
         // Skip issues already placed by a previous parent traversal (DAG support)
         if (!visited.Add(issue.Id))
@@ -98,7 +99,8 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
                 Issue = issue,
                 Row = nodeList.Count,
                 Lane = startLane,
-                IsActionable = actionableIds.Contains(issue.Id)
+                IsActionable = actionableIds.Contains(issue.Id),
+                ParentExecutionMode = parentExecutionMode
             });
             return startLane;
         }
@@ -121,7 +123,8 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
             Issue = issue,
             Row = nodeList.Count,
             Lane = parentLane,
-            IsActionable = actionableIds.Contains(issue.Id)
+            IsActionable = actionableIds.Contains(issue.Id),
+            ParentExecutionMode = parentExecutionMode
         });
 
         return parentLane;
@@ -161,13 +164,14 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
                     Issue = child,
                     Row = nodeList.Count,
                     Lane = startLane,
-                    IsActionable = actionableIds.Contains(child.Id)
+                    IsActionable = actionableIds.Contains(child.Id),
+                    ParentExecutionMode = ExecutionMode.Parallel
                 });
             }
             else
             {
                 // Subtree child — LayoutSubtree handles visited tracking
-                var childMax = LayoutSubtree(child, startLane, nodeList, childrenOf, issueLookup, actionableIds, visited);
+                var childMax = LayoutSubtree(child, startLane, nodeList, childrenOf, issueLookup, actionableIds, visited, parentExecutionMode: ExecutionMode.Parallel);
                 maxChildLane = Math.Max(maxChildLane, childMax);
             }
         }
@@ -213,7 +217,8 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
                     Issue = child,
                     Row = nodeList.Count,
                     Lane = currentLane,
-                    IsActionable = actionableIds.Contains(child.Id)
+                    IsActionable = actionableIds.Contains(child.Id),
+                    ParentExecutionMode = ExecutionMode.Series
                 });
             }
             else
@@ -221,7 +226,7 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
                 // Subtree child
                 // First non-skipped child starts at currentLane; subsequent start at currentLane + 1
                 int subtreeStart = isFirstChild ? currentLane : currentLane + 1;
-                var childMax = LayoutSubtree(child, subtreeStart, nodeList, childrenOf, issueLookup, actionableIds, visited);
+                var childMax = LayoutSubtree(child, subtreeStart, nodeList, childrenOf, issueLookup, actionableIds, visited, parentExecutionMode: ExecutionMode.Series);
                 currentLane = childMax;
             }
 
