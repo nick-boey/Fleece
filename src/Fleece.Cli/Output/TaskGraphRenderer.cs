@@ -89,14 +89,23 @@ public static class TaskGraphRenderer
 
             if (childCol == parentCol)
             {
-                // Same lane: vertical connector
+                // Same lane: vertical connector (both modes)
                 DrawVerticalSegment(grid, connections, childCol, childGridRow, parentGridRow);
             }
             else if (childCol < parentCol)
             {
-                // Child is left of parent: horizontal on child's row, then vertical down
-                DrawHorizontalSegment(grid, connections, childGridRow, childCol, parentCol);
-                DrawVerticalSegment(grid, connections, parentCol, childGridRow, parentGridRow);
+                if (node.ParentExecutionMode == ExecutionMode.Series)
+                {
+                    // Series: vertical down from child, then horizontal to parent
+                    DrawVerticalSegment(grid, connections, childCol, childGridRow, parentGridRow);
+                    DrawHorizontalSegment(grid, connections, parentGridRow, childCol, parentCol);
+                }
+                else // Parallel (or null, default to parallel-style for root children)
+                {
+                    // Parallel: horizontal right from child, then vertical down to parent
+                    DrawHorizontalSegment(grid, connections, childGridRow, childCol, parentCol);
+                    DrawVerticalSegment(grid, connections, parentCol, childGridRow, parentGridRow);
+                }
             }
         }
 
