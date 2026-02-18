@@ -46,6 +46,7 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
             .Where(i => i.ParentIssues.Count == 0 ||
                         i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
             .OrderBy(i => i.Priority ?? 99)
+            .ThenByDescending(i => !string.IsNullOrEmpty(i.Description))
             .ThenBy(i => i.Title)
             .ToList();
 
@@ -275,6 +276,9 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
         foreach (var kvp in childrenOf)
         {
             var parentId = kvp.Key;
+            var parentIsParallel = issueLookup.TryGetValue(parentId, out var parent)
+                                   && parent.ExecutionMode == ExecutionMode.Parallel;
+
             kvp.Value.Sort((a, b) =>
             {
                 var sortA = a.ParentIssues
@@ -293,6 +297,17 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
                 if (result != 0)
                 {
                     return result;
+                }
+
+                // Only apply description-based sorting for non-parallel parents
+                if (!parentIsParallel)
+                {
+                    var hasDescA = !string.IsNullOrEmpty(a.Description);
+                    var hasDescB = !string.IsNullOrEmpty(b.Description);
+                    if (hasDescA != hasDescB)
+                    {
+                        return hasDescA ? -1 : 1; // Issues with descriptions first
+                    }
                 }
 
                 return string.Compare(a.Title, b.Title, StringComparison.Ordinal);
