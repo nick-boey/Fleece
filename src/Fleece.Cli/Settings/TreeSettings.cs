@@ -3,7 +3,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Settings;
 
-public sealed class TreeSettings : CommandSettings
+public sealed class TreeSettings : FleeceCommandSettings
 {
     [CommandArgument(0, "[ID]")]
     [Description("Optional issue ID to use as tree root (shows children of this issue)")]

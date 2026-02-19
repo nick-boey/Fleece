@@ -3,7 +3,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Settings;
 
-public sealed class SearchSettings : CommandSettings
+public sealed class SearchSettings : FleeceCommandSettings
 {
     [CommandArgument(0, "<QUERY>")]
     [Description("Text to search for")]

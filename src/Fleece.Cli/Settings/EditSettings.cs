@@ -3,7 +3,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Settings;
 
-public sealed class EditSettings : CommandSettings
+public sealed class EditSettings : FleeceCommandSettings
 {
     [CommandArgument(0, "<ID>")]
     [Description("Issue ID to edit")]

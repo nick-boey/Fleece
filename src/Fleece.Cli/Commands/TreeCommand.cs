@@ -8,10 +8,12 @@ using System.Text.Json;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class TreeCommand(IIssueService issueService, IStorageService storageService, ITaskGraphService taskGraphService) : AsyncCommand<TreeSettings>
+public sealed class TreeCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider, ITaskGraphService taskGraphService) : AsyncCommand<TreeSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, TreeSettings settings)
     {
+        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
+        var issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
         var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {

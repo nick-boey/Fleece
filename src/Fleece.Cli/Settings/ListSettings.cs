@@ -3,7 +3,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Settings;
 
-public sealed class ListSettings : CommandSettings
+public sealed class ListSettings : FleeceCommandSettings
 {
     [CommandOption("-s|--status <STATUS>")]
     [Description("Filter by status: open, progress, review, complete, archived, closed")]

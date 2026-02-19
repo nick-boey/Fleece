@@ -3,7 +3,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Settings;
 
-public sealed class CleanSettings : CommandSettings
+public sealed class CleanSettings : FleeceCommandSettings
 {
     [CommandOption("--include-complete")]
     [Description("Also clean issues with Complete status")]

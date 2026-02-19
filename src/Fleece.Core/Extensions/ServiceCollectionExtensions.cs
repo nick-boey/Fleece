@@ -29,6 +29,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<INextService, NextService>();
         services.AddSingleton<ITaskGraphService, TaskGraphService>();
         services.AddSingleton<ICleanService, CleanService>();
+        services.AddSingleton<IStorageServiceProvider, StorageServiceProvider>();
+        services.AddSingleton<IIssueServiceFactory, IssueServiceFactory>();
 
         return services;
     }

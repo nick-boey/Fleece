@@ -3,7 +3,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Settings;
 
-public sealed class ValidateSettings : CommandSettings
+public sealed class ValidateSettings : FleeceCommandSettings
 {
     [CommandOption("--json")]
     [Description("Output results as JSON")]

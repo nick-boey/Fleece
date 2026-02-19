@@ -6,10 +6,12 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class DeleteCommand(IIssueService issueService, IStorageService storageService) : AsyncCommand<DeleteSettings>
+public sealed class DeleteCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider) : AsyncCommand<DeleteSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, DeleteSettings settings)
     {
+        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
+        var issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
         var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {

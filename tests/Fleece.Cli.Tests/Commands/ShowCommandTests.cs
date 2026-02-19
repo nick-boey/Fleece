@@ -16,6 +16,8 @@ public class ShowCommandTests
 {
     private IIssueService _issueService = null!;
     private IStorageService _storageService = null!;
+    private IStorageServiceProvider _storageServiceProvider = null!;
+    private IIssueServiceFactory _issueServiceFactory = null!;
     private ShowCommand _command = null!;
     private CommandContext _context = null!;
     private StringWriter _consoleOutput = null!;
@@ -30,7 +32,15 @@ public class ShowCommandTests
         _storageService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
             .Returns((false, string.Empty));
 
-        _command = new ShowCommand(_issueService, _storageService);
+        _storageServiceProvider = Substitute.For<IStorageServiceProvider>();
+        _storageServiceProvider.GetStorageService(Arg.Any<string?>())
+            .Returns(_storageService);
+
+        _issueServiceFactory = Substitute.For<IIssueServiceFactory>();
+        _issueServiceFactory.GetIssueService(Arg.Any<string?>())
+            .Returns(_issueService);
+
+        _command = new ShowCommand(_issueServiceFactory, _storageServiceProvider);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "show", null);
 
         _originalConsole = Console.Out;

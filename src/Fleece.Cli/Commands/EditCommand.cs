@@ -8,10 +8,14 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class EditCommand(IIssueService issueService, IStorageService storageService) : AsyncCommand<EditSettings>
+public sealed class EditCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider) : AsyncCommand<EditSettings>
 {
+    private IIssueService? _issueService;
+
     public override async Task<int> ExecuteAsync(CommandContext context, EditSettings settings)
     {
+        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
+        _issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
         var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
@@ -20,7 +24,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
         }
 
         // Resolve partial ID first
-        var matches = await issueService.ResolveByPartialIdAsync(settings.Id);
+        var matches = await _issueService!.ResolveByPartialIdAsync(settings.Id);
 
         if (matches.Count == 0)
         {
@@ -90,7 +94,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
 
         try
         {
-            var issue = await issueService.UpdateAsync(
+            var issue = await _issueService!.UpdateAsync(
                 id: resolvedId,
                 title: settings.Title,
                 description: settings.Description,
@@ -146,7 +150,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
     private async Task<int> EditWithEditorAsync(EditSettings settings, string resolvedId)
     {
         // Get the existing issue using the already-resolved ID
-        var existingIssue = await issueService.GetByIdAsync(resolvedId);
+        var existingIssue = await _issueService!.GetByIdAsync(resolvedId);
         if (existingIssue is null)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{resolvedId}' not found");
@@ -220,7 +224,7 @@ public sealed class EditCommand(IIssueService issueService, IStorageService stor
                 tags = [];
             }
 
-            var issue = await issueService.UpdateAsync(
+            var issue = await _issueService!.UpdateAsync(
                 id: resolvedId,
                 title: template.Title,
                 description: template.Description,

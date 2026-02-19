@@ -4,7 +4,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Settings;
 
-public sealed class DependencySettings : CommandSettings
+public sealed class DependencySettings : FleeceCommandSettings
 {
     [CommandOption("--parent <ID>")]
     [Description("Parent issue ID")]
