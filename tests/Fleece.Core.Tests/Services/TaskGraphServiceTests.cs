@@ -654,6 +654,35 @@ public class TaskGraphServiceTests
     }
 
     [Test]
+    public async Task BuildGraphAsync_RootWithoutDescription_SortedByFirstActionableChildDescription()
+    {
+        // Root issue without description but with a child that has a description
+        // Should be sorted based on the first actionable child's description, not the root's
+        var rootWithDescChild = new IssueBuilder().WithId("root-a").WithTitle("Root A").WithStatus(IssueStatus.Open)
+            .WithExecutionMode(ExecutionMode.Series).Build();
+        var childWithDesc = new IssueBuilder().WithId("child-with-desc").WithTitle("Child With Desc").WithStatus(IssueStatus.Open)
+            .WithDescription("This child has a description")
+            .WithParentIssueIdAndOrder("root-a", "aaa").Build();
+
+        // Another root issue without description and no child with description
+        var rootNoDesc = new IssueBuilder().WithId("root-b").WithTitle("Root B").WithStatus(IssueStatus.Open).Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { rootWithDescChild, childWithDesc, rootNoDesc });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { childWithDesc, rootNoDesc });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // root-a's subtree should appear first because its first actionable child has a description
+        // The order should be: child-with-desc (actionable, row 0), root-a (row 1), root-b (actionable, row 2)
+        result.Nodes.Should().HaveCount(3);
+        result.Nodes[0].Issue.Id.Should().Be("child-with-desc"); // First actionable from root-a subtree
+        result.Nodes[1].Issue.Id.Should().Be("root-a"); // Parent of child-with-desc
+        result.Nodes[2].Issue.Id.Should().Be("root-b"); // Subtree with no description
+    }
+
+    [Test]
     public async Task BuildGraphAsync_SeriesParent_ChildrenWithDescriptionsAppearFirst()
     {
         var parent = new IssueBuilder().WithId("parent").WithTitle("Parent").WithStatus(IssueStatus.Open)
