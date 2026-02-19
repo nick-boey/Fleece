@@ -276,7 +276,7 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
             }
         }
 
-        // Sort each children list by SortOrder
+        // Sort each children list by SortOrder, then by status, description, priority, and title
         foreach (var kvp in childrenOf)
         {
             var parentId = kvp.Key;
@@ -289,6 +289,24 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
                     .FirstOrDefault(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase))
                     ?.SortOrder ?? "zzz";
                 var result = string.Compare(sortA, sortB, StringComparison.Ordinal);
+                if (result != 0)
+                {
+                    return result;
+                }
+
+                // Review status before Open status
+                var statusA = a.Status == IssueStatus.Review ? 0 : 1;
+                var statusB = b.Status == IssueStatus.Review ? 0 : 1;
+                result = statusA.CompareTo(statusB);
+                if (result != 0)
+                {
+                    return result;
+                }
+
+                // Issues with descriptions before those without
+                var hasDescA = string.IsNullOrWhiteSpace(a.Description) ? 1 : 0;
+                var hasDescB = string.IsNullOrWhiteSpace(b.Description) ? 1 : 0;
+                result = hasDescA.CompareTo(hasDescB);
                 if (result != 0)
                 {
                     return result;

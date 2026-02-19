@@ -36,7 +36,17 @@ public sealed class NextService(IIssueService issueService) : INextService
             actionable = actionable.Where(i => descendants.Contains(i.Id)).ToList();
         }
 
-        return actionable;
+        // Sort actionable issues:
+        // 1. Review status before Open status
+        // 2. Issues with descriptions before those without
+        // 3. By priority (lower is higher priority)
+        // 4. By title alphabetically
+        return actionable
+            .OrderBy(i => i.Status == IssueStatus.Review ? 0 : 1)
+            .ThenBy(i => string.IsNullOrWhiteSpace(i.Description) ? 1 : 0)
+            .ThenBy(i => i.Priority ?? 99)
+            .ThenBy(i => i.Title, StringComparer.Ordinal)
+            .ToList();
     }
 
     /// <summary>
@@ -44,8 +54,8 @@ public sealed class NextService(IIssueService issueService) : INextService
     /// </summary>
     private static bool IsActionable(Issue issue, Dictionary<string, Issue> issueLookup)
     {
-        // Must be Open status to be actionable
-        if (issue.Status != IssueStatus.Open)
+        // Must be Open or Review status to be actionable
+        if (issue.Status != IssueStatus.Open && issue.Status != IssueStatus.Review)
         {
             return false;
         }
@@ -147,6 +157,8 @@ public sealed class NextService(IIssueService issueService) : INextService
             })
             .Where(x => x.ParentRef is not null)
             .OrderBy(x => x.ParentRef!.SortOrder, StringComparer.Ordinal)
+            .ThenBy(x => x.Issue.Status == IssueStatus.Review ? 0 : 1)
+            .ThenBy(x => string.IsNullOrWhiteSpace(x.Issue.Description) ? 1 : 0)
             .ThenBy(x => x.Issue.Priority ?? 99)
             .ThenBy(x => x.Issue.Title, StringComparer.Ordinal)
             .Select(x => x.Issue)

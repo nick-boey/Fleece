@@ -89,6 +89,18 @@ public class NextServiceTests
         result.Should().BeEmpty();
     }
 
+    [Test]
+    public async Task GetNextIssuesAsync_WithReviewIssue_ReturnsIssue()
+    {
+        // Review issues are actionable - they need attention to proceed
+        var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Review).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        result.Should().ContainSingle().Which.Id.Should().Be("issue1");
+    }
+
     #endregion
 
     #region Series Execution Mode Tests
@@ -422,6 +434,180 @@ public class NextServiceTests
         var result = await _sut.GetNextIssuesAsync();
 
         result.Select(i => i.Id).Should().BeEquivalentTo(["issue1", "issue2", "issue3"]);
+    }
+
+    #endregion
+
+    #region Sorting Tests
+
+    [Test]
+    public async Task GetNextIssuesAsync_SortsReviewStatusBeforeOpen()
+    {
+        var openIssue = new IssueBuilder().WithId("open1").WithTitle("Open Issue").WithStatus(IssueStatus.Open).Build();
+        var reviewIssue = new IssueBuilder().WithId("review1").WithTitle("Review Issue").WithStatus(IssueStatus.Review).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([openIssue, reviewIssue]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        result.Should().HaveCount(2);
+        result[0].Id.Should().Be("review1");
+        result[1].Id.Should().Be("open1");
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_SortsIssuesWithDescriptionsFirst()
+    {
+        var noDesc = new IssueBuilder().WithId("noDesc").WithTitle("AAA No Description").WithStatus(IssueStatus.Open).Build();
+        var withDesc = new IssueBuilder().WithId("withDesc").WithTitle("ZZZ With Description").WithStatus(IssueStatus.Open).WithDescription("Has a description").Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([noDesc, withDesc]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        result.Should().HaveCount(2);
+        result[0].Id.Should().Be("withDesc");
+        result[1].Id.Should().Be("noDesc");
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_SortsByStatusThenDescriptionThenPriorityThenTitle()
+    {
+        // Create issues in reverse order of expected sort
+        var issue1 = new IssueBuilder()
+            .WithId("lowPriNoDesc")
+            .WithTitle("D Issue")
+            .WithStatus(IssueStatus.Open)
+            .WithPriority(5)
+            .Build();
+        var issue2 = new IssueBuilder()
+            .WithId("highPriNoDesc")
+            .WithTitle("C Issue")
+            .WithStatus(IssueStatus.Open)
+            .WithPriority(1)
+            .Build();
+        var issue3 = new IssueBuilder()
+            .WithId("lowPriWithDesc")
+            .WithTitle("B Issue")
+            .WithStatus(IssueStatus.Open)
+            .WithPriority(5)
+            .WithDescription("Has description")
+            .Build();
+        var issue4 = new IssueBuilder()
+            .WithId("reviewWithDesc")
+            .WithTitle("A Issue")
+            .WithStatus(IssueStatus.Review)
+            .WithPriority(5)
+            .WithDescription("Has description")
+            .Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue1, issue2, issue3, issue4]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        // Expected order: review+desc, open+desc, open+noDesc+highPri, open+noDesc+lowPri
+        result.Should().HaveCount(4);
+        result[0].Id.Should().Be("reviewWithDesc");
+        result[1].Id.Should().Be("lowPriWithDesc");
+        result[2].Id.Should().Be("highPriNoDesc");
+        result[3].Id.Should().Be("lowPriNoDesc");
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_ReviewIssueWithIncompleteChildren_IsNotActionable()
+    {
+        // A review issue with incomplete children should not be actionable
+        var parent = new IssueBuilder()
+            .WithId("parent")
+            .WithStatus(IssueStatus.Review)
+            .WithExecutionMode(ExecutionMode.Parallel)
+            .Build();
+        var child = new IssueBuilder()
+            .WithId("child")
+            .WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa")
+            .Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        // Parent should NOT be actionable while it has incomplete children
+        result.Select(i => i.Id).Should().BeEquivalentTo(["child"]);
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_ReviewIssueWithAllChildrenDone_IsActionable()
+    {
+        var parent = new IssueBuilder()
+            .WithId("parent")
+            .WithStatus(IssueStatus.Review)
+            .WithExecutionMode(ExecutionMode.Series)
+            .Build();
+        var child = new IssueBuilder()
+            .WithId("child")
+            .WithStatus(IssueStatus.Complete)
+            .WithParentIssueIdAndOrder("parent", "aaa")
+            .Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        result.Select(i => i.Id).Should().BeEquivalentTo(["parent"]);
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_SeriesParent_ReviewChildSortedBeforeOpenChild()
+    {
+        var parent = new IssueBuilder()
+            .WithId("parent")
+            .WithStatus(IssueStatus.Open)
+            .WithExecutionMode(ExecutionMode.Series)
+            .Build();
+        // Both children have the same sort order, so Review should come first
+        var openChild = new IssueBuilder()
+            .WithId("openChild")
+            .WithTitle("A Open")
+            .WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa")
+            .Build();
+        var reviewChild = new IssueBuilder()
+            .WithId("reviewChild")
+            .WithTitle("B Review")
+            .WithStatus(IssueStatus.Review)
+            .WithParentIssueIdAndOrder("parent", "aaa")
+            .Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, openChild, reviewChild]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        // In series mode with same sort order, Review should be first (and only actionable)
+        result.Select(i => i.Id).Should().BeEquivalentTo(["reviewChild"]);
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_EmptyDescriptionTreatedAsMissing()
+    {
+        var emptyDesc = new IssueBuilder()
+            .WithId("emptyDesc")
+            .WithTitle("Empty Description")
+            .WithStatus(IssueStatus.Open)
+            .WithDescription("")
+            .Build();
+        var whitespaceDesc = new IssueBuilder()
+            .WithId("whitespaceDesc")
+            .WithTitle("Whitespace Description")
+            .WithStatus(IssueStatus.Open)
+            .WithDescription("   ")
+            .Build();
+        var actualDesc = new IssueBuilder()
+            .WithId("actualDesc")
+            .WithTitle("Actual Description")
+            .WithStatus(IssueStatus.Open)
+            .WithDescription("Real content")
+            .Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([emptyDesc, whitespaceDesc, actualDesc]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        // Issue with actual description should be first
+        result[0].Id.Should().Be("actualDesc");
     }
 
     #endregion
