@@ -46,6 +46,7 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
             .Where(i => i.ParentIssues.Count == 0 ||
                         i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
             .OrderBy(i => i.Priority ?? 99)
+            .ThenByDescending(i => FirstActionableIssueHasDescription(i, childrenOf, actionableIds))
             .ThenBy(i => i.Title)
             .ToList();
 
@@ -280,6 +281,9 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
         foreach (var kvp in childrenOf)
         {
             var parentId = kvp.Key;
+            var parentIsParallel = issueLookup.TryGetValue(parentId, out var parent)
+                                   && parent.ExecutionMode == ExecutionMode.Parallel;
+
             kvp.Value.Sort((a, b) =>
             {
                 var sortA = a.ParentIssues
@@ -300,10 +304,69 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
                     return result;
                 }
 
+                // Only apply description-based sorting for non-parallel parents
+                if (!parentIsParallel)
+                {
+                    var hasDescA = !string.IsNullOrEmpty(a.Description);
+                    var hasDescB = !string.IsNullOrEmpty(b.Description);
+                    if (hasDescA != hasDescB)
+                    {
+                        return hasDescA ? -1 : 1; // Issues with descriptions first
+                    }
+                }
+
                 return string.Compare(a.Title, b.Title, StringComparison.Ordinal);
             });
         }
 
         return childrenOf;
+    }
+
+    /// <summary>
+    /// Determines if the first actionable issue in a subtree has a description.
+    /// For root sorting, we want to sort by the description of the "next" issue
+    /// (the first issue in lane 0), not the root issue's description.
+    /// </summary>
+    private static bool FirstActionableIssueHasDescription(
+        Issue root,
+        Dictionary<string, List<Issue>> childrenOf,
+        HashSet<string> actionableIds)
+    {
+        // Find the first actionable issue in this subtree via depth-first traversal
+        var firstActionable = FindFirstActionableInSubtree(root, childrenOf, actionableIds);
+        return firstActionable is not null && !string.IsNullOrEmpty(firstActionable.Description);
+    }
+
+    /// <summary>
+    /// Recursively finds the first actionable issue in a subtree using depth-first traversal.
+    /// Returns null if no actionable issue is found.
+    /// </summary>
+    private static Issue? FindFirstActionableInSubtree(
+        Issue issue,
+        Dictionary<string, List<Issue>> childrenOf,
+        HashSet<string> actionableIds)
+    {
+        // If this issue is actionable, return it
+        if (actionableIds.Contains(issue.Id))
+        {
+            return issue;
+        }
+
+        // Otherwise, check children (they are already sorted by the children lookup)
+        if (!childrenOf.TryGetValue(issue.Id, out var children))
+        {
+            return null;
+        }
+
+        foreach (var child in children)
+        {
+            var found = FindFirstActionableInSubtree(child, childrenOf, actionableIds);
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
     }
 }

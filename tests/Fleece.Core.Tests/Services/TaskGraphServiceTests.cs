@@ -630,6 +630,134 @@ public class TaskGraphServiceTests
 
     #endregion
 
+    #region Description-Based Sorting Tests
+
+    [Test]
+    public async Task BuildGraphAsync_RootIssues_IssuesWithDescriptionsAppearFirst()
+    {
+        // Two root issues with same priority
+        // ZZZ would come after AAA alphabetically, but ZZZ has a description so should come first
+        var issueWithDesc = new IssueBuilder().WithId("zzz").WithTitle("ZZZ Issue").WithStatus(IssueStatus.Open)
+            .WithDescription("This issue has a description").Build();
+        var issueNoDesc = new IssueBuilder().WithId("aaa").WithTitle("AAA Issue").WithStatus(IssueStatus.Open).Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { issueWithDesc, issueNoDesc });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { issueWithDesc, issueNoDesc });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // Issue with description should appear first despite alphabetical title ordering
+        result.Nodes.Should().HaveCount(2);
+        result.Nodes[0].Issue.Id.Should().Be("zzz");
+        result.Nodes[1].Issue.Id.Should().Be("aaa");
+    }
+
+    [Test]
+    public async Task BuildGraphAsync_RootWithoutDescription_SortedByFirstActionableChildDescription()
+    {
+        // Root issue without description but with a child that has a description
+        // Should be sorted based on the first actionable child's description, not the root's
+        var rootWithDescChild = new IssueBuilder().WithId("root-a").WithTitle("Root A").WithStatus(IssueStatus.Open)
+            .WithExecutionMode(ExecutionMode.Series).Build();
+        var childWithDesc = new IssueBuilder().WithId("child-with-desc").WithTitle("Child With Desc").WithStatus(IssueStatus.Open)
+            .WithDescription("This child has a description")
+            .WithParentIssueIdAndOrder("root-a", "aaa").Build();
+
+        // Another root issue without description and no child with description
+        var rootNoDesc = new IssueBuilder().WithId("root-b").WithTitle("Root B").WithStatus(IssueStatus.Open).Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { rootWithDescChild, childWithDesc, rootNoDesc });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { childWithDesc, rootNoDesc });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // root-a's subtree should appear first because its first actionable child has a description
+        // The order should be: child-with-desc (actionable, row 0), root-a (row 1), root-b (actionable, row 2)
+        result.Nodes.Should().HaveCount(3);
+        result.Nodes[0].Issue.Id.Should().Be("child-with-desc"); // First actionable from root-a subtree
+        result.Nodes[1].Issue.Id.Should().Be("root-a"); // Parent of child-with-desc
+        result.Nodes[2].Issue.Id.Should().Be("root-b"); // Subtree with no description
+    }
+
+    [Test]
+    public async Task BuildGraphAsync_SeriesParent_ChildrenWithDescriptionsAppearFirst()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithTitle("Parent").WithStatus(IssueStatus.Open)
+            .WithExecutionMode(ExecutionMode.Series).Build();
+        // Child without description has sort order "aaa" (would be first normally)
+        var childNoDesc = new IssueBuilder().WithId("child-no-desc").WithTitle("Child No Desc").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "bbb").Build();
+        // Child with description has sort order "bbb" (would be second normally)
+        var childWithDesc = new IssueBuilder().WithId("child-with-desc").WithTitle("Child With Desc").WithStatus(IssueStatus.Open)
+            .WithDescription("This child has a description")
+            .WithParentIssueIdAndOrder("parent", "bbb").Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { parent, childNoDesc, childWithDesc });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { childWithDesc });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // Child with description should appear first in row order
+        result.Nodes.Should().HaveCount(3);
+        result.Nodes[0].Issue.Id.Should().Be("child-with-desc");
+        result.Nodes[1].Issue.Id.Should().Be("child-no-desc");
+        result.Nodes[2].Issue.Id.Should().Be("parent");
+    }
+
+    [Test]
+    public async Task BuildGraphAsync_ParallelParent_ChildrenMaintainSortOrder_NotReorderedByDescription()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithTitle("Parent").WithStatus(IssueStatus.Open)
+            .WithExecutionMode(ExecutionMode.Parallel).Build();
+        // Child without description has sort order "aaa" (should remain first for parallel)
+        var childNoDesc = new IssueBuilder().WithId("child-no-desc").WithTitle("Child No Desc").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").Build();
+        // Child with description has sort order "bbb" (should remain second for parallel)
+        var childWithDesc = new IssueBuilder().WithId("child-with-desc").WithTitle("Child With Desc").WithStatus(IssueStatus.Open)
+            .WithDescription("This child has a description")
+            .WithParentIssueIdAndOrder("parent", "bbb").Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { parent, childNoDesc, childWithDesc });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { childNoDesc, childWithDesc });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // For parallel parent, children should maintain their original sort order (description should NOT reorder)
+        result.Nodes.Should().HaveCount(3);
+        result.Nodes[0].Issue.Id.Should().Be("child-no-desc");
+        result.Nodes[1].Issue.Id.Should().Be("child-with-desc");
+        result.Nodes[2].Issue.Id.Should().Be("parent");
+    }
+
+    [Test]
+    public async Task BuildGraphAsync_SamePriority_DescriptionBreaksTieBeforeTitle()
+    {
+        // Two roots with identical priority (both have priority 1)
+        var issueWithDesc = new IssueBuilder().WithId("zebra").WithTitle("Zebra Issue").WithStatus(IssueStatus.Open)
+            .WithPriority(1)
+            .WithDescription("Has description").Build();
+        var issueNoDesc = new IssueBuilder().WithId("apple").WithTitle("Apple Issue").WithStatus(IssueStatus.Open)
+            .WithPriority(1).Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { issueWithDesc, issueNoDesc });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { issueWithDesc, issueNoDesc });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // Description should be used as tiebreaker before falling back to title
+        result.Nodes.Should().HaveCount(2);
+        result.Nodes[0].Issue.Id.Should().Be("zebra"); // Has description, appears first
+        result.Nodes[1].Issue.Id.Should().Be("apple"); // No description, appears second
+    }
+
+    #endregion
+
     #region ParentExecutionMode Tests
 
     [Test]
