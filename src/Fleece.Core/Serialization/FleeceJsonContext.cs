@@ -31,6 +31,22 @@ namespace Fleece.Core.Serialization;
 [JsonSerializable(typeof(IssueShowDto))]
 [JsonSerializable(typeof(IReadOnlyList<IssueSummaryDto>))]
 [JsonSerializable(typeof(IReadOnlyList<ParentContextDto>))]
+[JsonSerializable(typeof(FleeceSettings))]
+[JsonSerializable(typeof(EffectiveSettings))]
+[JsonSerializable(typeof(SettingsSources))]
 public partial class FleeceJsonContext : JsonSerializerContext
+{
+}
+
+/// <summary>
+/// JSON context for settings files with pretty-printing enabled.
+/// </summary>
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    WriteIndented = true,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    UseStringEnumConverter = true)]
+[JsonSerializable(typeof(FleeceSettings))]
+public partial class FleeceSettingsWriteContext : JsonSerializerContext
 {
 }

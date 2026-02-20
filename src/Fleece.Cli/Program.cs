@@ -126,6 +126,13 @@ app.Configure(config =>
         .WithExample("next")
         .WithExample("next", "--parent", "abc123")
         .WithExample("next", "--json");
+
+    config.AddCommand<ConfigCommand>("config")
+        .WithDescription("View and modify Fleece configuration settings")
+        .WithExample("config", "--list")
+        .WithExample("config", "--get", "autoMerge")
+        .WithExample("config", "--set", "identity=John Doe")
+        .WithExample("config", "--global", "--set", "autoMerge=true");
 });
 
 return await app.RunAsync(args);

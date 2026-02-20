@@ -11,6 +11,9 @@ public static class ServiceCollectionExtensions
     {
         basePath ??= Directory.GetCurrentDirectory();
 
+        // Register settings service early so other services can depend on it
+        services.AddSingleton<ISettingsService>(sp => new SettingsService(basePath));
+
         services.AddSingleton<IJsonlSerializer, JsonlSerializer>();
         services.AddSingleton<IIdGenerator, Sha256IdGenerator>();
         services.AddSingleton<ISchemaValidator, SchemaValidator>();
@@ -19,7 +22,8 @@ public static class ServiceCollectionExtensions
                 basePath,
                 sp.GetRequiredService<IJsonlSerializer>(),
                 sp.GetRequiredService<ISchemaValidator>()));
-        services.AddSingleton<IGitConfigService, GitConfigService>();
+        services.AddSingleton<IGitConfigService>(sp =>
+            new GitConfigService(sp.GetRequiredService<ISettingsService>()));
         services.AddSingleton<IGitService>(sp => new GitService(basePath));
         services.AddSingleton<IIssueService, IssueService>();
         services.AddSingleton<IMergeService, MergeService>();
