@@ -21,7 +21,10 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
             return new TaskGraph { Nodes = [], TotalLanes = 0 };
         }
 
-        // Filter to non-terminal issues only
+        // Build a lookup for ALL issues (needed to find terminal parents)
+        var fullLookup = issueList.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+
+        // Start with non-terminal issues
         var activeIssues = issueList.Where(i => !i.Status.IsTerminal()).ToList();
 
         if (activeIssues.Count == 0)
@@ -29,8 +32,11 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
             return new TaskGraph { Nodes = [], TotalLanes = 0 };
         }
 
-        // Build lookup for active issues
-        var issueLookup = activeIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+        // Collect ancestors of active issues (even terminal ones) to provide hierarchy context
+        var issuesToDisplay = CollectIssuesToDisplay(activeIssues, fullLookup);
+
+        // Build lookup for display issues
+        var issueLookup = issuesToDisplay.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
         // Determine which issues are actionable
         var actionableIssues = await nextService.GetNextIssuesAsync(cancellationToken: cancellationToken);
@@ -39,10 +45,10 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
             StringComparer.OrdinalIgnoreCase);
 
         // Build children lookup: parentId -> sorted list of incomplete children
-        var childrenOf = BuildChildrenLookup(activeIssues, issueLookup);
+        var childrenOf = BuildChildrenLookup(issuesToDisplay, issueLookup);
 
-        // Find root issues (no parent in the active set)
-        var rootIssues = activeIssues
+        // Find root issues (no parent in the display set)
+        var rootIssues = issuesToDisplay
             .Where(i => i.ParentIssues.Count == 0 ||
                         i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
             .OrderBy(i => i.Priority ?? 99)
@@ -237,7 +243,9 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
     }
 
     /// <summary>
-    /// Gets the incomplete (non-done) children of an issue, sorted by sort order.
+    /// Gets the children of an issue that need to be traversed for layout purposes.
+    /// A child needs traversal if it's not done, OR if it's done but has non-done descendants.
+    /// This allows terminal parents with active children to appear in the graph.
     /// </summary>
     private static List<Issue> GetIncompleteChildren(Issue issue, Dictionary<string, List<Issue>> childrenOf)
     {
@@ -246,7 +254,28 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
             return [];
         }
 
-        return children.Where(c => !c.Status.IsDone()).ToList();
+        return children.Where(c => HasActiveDescendants(c, childrenOf)).ToList();
+    }
+
+    /// <summary>
+    /// Checks if an issue has any active (non-done) descendants, including itself.
+    /// Returns true if the issue itself is not done, or if any of its descendants are not done.
+    /// </summary>
+    private static bool HasActiveDescendants(Issue issue, Dictionary<string, List<Issue>> childrenOf)
+    {
+        // If this issue is not done, it counts as active
+        if (!issue.Status.IsDone())
+        {
+            return true;
+        }
+
+        // Otherwise, check if any children have active descendants
+        if (!childrenOf.TryGetValue(issue.Id, out var children))
+        {
+            return false;
+        }
+
+        return children.Any(c => HasActiveDescendants(c, childrenOf));
     }
 
     /// <summary>
@@ -322,17 +351,6 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
                     return result;
                 }
 
-                // Only apply description-based sorting for non-parallel parents
-                if (!parentIsParallel)
-                {
-                    var hasDescA = !string.IsNullOrEmpty(a.Description);
-                    var hasDescB = !string.IsNullOrEmpty(b.Description);
-                    if (hasDescA != hasDescB)
-                    {
-                        return hasDescA ? -1 : 1; // Issues with descriptions first
-                    }
-                }
-
                 return string.Compare(a.Title, b.Title, StringComparison.Ordinal);
             });
         }
@@ -386,5 +404,68 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Collects the set of issues to display in the task graph.
+    /// Starts with non-terminal issues and adds all ancestor issues (even terminal ones)
+    /// to provide proper hierarchy context.
+    /// </summary>
+    private static List<Issue> CollectIssuesToDisplay(
+        List<Issue> activeIssues,
+        Dictionary<string, Issue> fullLookup)
+    {
+        var displayIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Start with all active (non-terminal) issues
+        foreach (var issue in activeIssues)
+        {
+            displayIds.Add(issue.Id);
+        }
+
+        // Walk up parent chains to collect ancestors (even terminal ones)
+        var toProcess = new Queue<Issue>(activeIssues);
+        var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        while (toProcess.Count > 0)
+        {
+            var issue = toProcess.Dequeue();
+
+            if (!processed.Add(issue.Id))
+            {
+                continue; // Already processed
+            }
+
+            foreach (var parentRef in issue.ParentIssues)
+            {
+                if (fullLookup.TryGetValue(parentRef.ParentIssue, out var parent))
+                {
+                    if (displayIds.Add(parent.Id))
+                    {
+                        // Newly added parent - need to check its parents too
+                        toProcess.Enqueue(parent);
+                    }
+                }
+            }
+        }
+
+        // Return issues in a consistent order, preserving the order of active issues
+        // and appending any terminal ancestors
+        var result = new List<Issue>();
+        foreach (var issue in activeIssues)
+        {
+            result.Add(issue);
+        }
+
+        // Add terminal ancestors that weren't in the active set
+        foreach (var id in displayIds)
+        {
+            if (fullLookup.TryGetValue(id, out var issue) && issue.Status.IsTerminal())
+            {
+                result.Add(issue);
+            }
+        }
+
+        return result;
     }
 }

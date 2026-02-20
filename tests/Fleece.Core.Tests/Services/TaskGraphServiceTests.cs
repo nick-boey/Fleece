@@ -853,4 +853,189 @@ public class TaskGraphServiceTests
     }
 
     #endregion
+
+    #region Terminal Parent Inclusion Tests
+
+    [Test]
+    public async Task BuildGraphAsync_OpenChildWithCompleteParent_ParentIncludedInGraph()
+    {
+        // Scenario from issue description:
+        // Go to work (Complete)
+        // └── Drive to work (Open) ← actionable "next" task
+        //
+        // Expected: Both "Go to work" (Complete) and "Drive to work" (Open) show up
+
+        var parent = new IssueBuilder().WithId("go-to-work").WithTitle("Go to work")
+            .WithStatus(IssueStatus.Complete).WithExecutionMode(ExecutionMode.Series).Build();
+        var child = new IssueBuilder().WithId("drive-to-work").WithTitle("Drive to work")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("go-to-work", "aaa").Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { parent, child });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new List<Issue> { child });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // Both issues should be present
+        result.Nodes.Should().HaveCount(2);
+        var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
+
+        // Child at lane 0, parent at lane 1
+        nodeLookup["drive-to-work"].Lane.Should().Be(0);
+        nodeLookup["go-to-work"].Lane.Should().Be(1);
+
+        // Only the child is actionable, parent is complete (not actionable)
+        nodeLookup["drive-to-work"].IsActionable.Should().BeTrue();
+        nodeLookup["go-to-work"].IsActionable.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task BuildGraphAsync_GrandchildWithCompleteAncestors_AllAncestorsIncluded()
+    {
+        // Multi-level hierarchy:
+        // Grandparent (Complete)
+        // └── Parent (Archived)
+        //     └── Child (Open) ← actionable
+
+        var grandparent = new IssueBuilder().WithId("grandparent").WithTitle("Grandparent")
+            .WithStatus(IssueStatus.Complete).WithExecutionMode(ExecutionMode.Series).Build();
+        var parent = new IssueBuilder().WithId("parent").WithTitle("Parent")
+            .WithStatus(IssueStatus.Archived).WithExecutionMode(ExecutionMode.Series)
+            .WithParentIssueIdAndOrder("grandparent", "aaa").Build();
+        var child = new IssueBuilder().WithId("child").WithTitle("Child")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { grandparent, parent, child });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new List<Issue> { child });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // All three issues should be present
+        result.Nodes.Should().HaveCount(3);
+        var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
+
+        nodeLookup.Should().ContainKey("grandparent");
+        nodeLookup.Should().ContainKey("parent");
+        nodeLookup.Should().ContainKey("child");
+
+        // Verify lane assignments: child at 0, parent at 1, grandparent at 2
+        nodeLookup["child"].Lane.Should().Be(0);
+        nodeLookup["parent"].Lane.Should().Be(1);
+        nodeLookup["grandparent"].Lane.Should().Be(2);
+
+        // Only child is actionable
+        nodeLookup["child"].IsActionable.Should().BeTrue();
+        nodeLookup["parent"].IsActionable.Should().BeFalse();
+        nodeLookup["grandparent"].IsActionable.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task BuildGraphAsync_MixedStatusHierarchy_AllRelevantParentsIncluded()
+    {
+        // Mixed status hierarchy from issue description:
+        // Go to work (Complete)
+        // ├── Wake up (Complete) ← NOT included (terminal, no active children)
+        // ├── Make breakfast (Complete) ← NOT included (terminal, no active children)
+        // └── Drive to work (Open) ← actionable
+        //
+        // Only "Go to work" and "Drive to work" should be in the graph
+
+        var goToWork = new IssueBuilder().WithId("go-to-work").WithTitle("Go to work")
+            .WithStatus(IssueStatus.Complete).WithExecutionMode(ExecutionMode.Series).Build();
+        var wakeUp = new IssueBuilder().WithId("wake-up").WithTitle("Wake up")
+            .WithStatus(IssueStatus.Complete).WithParentIssueIdAndOrder("go-to-work", "aaa").Build();
+        var makeBreakfast = new IssueBuilder().WithId("make-breakfast").WithTitle("Make breakfast")
+            .WithStatus(IssueStatus.Complete).WithParentIssueIdAndOrder("go-to-work", "bbb").Build();
+        var driveToWork = new IssueBuilder().WithId("drive-to-work").WithTitle("Drive to work")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("go-to-work", "ccc").Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { goToWork, wakeUp, makeBreakfast, driveToWork });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new List<Issue> { driveToWork });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // Only "go-to-work" and "drive-to-work" should be present
+        result.Nodes.Should().HaveCount(2);
+        var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
+
+        nodeLookup.Should().ContainKey("go-to-work");
+        nodeLookup.Should().ContainKey("drive-to-work");
+        nodeLookup.Should().NotContainKey("wake-up");
+        nodeLookup.Should().NotContainKey("make-breakfast");
+
+        nodeLookup["drive-to-work"].Lane.Should().Be(0);
+        nodeLookup["go-to-work"].Lane.Should().Be(1);
+    }
+
+    [Test]
+    public async Task BuildGraphAsync_CompleteParentWithOpenAndProgressChildren_AllActiveChildrenShown()
+    {
+        // Complete parent with multiple active children
+        // Parent (Complete)
+        // ├── Child1 (Open)
+        // └── Child2 (Progress)
+
+        var parent = new IssueBuilder().WithId("parent").WithTitle("Parent")
+            .WithStatus(IssueStatus.Complete).WithExecutionMode(ExecutionMode.Parallel).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithTitle("Child 1")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithTitle("Child 2")
+            .WithStatus(IssueStatus.Progress).WithParentIssueIdAndOrder("parent", "bbb").Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { parent, child1, child2 });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new List<Issue> { child1 });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // All three should be present
+        result.Nodes.Should().HaveCount(3);
+        var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
+
+        nodeLookup.Should().ContainKey("parent");
+        nodeLookup.Should().ContainKey("child1");
+        nodeLookup.Should().ContainKey("child2");
+
+        // Both children at lane 0 (parallel), parent at lane 1
+        nodeLookup["child1"].Lane.Should().Be(0);
+        nodeLookup["child2"].Lane.Should().Be(0);
+        nodeLookup["parent"].Lane.Should().Be(1);
+    }
+
+    [Test]
+    public async Task BuildGraphAsync_TerminalParentNotInFullLookup_TreatedAsOrphan()
+    {
+        // Edge case: Child references a parent that doesn't exist in the issue list
+        var child = new IssueBuilder().WithId("child").WithTitle("Child")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("nonexistent", "aaa").Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { child });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new List<Issue> { child });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // Child should be treated as root
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("child");
+        result.Nodes[0].Lane.Should().Be(0);
+    }
+
+    [Test]
+    public async Task BuildGraphAsync_TerminalIssuesWithNoActiveDescendants_Excluded()
+    {
+        // Terminal issues that are not ancestors of active issues should still be excluded
+        var complete1 = new IssueBuilder().WithId("complete1").WithTitle("Complete 1")
+            .WithStatus(IssueStatus.Complete).Build();
+        var complete2 = new IssueBuilder().WithId("complete2").WithTitle("Complete 2")
+            .WithStatus(IssueStatus.Complete).WithParentIssueIdAndOrder("complete1", "aaa").Build();
+        var openUnrelated = new IssueBuilder().WithId("open1").WithTitle("Open Unrelated")
+            .WithStatus(IssueStatus.Open).Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue> { complete1, complete2, openUnrelated });
+        _nextService.GetNextIssuesAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new List<Issue> { openUnrelated });
+
+        var result = await _sut.BuildGraphAsync();
+
+        // Only the unrelated open issue should be included
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("open1");
+    }
+
+    #endregion
 }
