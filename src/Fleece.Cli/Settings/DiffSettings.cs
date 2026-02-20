@@ -3,7 +3,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Settings;
 
-public sealed class DiffSettings : CommandSettings
+public sealed class DiffSettings : FleeceCommandSettings
 {
     [CommandArgument(0, "[FILE1]")]
     [Description("First JSONL file to compare")]

@@ -3,7 +3,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Settings;
 
-public sealed class NextSettings : CommandSettings
+public sealed class NextSettings : FleeceCommandSettings
 {
     [CommandOption("-p|--parent <PARENT>")]
     [Description("Show next issues only under this parent")]

@@ -7,10 +7,11 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class CleanCommand(ICleanService cleanService, IStorageService storageService) : AsyncCommand<CleanSettings>
+public sealed class CleanCommand(ICleanService cleanService, IStorageServiceProvider storageServiceProvider) : AsyncCommand<CleanSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, CleanSettings settings)
     {
+        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
         var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {

@@ -9,10 +9,12 @@ namespace Fleece.Cli.Commands;
 /// <summary>
 /// Command to find issues that can be worked on next based on dependencies and execution mode.
 /// </summary>
-public sealed class NextCommand(INextService nextService, IIssueService issueService, IStorageService storageService) : AsyncCommand<NextSettings>
+public sealed class NextCommand(INextService nextService, IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider) : AsyncCommand<NextSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, NextSettings settings)
     {
+        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
+        var issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
         var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {

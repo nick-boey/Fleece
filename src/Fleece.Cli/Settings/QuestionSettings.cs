@@ -3,7 +3,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Settings;
 
-public sealed class QuestionSettings : CommandSettings
+public sealed class QuestionSettings : FleeceCommandSettings
 {
     [CommandArgument(0, "<ID>")]
     [Description("Issue ID")]

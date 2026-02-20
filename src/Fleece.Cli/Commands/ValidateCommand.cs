@@ -6,11 +6,12 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class ValidateCommand(IValidationService validationService, IStorageService storageService)
+public sealed class ValidateCommand(IValidationService validationService, IStorageServiceProvider storageServiceProvider)
     : AsyncCommand<ValidateSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ValidateSettings settings)
     {
+        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
         var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {

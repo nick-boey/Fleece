@@ -3,7 +3,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Settings;
 
-public sealed class CreateSettings : CommandSettings
+public sealed class CreateSettings : FleeceCommandSettings
 {
     [CommandOption("-t|--title <TITLE>")]
     [Description("Issue title (required)")]

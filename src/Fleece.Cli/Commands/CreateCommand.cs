@@ -8,11 +8,16 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class CreateCommand(IIssueService issueService, IStorageService storageService, IGitService gitService) : AsyncCommand<CreateSettings>
+public sealed class CreateCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider, IGitService gitService) : AsyncCommand<CreateSettings>
 {
+    private IStorageService? _storageService;
+    private IIssueService? _issueService;
+
     public override async Task<int> ExecuteAsync(CommandContext context, CreateSettings settings)
     {
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        _storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
+        _issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
+        var (hasMultiple, message) = await _storageService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
@@ -103,9 +108,9 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
                 tags = template.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             }
 
-            await storageService.EnsureDirectoryExistsAsync();
+            await _storageService!.EnsureDirectoryExistsAsync();
 
-            var issue = await issueService.CreateAsync(
+            var issue = await _issueService!.CreateAsync(
                 title: template.Title,
                 type: issueType,
                 description: template.Description,
@@ -182,11 +187,11 @@ public sealed class CreateCommand(IIssueService issueService, IStorageService st
             executionMode = parsedMode;
         }
 
-        await storageService.EnsureDirectoryExistsAsync();
+        await _storageService!.EnsureDirectoryExistsAsync();
 
         try
         {
-            var issue = await issueService.CreateAsync(
+            var issue = await _issueService!.CreateAsync(
                 title: settings.Title,
                 type: issueType,
                 description: settings.Description,

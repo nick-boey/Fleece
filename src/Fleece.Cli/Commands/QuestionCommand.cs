@@ -11,12 +11,23 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class QuestionCommand(IIssueService issueService) : AsyncCommand<QuestionSettings>
+public sealed class QuestionCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider) : AsyncCommand<QuestionSettings>
 {
+    private IIssueService? _issueService;
+
     public override async Task<int> ExecuteAsync(CommandContext context, QuestionSettings settings)
     {
+        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
+        _issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
+        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        if (hasMultiple)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            return 1;
+        }
+
         // Resolve the issue ID (supports partial IDs)
-        var matches = await issueService.ResolveByPartialIdAsync(settings.Id);
+        var matches = await _issueService!.ResolveByPartialIdAsync(settings.Id);
 
         if (matches.Count == 0)
         {
@@ -125,7 +136,7 @@ public sealed class QuestionCommand(IIssueService issueService) : AsyncCommand<Q
 
         try
         {
-            var updated = await issueService.UpdateQuestionsAsync(issue.Id, updatedQuestions);
+            var updated = await _issueService!.UpdateQuestionsAsync(issue.Id, updatedQuestions);
 
             if (json)
             {
@@ -171,7 +182,7 @@ public sealed class QuestionCommand(IIssueService issueService) : AsyncCommand<Q
 
         try
         {
-            var updated = await issueService.UpdateQuestionsAsync(issue.Id, questions);
+            var updated = await _issueService!.UpdateQuestionsAsync(issue.Id, questions);
 
             if (json)
             {
