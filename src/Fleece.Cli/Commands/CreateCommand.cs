@@ -80,7 +80,7 @@ public sealed class CreateCommand(IIssueServiceFactory issueServiceFactory, ISto
 
             if (!Enum.TryParse<IssueType>(template.Type, ignoreCase: true, out var issueType))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{template.Type}'. Use: task, bug, chore, feature");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{template.Type}'. Use: task, bug, chore, feature, idea");
                 return 1;
             }
 
@@ -148,7 +148,7 @@ public sealed class CreateCommand(IIssueServiceFactory issueServiceFactory, ISto
     {
         if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var issueType))
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature");
+            AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea");
             return 1;
         }
 

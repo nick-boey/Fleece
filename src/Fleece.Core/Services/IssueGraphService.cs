@@ -161,13 +161,20 @@ public sealed class IssueGraphService(IIssueService issueService) : IIssueGraphS
         var childrenOf = BuildChildrenLookup(issuesToDisplay, issueLookup);
 
         // Find root issues (no parent in the display set)
+        // Exclude Idea type issues from being roots - they can still appear as children
         var rootIssues = issuesToDisplay
             .Where(i => i.ParentIssues.Count == 0 ||
                         i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
+            .Where(i => i.Type != IssueType.Idea)
             .OrderBy(i => i.Priority ?? 99)
             .ThenByDescending(i => FirstActionableIssueHasDescription(i, childrenOf, actionableIds))
             .ThenBy(i => i.Title)
             .ToList();
+
+        if (rootIssues.Count == 0)
+        {
+            return new TaskGraph { Nodes = [], TotalLanes = 0 };
+        }
 
         // Layout each root subtree
         var nodeList = new List<TaskGraphNode>();
@@ -461,6 +468,12 @@ public sealed class IssueGraphService(IIssueService issueService) : IIssueGraphS
     private static bool IsActionable(IssueGraphNode node)
     {
         var issue = node.Issue;
+
+        // Ideas are never actionable - they represent future possibilities, not current work
+        if (issue.Type == IssueType.Idea)
+        {
+            return false;
+        }
 
         // Must be Open or Review status to be actionable
         if (issue.Status != IssueStatus.Open && issue.Status != IssueStatus.Review)

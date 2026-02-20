@@ -10,7 +10,7 @@ public sealed class CreateSettings : FleeceCommandSettings
     public string Title { get; init; } = null!;
 
     [CommandOption("-y|--type <TYPE>")]
-    [Description("Issue type: task, bug, chore, feature (required)")]
+    [Description("Issue type: task, bug, chore, feature, idea (required)")]
     public string Type { get; init; } = null!;
 
     [CommandOption("-d|--description <DESC>")]

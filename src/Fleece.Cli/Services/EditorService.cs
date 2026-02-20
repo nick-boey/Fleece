@@ -30,7 +30,7 @@ public sealed class EditorService
 
             # Required fields:
             title:
-            type: task  # Options: task, bug, chore, feature
+            type: task  # Options: task, bug, chore, feature, idea
 
             # Optional fields:
             description:
@@ -64,7 +64,7 @@ public sealed class EditorService
 
             # Required fields:
             title: {EscapeYamlValue(issue.Title)}
-            type: {issue.Type.ToString().ToLowerInvariant()}  # Options: task, bug, chore, feature
+            type: {issue.Type.ToString().ToLowerInvariant()}  # Options: task, bug, chore, feature, idea
 
             # Optional fields:
             description: {EscapeYamlValue(issue.Description)}

@@ -22,7 +22,7 @@ public sealed class EditSettings : FleeceCommandSettings
     public string? Status { get; init; }
 
     [CommandOption("-y|--type <TYPE>")]
-    [Description("New type: task, bug, chore, feature")]
+    [Description("New type: task, bug, chore, feature, idea")]
     public string? Type { get; init; }
 
     [CommandOption("-p|--priority <PRIORITY>")]
