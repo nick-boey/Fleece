@@ -125,7 +125,7 @@ public sealed class SettingsService : ISettingsService
         FleeceSettings? cli)
     {
         var (autoMerge, autoMergeSource) = ResolveBoolValue(
-            cli?.AutoMerge, local?.AutoMerge, global?.AutoMerge, false);
+            cli?.AutoMerge, local?.AutoMerge, global?.AutoMerge, true);
         var (identity, identitySource) = ResolveValue(
             cli?.Identity, local?.Identity, global?.Identity, (string?)null);
         var (syncBranch, syncBranchSource) = ResolveValue(

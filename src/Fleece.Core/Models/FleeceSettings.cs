@@ -9,7 +9,7 @@ public sealed record FleeceSettings
 {
     /// <summary>
     /// When true, automatically run merge before operations that read issues.
-    /// Default: false
+    /// Default: true
     /// </summary>
     public bool? AutoMerge { get; init; }
 
