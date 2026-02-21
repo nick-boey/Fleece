@@ -48,4 +48,8 @@ public sealed class ListSettings : FleeceCommandSettings
     [CommandOption("--strict")]
     [Description("Fail with exit code 1 if schema warnings are detected")]
     public bool Strict { get; init; }
+
+    [CommandOption("--sync-status")]
+    [Description("Show git sync status for each issue (~=synced, +=committed, *=local)")]
+    public bool SyncStatus { get; init; }
 }

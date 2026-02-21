@@ -19,6 +19,7 @@ public class ListCommandTests
     private IStorageService _storageService = null!;
     private IStorageServiceProvider _storageServiceProvider = null!;
     private IIssueServiceFactory _issueServiceFactory = null!;
+    private ISyncStatusService _syncStatusService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
     private StringWriter _consoleOutput = null!;
@@ -43,7 +44,11 @@ public class ListCommandTests
         _issueServiceFactory.GetIssueService(Arg.Any<string?>())
             .Returns(_issueService);
 
-        _command = new ListCommand(_issueServiceFactory, _storageServiceProvider);
+        _syncStatusService = Substitute.For<ISyncStatusService>();
+        _syncStatusService.GetSyncStatusesAsync(Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<string, SyncStatus>());
+
+        _command = new ListCommand(_issueServiceFactory, _storageServiceProvider, _syncStatusService);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;
