@@ -139,6 +139,36 @@ app.Configure(config =>
         .WithExample("config", "--get", "autoMerge")
         .WithExample("config", "--set", "identity=John Doe")
         .WithExample("config", "--global", "--set", "autoMerge=true");
+
+    config.AddCommand<OpenCommand>("open")
+        .WithDescription("Set issue status to open")
+        .WithExample("open", "abc123")
+        .WithExample("open", "abc123", "def456");
+
+    config.AddCommand<ProgressCommand>("progress")
+        .WithDescription("Set issue status to progress")
+        .WithExample("progress", "abc123")
+        .WithExample("progress", "abc123", "def456");
+
+    config.AddCommand<ReviewCommand>("review")
+        .WithDescription("Set issue status to review")
+        .WithExample("review", "abc123")
+        .WithExample("review", "abc123", "def456");
+
+    config.AddCommand<CompleteCommand>("complete")
+        .WithDescription("Set issue status to complete")
+        .WithExample("complete", "abc123")
+        .WithExample("complete", "abc123", "def456");
+
+    config.AddCommand<ArchivedCommand>("archived")
+        .WithDescription("Set issue status to archived")
+        .WithExample("archived", "abc123")
+        .WithExample("archived", "abc123", "def456");
+
+    config.AddCommand<ClosedCommand>("closed")
+        .WithDescription("Set issue status to closed")
+        .WithExample("closed", "abc123")
+        .WithExample("closed", "abc123", "def456");
 });
 
 return await app.RunAsync(args);
