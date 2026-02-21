@@ -34,6 +34,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICleanService, CleanService>();
         services.AddSingleton<IStorageServiceProvider, StorageServiceProvider>();
         services.AddSingleton<IIssueServiceFactory, IssueServiceFactory>();
+        services.AddSingleton<ISyncStatusService>(sp =>
+            new SyncStatusService(
+                basePath,
+                sp.GetRequiredService<IJsonlSerializer>(),
+                sp.GetRequiredService<IGitService>()));
 
         return services;
     }

@@ -6,9 +6,23 @@ namespace Fleece.Cli.Output;
 
 public static class JsonFormatter
 {
-    public static void RenderIssues(IReadOnlyList<Issue> issues, bool verbose = false)
+    public static void RenderIssues(
+        IReadOnlyList<Issue> issues,
+        bool verbose = false,
+        IReadOnlyDictionary<string, SyncStatus>? syncStatuses = null)
     {
-        if (verbose)
+        if (syncStatuses != null)
+        {
+            // Use IssueSyncDto to include sync status
+            var dtos = issues.Select(issue =>
+            {
+                var status = syncStatuses.GetValueOrDefault(issue.Id, SyncStatus.Local);
+                return IssueSyncDto.FromIssue(issue, status);
+            }).ToList();
+            var json = JsonSerializer.Serialize(dtos, FleeceJsonContext.Default.IReadOnlyListIssueSyncDto);
+            Console.WriteLine(json);
+        }
+        else if (verbose)
         {
             var json = JsonSerializer.Serialize(issues, FleeceJsonContext.Default.IReadOnlyListIssue);
             Console.WriteLine(json);

@@ -43,11 +43,29 @@ public static class IssueLineFormatter
     /// <summary>
     /// Returns plain text for a single issue line:
     /// {id} {status} {type} {title}
+    /// Or with sync status: {sync} {id} {status} {type} {title}
     /// </summary>
-    public static string FormatPlainText(Issue issue)
+    public static string FormatPlainText(Issue issue, SyncStatus? syncStatus = null)
     {
-        return $"{issue.Id} {issue.Status.ToString().ToLowerInvariant()} {issue.Type.ToString().ToLowerInvariant()} {issue.Title}";
+        var baseLine = $"{issue.Id} {issue.Status.ToString().ToLowerInvariant()} {issue.Type.ToString().ToLowerInvariant()} {issue.Title}";
+        if (syncStatus.HasValue)
+        {
+            var syncChar = GetSyncChar(syncStatus.Value);
+            return $"{syncChar} {baseLine}";
+        }
+        return baseLine;
     }
+
+    /// <summary>
+    /// Gets the single character indicator for a sync status.
+    /// </summary>
+    public static string GetSyncChar(SyncStatus status) => status switch
+    {
+        SyncStatus.Synced => "~",
+        SyncStatus.Committed => "+",
+        SyncStatus.Local => "*",
+        _ => "?"
+    };
 
     /// <summary>
     /// Returns the Spectre.Console color name for a given issue status.

@@ -34,6 +34,8 @@ namespace Fleece.Core.Serialization;
 [JsonSerializable(typeof(FleeceSettings))]
 [JsonSerializable(typeof(EffectiveSettings))]
 [JsonSerializable(typeof(SettingsSources))]
+[JsonSerializable(typeof(IssueSyncDto))]
+[JsonSerializable(typeof(IReadOnlyList<IssueSyncDto>))]
 public partial class FleeceJsonContext : JsonSerializerContext
 {
 }

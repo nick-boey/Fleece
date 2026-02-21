@@ -5,7 +5,7 @@ namespace Fleece.Cli.Output;
 
 public static class TableFormatter
 {
-    public static void RenderIssues(IReadOnlyList<Issue> issues)
+    public static void RenderIssues(IReadOnlyList<Issue> issues, IReadOnlyDictionary<string, SyncStatus>? syncStatuses = null)
     {
         if (issues.Count == 0)
         {
@@ -23,6 +23,10 @@ public static class TableFormatter
         table.AddColumn(new TableColumn("Pri").Centered());
         table.AddColumn(new TableColumn("Assigned").Centered());
         table.AddColumn(new TableColumn("Updated").Centered());
+        if (syncStatuses != null)
+        {
+            table.AddColumn(new TableColumn("Sync").Centered());
+        }
 
         foreach (var issue in issues)
         {
@@ -49,20 +53,50 @@ public static class TableFormatter
             var priDisplay = issue.Priority?.ToString() ?? "-";
             var assignedDisplay = issue.AssignedTo ?? "-";
 
-            table.AddRow(
-                $"[bold]{issue.Id}[/]",
-                Markup.Escape(issue.Title),
-                $"[{typeColor}]{issue.Type}[/]",
-                $"[{statusColor}]{issue.Status}[/]",
-                priDisplay,
-                Markup.Escape(assignedDisplay),
-                issue.LastUpdate.ToString("yyyy-MM-dd")
-            );
+            if (syncStatuses != null)
+            {
+                var syncStatus = syncStatuses.GetValueOrDefault(issue.Id, SyncStatus.Local);
+                var (syncChar, syncColor) = GetSyncDisplay(syncStatus);
+
+                table.AddRow(
+                    $"[bold]{issue.Id}[/]",
+                    Markup.Escape(issue.Title),
+                    $"[{typeColor}]{issue.Type}[/]",
+                    $"[{statusColor}]{issue.Status}[/]",
+                    priDisplay,
+                    Markup.Escape(assignedDisplay),
+                    issue.LastUpdate.ToString("yyyy-MM-dd"),
+                    $"[{syncColor}]{syncChar}[/]"
+                );
+            }
+            else
+            {
+                table.AddRow(
+                    $"[bold]{issue.Id}[/]",
+                    Markup.Escape(issue.Title),
+                    $"[{typeColor}]{issue.Type}[/]",
+                    $"[{statusColor}]{issue.Status}[/]",
+                    priDisplay,
+                    Markup.Escape(assignedDisplay),
+                    issue.LastUpdate.ToString("yyyy-MM-dd")
+                );
+            }
         }
 
         AnsiConsole.Write(table);
         AnsiConsole.MarkupLine($"[dim]{issues.Count} issue(s)[/]");
     }
+
+    /// <summary>
+    /// Gets the display character and color for a sync status.
+    /// </summary>
+    public static (string Char, string Color) GetSyncDisplay(SyncStatus status) => status switch
+    {
+        SyncStatus.Synced => ("~", "green"),
+        SyncStatus.Committed => ("+", "yellow"),
+        SyncStatus.Local => ("*", "red"),
+        _ => ("?", "white")
+    };
 
     public static void RenderIssue(Issue issue, IssueShowDto? context = null)
     {

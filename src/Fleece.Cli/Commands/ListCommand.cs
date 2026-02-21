@@ -7,7 +7,10 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class ListCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider) : AsyncCommand<ListSettings>
+public sealed class ListCommand(
+    IIssueServiceFactory issueServiceFactory,
+    IStorageServiceProvider storageServiceProvider,
+    ISyncStatusService syncStatusService) : AsyncCommand<ListSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ListSettings settings)
     {
@@ -70,23 +73,30 @@ public sealed class ListCommand(IIssueServiceFactory issueServiceFactory, IStora
             settings.LinkedPr,
             settings.All);
 
+        // Get sync statuses if requested
+        IReadOnlyDictionary<string, SyncStatus>? syncStatuses = null;
+        if (settings.SyncStatus)
+        {
+            syncStatuses = await syncStatusService.GetSyncStatusesAsync();
+        }
+
         if (settings.Json || settings.JsonVerbose)
         {
-            JsonFormatter.RenderIssues(issues, verbose: settings.JsonVerbose);
+            JsonFormatter.RenderIssues(issues, verbose: settings.JsonVerbose, syncStatuses: syncStatuses);
         }
         else if (settings.OneLine)
         {
-            RenderOneLine(issues);
+            RenderOneLine(issues, syncStatuses);
         }
         else
         {
-            TableFormatter.RenderIssues(issues);
+            TableFormatter.RenderIssues(issues, syncStatuses);
         }
 
         return 0;
     }
 
-    private static void RenderOneLine(IReadOnlyList<Issue> issues)
+    private static void RenderOneLine(IReadOnlyList<Issue> issues, IReadOnlyDictionary<string, SyncStatus>? syncStatuses)
     {
         if (issues.Count == 0)
         {
@@ -96,7 +106,8 @@ public sealed class ListCommand(IIssueServiceFactory issueServiceFactory, IStora
 
         foreach (var issue in issues)
         {
-            Console.WriteLine(IssueLineFormatter.FormatPlainText(issue));
+            var syncStatus = syncStatuses?.GetValueOrDefault(issue.Id);
+            Console.WriteLine(IssueLineFormatter.FormatPlainText(issue, syncStatus));
         }
     }
 }
