@@ -1,8 +1,10 @@
 using System.Reflection;
 using System.Text;
 using Fleece.Cli.Commands;
+using Fleece.Cli.Interceptors;
 using Fleece.Cli.Tui;
 using Fleece.Core.Extensions;
+using Fleece.Core.Services.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console.Cli;
 
@@ -28,10 +30,14 @@ services.AddFleeceInMemoryService();
 var registrar = new TypeRegistrar(services);
 var app = new CommandApp<TuiCommand>(registrar);
 
+// Create interceptor with lazy service provider resolution
+var autoMergeInterceptor = new AutoMergeInterceptor(() => registrar.GetServiceProvider());
+
 app.Configure(config =>
 {
     config.SetApplicationName("fleece");
     config.SetApplicationVersion(version);
+    config.SetInterceptor(autoMergeInterceptor);
 
     config.AddCommand<CreateCommand>("create")
         .WithDescription("Create a new issue. Run without options to open an interactive editor with a YAML template.")
@@ -140,7 +146,16 @@ return await app.RunAsync(args);
 // Type registrar for Spectre.Console.Cli DI integration
 public sealed class TypeRegistrar(IServiceCollection services) : ITypeRegistrar
 {
-    public ITypeResolver Build() => new TypeResolver(services.BuildServiceProvider());
+    private IServiceProvider? _serviceProvider;
+
+    public ITypeResolver Build()
+    {
+        _serviceProvider = services.BuildServiceProvider();
+        return new TypeResolver(_serviceProvider);
+    }
+
+    public IServiceProvider GetServiceProvider() =>
+        _serviceProvider ?? throw new InvalidOperationException("Service provider not built yet. Call Build() first.");
 
     public void Register(Type service, Type implementation) =>
         services.AddSingleton(service, implementation);

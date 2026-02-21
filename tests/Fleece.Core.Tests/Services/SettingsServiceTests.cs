@@ -79,7 +79,7 @@ public class SettingsServiceTests
     {
         var result = await _sut.GetEffectiveSettingsAsync();
 
-        result.AutoMerge.Should().BeFalse();
+        result.AutoMerge.Should().BeTrue();  // Default is true
         result.Identity.Should().BeNull();
         result.SyncBranch.Should().BeNull();
         result.Sources.AutoMerge.Should().Be(SettingSource.Default);
@@ -123,7 +123,7 @@ public class SettingsServiceTests
 
         var result = await _sut.GetEffectiveSettingsAsync();
 
-        result.AutoMerge.Should().BeFalse();
+        result.AutoMerge.Should().BeTrue();  // Default is true
         result.Sources.AutoMerge.Should().Be(SettingSource.Default);
         result.Identity.Should().Be("Local User");
         result.Sources.Identity.Should().Be(SettingSource.Local);
