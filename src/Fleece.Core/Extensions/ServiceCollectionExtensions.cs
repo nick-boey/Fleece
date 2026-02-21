@@ -30,8 +30,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton<IValidationService, ValidationService>();
         services.AddSingleton<IDependencyService, DependencyService>();
-        services.AddSingleton<INextService, NextService>();
-        services.AddSingleton<ITaskGraphService, TaskGraphService>();
+        services.AddSingleton<IIssueGraphService, IssueGraphService>();
         services.AddSingleton<ICleanService, CleanService>();
         services.AddSingleton<IStorageServiceProvider, StorageServiceProvider>();
         services.AddSingleton<IIssueServiceFactory, IssueServiceFactory>();
