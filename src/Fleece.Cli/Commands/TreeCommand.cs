@@ -8,7 +8,7 @@ using System.Text.Json;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class TreeCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider, ITaskGraphService taskGraphService) : AsyncCommand<TreeSettings>
+public sealed class TreeCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider, IIssueGraphService graphService) : AsyncCommand<TreeSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, TreeSettings settings)
     {
@@ -57,7 +57,7 @@ public sealed class TreeCommand(IIssueServiceFactory issueServiceFactory, IStora
                 return 1;
             }
 
-            var graph = await taskGraphService.BuildGraphAsync();
+            var graph = await graphService.BuildTaskGraphLayoutAsync();
             TaskGraphRenderer.Render(graph);
             return 0;
         }

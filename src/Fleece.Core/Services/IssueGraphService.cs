@@ -4,14 +4,127 @@ using Fleece.Core.Services.Interfaces;
 namespace Fleece.Core.Services;
 
 /// <summary>
-/// Service for building a task graph layout from issues.
-/// The graph is organized bottom-up, with actionable tasks at the left (lane 0)
-/// and root/parent tasks at the right (higher lanes).
+/// Unified service for building and querying issue graphs with computed relationships.
+/// Consolidates functionality from NextService (actionable issues) and TaskGraphService (layout).
 /// </summary>
-public sealed class TaskGraphService(IIssueService issueService, INextService nextService) : ITaskGraphService
+public sealed class IssueGraphService(IIssueService issueService) : IIssueGraphService
 {
+    #region IIssueGraphService Implementation
+
     /// <inheritdoc />
-    public async Task<TaskGraph> BuildGraphAsync(CancellationToken cancellationToken = default)
+    public async Task<IssueGraph> BuildGraphAsync(CancellationToken cancellationToken = default)
+    {
+        var allIssues = await issueService.GetAllAsync(cancellationToken);
+        return BuildGraphFromIssues(allIssues.ToList());
+    }
+
+    /// <inheritdoc />
+    public async Task<IssueGraph> QueryGraphAsync(
+        GraphQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        // Build full graph first
+        var fullGraph = await BuildGraphAsync(cancellationToken);
+
+        // Determine which issues to include
+        var includedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var node in fullGraph.Nodes.Values)
+        {
+            if (ShouldIncludeInQuery(node, query))
+            {
+                includedIds.Add(node.Issue.Id);
+            }
+        }
+
+        // Handle IncludeInactiveWithActiveDescendants
+        if (query.IncludeInactiveWithActiveDescendants)
+        {
+            var activeIds = includedIds.ToList();
+            foreach (var id in activeIds)
+            {
+                var node = fullGraph.GetNode(id);
+                if (node == null)
+                {
+                    continue;
+                }
+
+                foreach (var parentId in node.ParentIssueIds)
+                {
+                    IncludeAncestorsWithActiveDescendants(parentId, fullGraph, includedIds);
+                }
+            }
+        }
+
+        // Handle RootIssueId scoping
+        if (!string.IsNullOrWhiteSpace(query.RootIssueId))
+        {
+            var scopedIds = GetDescendantIds(query.RootIssueId, fullGraph);
+            scopedIds.Add(query.RootIssueId); // Include the root itself
+            includedIds.IntersectWith(scopedIds);
+        }
+
+        // Build filtered graph
+        var filteredNodes = new Dictionary<string, IssueGraphNode>(StringComparer.OrdinalIgnoreCase);
+        var filteredRoots = new List<string>();
+
+        foreach (var id in includedIds)
+        {
+            if (fullGraph.Nodes.TryGetValue(id, out var node))
+            {
+                filteredNodes[id] = node;
+
+                // Check if this is a root in the filtered context
+                var hasParentInFiltered = node.ParentIssueIds.Any(p => includedIds.Contains(p));
+                if (!hasParentInFiltered)
+                {
+                    filteredRoots.Add(id);
+                }
+            }
+        }
+
+        return new IssueGraph
+        {
+            Nodes = filteredNodes,
+            RootIssueIds = filteredRoots
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<Issue>> GetNextIssuesAsync(
+        string? parentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var graph = await BuildGraphAsync(cancellationToken);
+
+        // Find actionable issues
+        var actionable = graph.Nodes.Values
+            .Where(IsActionable)
+            .ToList();
+
+        // Apply parent filter if specified
+        if (!string.IsNullOrWhiteSpace(parentId))
+        {
+            var descendants = GetDescendantIds(parentId, graph);
+            actionable = actionable.Where(n => descendants.Contains(n.Issue.Id)).ToList();
+        }
+
+        // Sort actionable issues:
+        // 1. Review status before Open status
+        // 2. Issues with descriptions before those without
+        // 3. By priority (lower is higher priority)
+        // 4. By title alphabetically
+        return actionable
+            .Select(n => n.Issue)
+            .OrderBy(i => i.Status == IssueStatus.Review ? 0 : 1)
+            .ThenBy(i => string.IsNullOrWhiteSpace(i.Description) ? 1 : 0)
+            .ThenBy(i => i.Priority ?? 99)
+            .ThenBy(i => i.Title, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<TaskGraph> BuildTaskGraphLayoutAsync(CancellationToken cancellationToken = default)
     {
         var allIssues = await issueService.GetAllAsync(cancellationToken);
         var issueList = allIssues.ToList();
@@ -39,7 +152,7 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
         var issueLookup = issuesToDisplay.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
         // Determine which issues are actionable
-        var actionableIssues = await nextService.GetNextIssuesAsync(cancellationToken: cancellationToken);
+        var actionableIssues = await GetNextIssuesAsync(cancellationToken: cancellationToken);
         var actionableIds = new HashSet<string>(
             actionableIssues.Select(i => i.Id),
             StringComparer.OrdinalIgnoreCase);
@@ -74,6 +187,306 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
         };
     }
 
+    #endregion
+
+    #region Graph Building
+
+    private IssueGraph BuildGraphFromIssues(List<Issue> issues)
+    {
+        if (issues.Count == 0)
+        {
+            return new IssueGraph
+            {
+                Nodes = new Dictionary<string, IssueGraphNode>(StringComparer.OrdinalIgnoreCase),
+                RootIssueIds = []
+            };
+        }
+
+        // Build lookups
+        var issueLookup = issues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+        var childrenOf = BuildChildrenLookup(issues, issueLookup);
+
+        // Compute Next/Previous for each issue (Series mode only)
+        var nextPrevious = ComputeNextPrevious(issues, issueLookup, childrenOf);
+
+        // Build nodes
+        var nodes = new Dictionary<string, IssueGraphNode>(StringComparer.OrdinalIgnoreCase);
+        var rootIds = new List<string>();
+
+        foreach (var issue in issues)
+        {
+            var parentIds = issue.ParentIssues
+                .Where(p => issueLookup.ContainsKey(p.ParentIssue))
+                .Select(p => p.ParentIssue)
+                .ToList();
+
+            var childIds = childrenOf.TryGetValue(issue.Id, out var children)
+                ? children.Select(c => c.Id).ToList()
+                : new List<string>();
+
+            var (prevIds, nextIds) = nextPrevious.TryGetValue(issue.Id, out var np)
+                ? np
+                : (new List<string>(), new List<string>());
+
+            var hasIncompleteChildren = childIds.Any(id =>
+                issueLookup.TryGetValue(id, out var child) && !child.Status.IsDone());
+
+            var allPreviousDone = prevIds.All(id =>
+                !issueLookup.TryGetValue(id, out var prev) || prev.Status.IsDone());
+
+            var parentExecMode = GetParentExecutionMode(issue, issueLookup);
+
+            nodes[issue.Id] = new IssueGraphNode
+            {
+                Issue = issue,
+                ChildIssueIds = childIds,
+                ParentIssueIds = parentIds,
+                PreviousIssueIds = prevIds,
+                NextIssueIds = nextIds,
+                HasIncompleteChildren = hasIncompleteChildren,
+                AllPreviousDone = allPreviousDone,
+                ParentExecutionMode = parentExecMode
+            };
+
+            if (parentIds.Count == 0)
+            {
+                rootIds.Add(issue.Id);
+            }
+        }
+
+        return new IssueGraph
+        {
+            Nodes = nodes,
+            RootIssueIds = rootIds
+        };
+    }
+
+    /// <summary>
+    /// Computes Next/Previous relationships for issues.
+    /// ONLY siblings under a Series execution mode parent have Next/Previous.
+    /// Parallel mode siblings and root issues have empty lists.
+    /// </summary>
+    private static Dictionary<string, (List<string> Prev, List<string> Next)> ComputeNextPrevious(
+        List<Issue> issues,
+        Dictionary<string, Issue> issueLookup,
+        Dictionary<string, List<Issue>> childrenOf)
+    {
+        var result = issues.ToDictionary(
+            i => i.Id,
+            _ => (Prev: new List<string>(), Next: new List<string>()),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var kvp in childrenOf)
+        {
+            var parentId = kvp.Key;
+            var children = kvp.Value;
+
+            // Only compute next/previous for Series mode parents
+            if (!issueLookup.TryGetValue(parentId, out var parent) ||
+                parent.ExecutionMode != ExecutionMode.Series)
+            {
+                continue;
+            }
+
+            for (int i = 0; i < children.Count; i++)
+            {
+                var childId = children[i].Id;
+                if (!result.ContainsKey(childId))
+                {
+                    continue;
+                }
+
+                // Previous is the immediately preceding sibling
+                if (i > 0)
+                {
+                    var prevId = children[i - 1].Id;
+                    if (!result[childId].Prev.Contains(prevId))
+                    {
+                        result[childId].Prev.Add(prevId);
+                    }
+                }
+
+                // Next is the immediately following sibling
+                if (i < children.Count - 1)
+                {
+                    var nextId = children[i + 1].Id;
+                    if (!result[childId].Next.Contains(nextId))
+                    {
+                        result[childId].Next.Add(nextId);
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static ExecutionMode? GetParentExecutionMode(Issue issue, Dictionary<string, Issue> issueLookup)
+    {
+        // For issues with multiple parents, return the first valid parent's mode
+        foreach (var parentRef in issue.ParentIssues)
+        {
+            if (issueLookup.TryGetValue(parentRef.ParentIssue, out var parent))
+            {
+                return parent.ExecutionMode;
+            }
+        }
+        return null;
+    }
+
+    #endregion
+
+    #region Query Helpers
+
+    private static bool ShouldIncludeInQuery(IssueGraphNode node, GraphQuery query)
+    {
+        var issue = node.Issue;
+
+        // Status filter
+        if (query.Status.HasValue && issue.Status != query.Status.Value)
+        {
+            return false;
+        }
+
+        // Exclude terminal unless explicitly included or a specific status was requested
+        if (!query.IncludeTerminal && query.Status is null && issue.Status.IsTerminal())
+        {
+            return false;
+        }
+
+        // Type filter
+        if (query.Type.HasValue && issue.Type != query.Type.Value)
+        {
+            return false;
+        }
+
+        // Priority filter
+        if (query.Priority.HasValue && issue.Priority != query.Priority.Value)
+        {
+            return false;
+        }
+
+        // AssignedTo filter
+        if (!string.IsNullOrWhiteSpace(query.AssignedTo) &&
+            !string.Equals(issue.AssignedTo, query.AssignedTo, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // Tags filter (any match)
+        if (query.Tags is { Count: > 0 } &&
+            !query.Tags.Any(t => issue.Tags?.Contains(t, StringComparer.OrdinalIgnoreCase) ?? false))
+        {
+            return false;
+        }
+
+        // LinkedPr filter
+        if (query.LinkedPr.HasValue && issue.LinkedPR != query.LinkedPr.Value)
+        {
+            return false;
+        }
+
+        // SearchText filter
+        if (!string.IsNullOrWhiteSpace(query.SearchText))
+        {
+            var matchesTitle = issue.Title.Contains(query.SearchText, StringComparison.OrdinalIgnoreCase);
+            var matchesDescription = issue.Description?.Contains(query.SearchText, StringComparison.OrdinalIgnoreCase) ?? false;
+            var matchesTags = issue.Tags?.Any(t => t.Contains(query.SearchText, StringComparison.OrdinalIgnoreCase)) ?? false;
+
+            if (!matchesTitle && !matchesDescription && !matchesTags)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void IncludeAncestorsWithActiveDescendants(
+        string parentId,
+        IssueGraph graph,
+        HashSet<string> includedIds)
+    {
+        var node = graph.GetNode(parentId);
+        if (node == null)
+        {
+            return;
+        }
+
+        // Include this parent (it has an active descendant)
+        if (includedIds.Add(parentId))
+        {
+            // Recursively include grandparents
+            foreach (var grandparentId in node.ParentIssueIds)
+            {
+                IncludeAncestorsWithActiveDescendants(grandparentId, graph, includedIds);
+            }
+        }
+    }
+
+    private static HashSet<string> GetDescendantIds(string parentId, IssueGraph graph)
+    {
+        var descendants = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var toProcess = new Queue<string>();
+        toProcess.Enqueue(parentId);
+
+        while (toProcess.Count > 0)
+        {
+            var currentId = toProcess.Dequeue();
+            var node = graph.GetNode(currentId);
+            if (node == null)
+            {
+                continue;
+            }
+
+            foreach (var childId in node.ChildIssueIds)
+            {
+                if (descendants.Add(childId))
+                {
+                    toProcess.Enqueue(childId);
+                }
+            }
+        }
+
+        return descendants;
+    }
+
+    #endregion
+
+    #region Actionable Issue Detection
+
+    /// <summary>
+    /// Determines if a graph node represents an actionable issue.
+    /// </summary>
+    private static bool IsActionable(IssueGraphNode node)
+    {
+        var issue = node.Issue;
+
+        // Must be Open or Review status to be actionable
+        if (issue.Status != IssueStatus.Open && issue.Status != IssueStatus.Review)
+        {
+            return false;
+        }
+
+        // Parent issues with incomplete children cannot be next for completion
+        if (node.HasIncompleteChildren)
+        {
+            return false;
+        }
+
+        // All previous issues must be done
+        if (!node.AllPreviousDone)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    #endregion
+
+    #region Task Graph Layout (ported from TaskGraphService)
+
     /// <summary>
     /// Recursively lays out a subtree, emitting nodes in depth-first order.
     /// Returns the maximum lane used by the subtree.
@@ -95,7 +508,7 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
         }
 
         // Get incomplete children of this issue
-        var incompleteChildren = GetIncompleteChildren(issue, childrenOf);
+        var incompleteChildren = GetIncompleteChildrenForLayout(issue, childrenOf);
 
         // Leaf issue (no incomplete children)
         if (incompleteChildren.Count == 0)
@@ -159,7 +572,7 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
                 continue;
             }
 
-            var childIncomplete = GetIncompleteChildren(child, childrenOf);
+            var childIncomplete = GetIncompleteChildrenForLayout(child, childrenOf);
 
             if (childIncomplete.Count == 0)
             {
@@ -212,7 +625,7 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
                 continue;
             }
 
-            var childIncomplete = GetIncompleteChildren(child, childrenOf);
+            var childIncomplete = GetIncompleteChildrenForLayout(child, childrenOf);
 
             if (childIncomplete.Count == 0)
             {
@@ -244,10 +657,8 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
 
     /// <summary>
     /// Gets the children of an issue that need to be traversed for layout purposes.
-    /// A child needs traversal if it's not done, OR if it's done but has non-done descendants.
-    /// This allows terminal parents with active children to appear in the graph.
     /// </summary>
-    private static List<Issue> GetIncompleteChildren(Issue issue, Dictionary<string, List<Issue>> childrenOf)
+    private static List<Issue> GetIncompleteChildrenForLayout(Issue issue, Dictionary<string, List<Issue>> childrenOf)
     {
         if (!childrenOf.TryGetValue(issue.Id, out var children))
         {
@@ -259,7 +670,6 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
 
     /// <summary>
     /// Checks if an issue has any active (non-done) descendants, including itself.
-    /// Returns true if the issue itself is not done, or if any of its descendants are not done.
     /// </summary>
     private static bool HasActiveDescendants(Issue issue, Dictionary<string, List<Issue>> childrenOf)
     {
@@ -282,18 +692,18 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
     /// Builds a lookup from parent ID to sorted list of children.
     /// </summary>
     private static Dictionary<string, List<Issue>> BuildChildrenLookup(
-        List<Issue> activeIssues,
+        List<Issue> issues,
         Dictionary<string, Issue> issueLookup)
     {
         var childrenOf = new Dictionary<string, List<Issue>>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var issue in activeIssues)
+        foreach (var issue in issues)
         {
             foreach (var parentRef in issue.ParentIssues)
             {
                 if (!issueLookup.ContainsKey(parentRef.ParentIssue))
                 {
-                    continue; // Parent not in active set
+                    continue; // Parent not in set
                 }
 
                 if (!childrenOf.TryGetValue(parentRef.ParentIssue, out var children))
@@ -310,8 +720,6 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
         foreach (var kvp in childrenOf)
         {
             var parentId = kvp.Key;
-            var parentIsParallel = issueLookup.TryGetValue(parentId, out var parent)
-                                   && parent.ExecutionMode == ExecutionMode.Parallel;
 
             kvp.Value.Sort((a, b) =>
             {
@@ -360,35 +768,29 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
 
     /// <summary>
     /// Determines if the first actionable issue in a subtree has a description.
-    /// For root sorting, we want to sort by the description of the "next" issue
-    /// (the first issue in lane 0), not the root issue's description.
     /// </summary>
     private static bool FirstActionableIssueHasDescription(
         Issue root,
         Dictionary<string, List<Issue>> childrenOf,
         HashSet<string> actionableIds)
     {
-        // Find the first actionable issue in this subtree via depth-first traversal
         var firstActionable = FindFirstActionableInSubtree(root, childrenOf, actionableIds);
         return firstActionable is not null && !string.IsNullOrEmpty(firstActionable.Description);
     }
 
     /// <summary>
-    /// Recursively finds the first actionable issue in a subtree using depth-first traversal.
-    /// Returns null if no actionable issue is found.
+    /// Recursively finds the first actionable issue in a subtree.
     /// </summary>
     private static Issue? FindFirstActionableInSubtree(
         Issue issue,
         Dictionary<string, List<Issue>> childrenOf,
         HashSet<string> actionableIds)
     {
-        // If this issue is actionable, return it
         if (actionableIds.Contains(issue.Id))
         {
             return issue;
         }
 
-        // Otherwise, check children (they are already sorted by the children lookup)
         if (!childrenOf.TryGetValue(issue.Id, out var children))
         {
             return null;
@@ -408,8 +810,7 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
 
     /// <summary>
     /// Collects the set of issues to display in the task graph.
-    /// Starts with non-terminal issues and adds all ancestor issues (even terminal ones)
-    /// to provide proper hierarchy context.
+    /// Starts with non-terminal issues and adds all ancestor issues (even terminal ones).
     /// </summary>
     private static List<Issue> CollectIssuesToDisplay(
         List<Issue> activeIssues,
@@ -433,7 +834,7 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
 
             if (!processed.Add(issue.Id))
             {
-                continue; // Already processed
+                continue;
             }
 
             foreach (var parentRef in issue.ParentIssues)
@@ -442,15 +843,13 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
                 {
                     if (displayIds.Add(parent.Id))
                     {
-                        // Newly added parent - need to check its parents too
                         toProcess.Enqueue(parent);
                     }
                 }
             }
         }
 
-        // Return issues in a consistent order, preserving the order of active issues
-        // and appending any terminal ancestors
+        // Return issues in a consistent order
         var result = new List<Issue>();
         foreach (var issue in activeIssues)
         {
@@ -468,4 +867,6 @@ public sealed class TaskGraphService(IIssueService issueService, INextService ne
 
         return result;
     }
+
+    #endregion
 }

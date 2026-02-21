@@ -19,7 +19,7 @@ public class TreeCommandTests
     private IStorageService _storageService = null!;
     private IStorageServiceProvider _storageServiceProvider = null!;
     private IIssueServiceFactory _issueServiceFactory = null!;
-    private ITaskGraphService _taskGraphService = null!;
+    private IIssueGraphService _graphService = null!;
     private TreeCommand _command = null!;
     private CommandContext _context = null!;
     private StringWriter _consoleOutput = null!;
@@ -31,7 +31,7 @@ public class TreeCommandTests
     {
         _issueService = Substitute.For<IIssueService>();
         _storageService = Substitute.For<IStorageService>();
-        _taskGraphService = Substitute.For<ITaskGraphService>();
+        _graphService = Substitute.For<IIssueGraphService>();
         _storageService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
             .Returns((false, string.Empty));
 
@@ -43,7 +43,7 @@ public class TreeCommandTests
         _issueServiceFactory.GetIssueService(Arg.Any<string?>())
             .Returns(_issueService);
 
-        _command = new TreeCommand(_issueServiceFactory, _storageServiceProvider, _taskGraphService);
+        _command = new TreeCommand(_issueServiceFactory, _storageServiceProvider, _graphService);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "tree", null);
 
         _originalConsole = Console.Out;
