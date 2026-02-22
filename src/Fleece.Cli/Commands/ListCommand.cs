@@ -23,7 +23,39 @@ public sealed class ListCommand(
             return 1;
         }
 
-        // Load issues with diagnostics
+        // --tree-root implies --tree
+        var isTree = settings.Tree || !string.IsNullOrWhiteSpace(settings.TreeRoot);
+
+        // Validate mutually exclusive options
+        if (isTree && settings.Next)
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] --tree and --next cannot be used together");
+            return 1;
+        }
+
+        if ((isTree || settings.Next) && settings.OneLine)
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] --tree/--next cannot be used with --one-line");
+            return 1;
+        }
+
+        if (settings.Next && settings.Json)
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] --next and --json cannot be used together");
+            return 1;
+        }
+
+        // --- Next mode ---
+        if (settings.Next)
+        {
+            var graph = await issueService.BuildTaskGraphLayoutAsync();
+            TaskGraphRenderer.Render(graph);
+            return 0;
+        }
+
+        // --- Tree mode and default list mode share filtering/diagnostics ---
+
+        // Load issues with diagnostics (only for non-next modes)
         var loadResult = await storageService.LoadIssuesWithDiagnosticsAsync();
         var hasWarnings = DiagnosticFormatter.RenderDiagnostics(loadResult.Diagnostics);
 
@@ -56,7 +88,7 @@ public sealed class ListCommand(
             type = parsedType;
         }
 
-        // Validate mutually exclusive options
+        // Validate mutually exclusive output options
         if (settings.OneLine && (settings.Json || settings.JsonVerbose))
         {
             AnsiConsole.MarkupLine("[red]Error:[/] --one-line cannot be used with --json or --json-verbose");
@@ -73,6 +105,13 @@ public sealed class ListCommand(
             settings.LinkedPr,
             settings.All);
 
+        // --- Tree mode ---
+        if (isTree)
+        {
+            return await ExecuteTreeMode(issueService, issues.ToList(), settings);
+        }
+
+        // --- Default list mode ---
         // Get sync statuses if requested
         IReadOnlyDictionary<string, SyncStatus>? syncStatuses = null;
         if (settings.SyncStatus)
@@ -91,6 +130,54 @@ public sealed class ListCommand(
         else
         {
             TableFormatter.RenderIssues(issues, syncStatuses);
+        }
+
+        return 0;
+    }
+
+    private static async Task<int> ExecuteTreeMode(
+        IIssueService issueService,
+        List<Issue> issueList,
+        ListSettings settings)
+    {
+        // Resolve optional root issue ID
+        Issue? rootIssue = null;
+        if (!string.IsNullOrWhiteSpace(settings.TreeRoot))
+        {
+            var matches = await issueService.ResolveByPartialIdAsync(settings.TreeRoot);
+
+            if (matches.Count == 0)
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.TreeRoot}' not found");
+                return 1;
+            }
+
+            if (matches.Count > 1)
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.TreeRoot}':");
+                foreach (var match in matches)
+                {
+                    AnsiConsole.MarkupLine($"  {match.Id} {Markup.Escape(match.Title)}");
+                }
+                return 1;
+            }
+
+            rootIssue = matches[0];
+        }
+
+        // When a root issue is specified, constrain to the root + its transitive descendants
+        if (rootIssue is not null)
+        {
+            issueList = TreeRenderer.ScopeToDescendants(rootIssue, issueList);
+        }
+
+        if (settings.Json)
+        {
+            TreeRenderer.RenderJsonTree(issueList);
+        }
+        else
+        {
+            TreeRenderer.RenderTree(issueList);
         }
 
         return 0;

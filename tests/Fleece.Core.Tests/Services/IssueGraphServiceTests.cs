@@ -8,17 +8,23 @@ using NUnit.Framework;
 
 namespace Fleece.Core.Tests.Services;
 
+/// <summary>
+/// Tests for graph methods (BuildGraphAsync, QueryGraphAsync, GetNextIssuesAsync, BuildTaskGraphLayoutAsync)
+/// which are now part of IssueService.
+/// </summary>
 [TestFixture]
-public class IssueGraphServiceTests
+public class IssueServiceGraphTests
 {
-    private IIssueService _issueService = null!;
-    private IssueGraphService _sut = null!;
+    private IStorageService _storageService = null!;
+    private IssueService _sut = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _issueService = Substitute.For<IIssueService>();
-        _sut = new IssueGraphService(_issueService);
+        _storageService = Substitute.For<IStorageService>();
+        var idGenerator = Substitute.For<IIdGenerator>();
+        var gitConfigService = Substitute.For<IGitConfigService>();
+        _sut = new IssueService(_storageService, idGenerator, gitConfigService);
     }
 
     #region BuildGraphAsync Basic Tests
@@ -26,7 +32,7 @@ public class IssueGraphServiceTests
     [Test]
     public async Task BuildGraphAsync_WithNoIssues_ReturnsEmptyGraph()
     {
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -38,7 +44,7 @@ public class IssueGraphServiceTests
     public async Task BuildGraphAsync_WithSingleIssue_ReturnsOneNode()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Open).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -53,7 +59,7 @@ public class IssueGraphServiceTests
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -86,7 +92,7 @@ public class IssueGraphServiceTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -106,7 +112,7 @@ public class IssueGraphServiceTests
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
         var child3 = new IssueBuilder().WithId("child3").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "ccc").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2, child3]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2, child3]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -124,7 +130,7 @@ public class IssueGraphServiceTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -146,7 +152,7 @@ public class IssueGraphServiceTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -165,7 +171,7 @@ public class IssueGraphServiceTests
     {
         var issue1 = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Open).Build();
         var issue2 = new IssueBuilder().WithId("issue2").WithStatus(IssueStatus.Open).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue1, issue2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue1, issue2]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -195,7 +201,7 @@ public class IssueGraphServiceTests
                 new ParentIssueRef { ParentIssue = "parent1", SortOrder = "bbb" },
                 new ParentIssueRef { ParentIssue = "parent2", SortOrder = "aaa" })
             .Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent1, parent2, sibling1, multiParent]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent1, parent2, sibling1, multiParent]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -214,7 +220,7 @@ public class IssueGraphServiceTests
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -228,7 +234,7 @@ public class IssueGraphServiceTests
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Complete)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -244,7 +250,7 @@ public class IssueGraphServiceTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -260,7 +266,7 @@ public class IssueGraphServiceTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -274,7 +280,7 @@ public class IssueGraphServiceTests
     [Test]
     public async Task GetNextIssuesAsync_WithNoIssues_ReturnsEmptyList()
     {
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -285,7 +291,7 @@ public class IssueGraphServiceTests
     public async Task GetNextIssuesAsync_WithSingleOpenIssue_ReturnsIssue()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Open).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -296,7 +302,7 @@ public class IssueGraphServiceTests
     public async Task GetNextIssuesAsync_WithClosedIssue_ReturnsEmptyList()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Closed).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -307,7 +313,7 @@ public class IssueGraphServiceTests
     public async Task GetNextIssuesAsync_WithProgressIssue_ReturnsEmptyList()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Progress).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -318,7 +324,7 @@ public class IssueGraphServiceTests
     public async Task GetNextIssuesAsync_WithReviewIssue_ReturnsIssue()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Review).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -334,7 +340,7 @@ public class IssueGraphServiceTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -350,7 +356,7 @@ public class IssueGraphServiceTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -366,7 +372,7 @@ public class IssueGraphServiceTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -380,7 +386,7 @@ public class IssueGraphServiceTests
             .WithExecutionMode(ExecutionMode.Parallel).Build();
         var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -394,7 +400,7 @@ public class IssueGraphServiceTests
             .WithExecutionMode(ExecutionMode.Series).Build();
         var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Complete)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -409,7 +415,7 @@ public class IssueGraphServiceTests
         var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var other = new IssueBuilder().WithId("other").WithStatus(IssueStatus.Open).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, other]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, other]);
 
         var result = await _sut.GetNextIssuesAsync(parentId: "parent");
 
@@ -423,7 +429,7 @@ public class IssueGraphServiceTests
             .WithStatus(IssueStatus.Open).Build();
         var reviewIssue = new IssueBuilder().WithId("review1").WithTitle("Review Issue")
             .WithStatus(IssueStatus.Review).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([openIssue, reviewIssue]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([openIssue, reviewIssue]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -439,7 +445,7 @@ public class IssueGraphServiceTests
             .WithStatus(IssueStatus.Open).Build();
         var withDesc = new IssueBuilder().WithId("withDesc").WithTitle("ZZZ With Description")
             .WithStatus(IssueStatus.Open).WithDescription("Has a description").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([noDesc, withDesc]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([noDesc, withDesc]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -455,7 +461,7 @@ public class IssueGraphServiceTests
     [Test]
     public async Task BuildTaskGraphLayoutAsync_WithNoIssues_ReturnsEmptyGraph()
     {
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([]);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -468,7 +474,7 @@ public class IssueGraphServiceTests
     {
         var issue = new IssueBuilder().WithId("issue1").WithTitle("Do something")
             .WithStatus(IssueStatus.Open).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -486,7 +492,7 @@ public class IssueGraphServiceTests
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
         var closed = new IssueBuilder().WithId("closed1").WithStatus(IssueStatus.Closed).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([open, complete, closed]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, complete, closed]);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -503,7 +509,7 @@ public class IssueGraphServiceTests
         var child2 = new IssueBuilder().WithId("child2").WithTitle("Child 2")
             .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -529,7 +535,7 @@ public class IssueGraphServiceTests
         var child2 = new IssueBuilder().WithId("child2").WithTitle("Child 2")
             .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -569,7 +575,7 @@ public class IssueGraphServiceTests
         var allIssues = new List<Issue>
             { goToWork, wakeUp, makeBreakfast, makeCoffee, makeToast, toastBread, spreadButter, getInCar, driveToWork };
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(allIssues);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(allIssues);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -598,7 +604,7 @@ public class IssueGraphServiceTests
         var child = new IssueBuilder().WithId("drive-to-work").WithTitle("Drive to work")
             .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("go-to-work", "aaa").Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -626,7 +632,7 @@ public class IssueGraphServiceTests
                 new ParentIssueRef { ParentIssue = "parentB", SortOrder = "aaa" })
             .Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parentA, parentB, sharedChild]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parentA, parentB, sharedChild]);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -643,7 +649,7 @@ public class IssueGraphServiceTests
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var review = new IssueBuilder().WithId("review1").WithStatus(IssueStatus.Review).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([open, review]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, review]);
 
         var result = await _sut.QueryGraphAsync(new GraphQuery { Status = IssueStatus.Open });
 
@@ -655,7 +661,7 @@ public class IssueGraphServiceTests
     {
         var task = new IssueBuilder().WithId("task1").WithType(IssueType.Task).Build();
         var bug = new IssueBuilder().WithId("bug1").WithType(IssueType.Bug).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([task, bug]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([task, bug]);
 
         var result = await _sut.QueryGraphAsync(new GraphQuery { Type = IssueType.Bug });
 
@@ -667,7 +673,7 @@ public class IssueGraphServiceTests
     {
         var tagged = new IssueBuilder().WithId("tagged1").WithTags("important", "urgent").Build();
         var untagged = new IssueBuilder().WithId("untagged1").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([tagged, untagged]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([tagged, untagged]);
 
         var result = await _sut.QueryGraphAsync(new GraphQuery { Tags = ["important"] });
 
@@ -679,7 +685,7 @@ public class IssueGraphServiceTests
     {
         var matches = new IssueBuilder().WithId("match1").WithTitle("Fix the login bug").Build();
         var noMatch = new IssueBuilder().WithId("nomatch1").WithTitle("Add new feature").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([matches, noMatch]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([matches, noMatch]);
 
         var result = await _sut.QueryGraphAsync(new GraphQuery { SearchText = "login" });
 
@@ -691,7 +697,7 @@ public class IssueGraphServiceTests
     {
         var matches = new IssueBuilder().WithId("match1").WithTitle("Issue").WithDescription("The login is broken").Build();
         var noMatch = new IssueBuilder().WithId("nomatch1").WithTitle("Issue2").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([matches, noMatch]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([matches, noMatch]);
 
         var result = await _sut.QueryGraphAsync(new GraphQuery { SearchText = "login" });
 
@@ -705,7 +711,7 @@ public class IssueGraphServiceTests
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("root", "aaa").Build();
         var other = new IssueBuilder().WithId("other").WithStatus(IssueStatus.Open).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([root, child, other]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([root, child, other]);
 
         var result = await _sut.QueryGraphAsync(new GraphQuery { RootIssueId = "root" });
 
@@ -720,7 +726,7 @@ public class IssueGraphServiceTests
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([open, complete]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, complete]);
 
         var result = await _sut.QueryGraphAsync(new GraphQuery { IncludeTerminal = true });
 
@@ -732,7 +738,7 @@ public class IssueGraphServiceTests
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([open, complete]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, complete]);
 
         var result = await _sut.QueryGraphAsync(new GraphQuery());
 
@@ -745,7 +751,7 @@ public class IssueGraphServiceTests
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Complete).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
         var result = await _sut.QueryGraphAsync(new GraphQuery
         {
@@ -762,7 +768,7 @@ public class IssueGraphServiceTests
     {
         var assigned = new IssueBuilder().WithId("assigned1").WithAssignedTo("john").Build();
         var other = new IssueBuilder().WithId("other1").WithAssignedTo("jane").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([assigned, other]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([assigned, other]);
 
         var result = await _sut.QueryGraphAsync(new GraphQuery { AssignedTo = "john" });
 
@@ -774,7 +780,7 @@ public class IssueGraphServiceTests
     {
         var highPri = new IssueBuilder().WithId("high1").WithPriority(1).Build();
         var lowPri = new IssueBuilder().WithId("low1").WithPriority(5).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([highPri, lowPri]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([highPri, lowPri]);
 
         var result = await _sut.QueryGraphAsync(new GraphQuery { Priority = 1 });
 
@@ -786,7 +792,7 @@ public class IssueGraphServiceTests
     {
         var withPr = new IssueBuilder().WithId("pr1").WithLinkedPr(123).Build();
         var noPr = new IssueBuilder().WithId("nopr1").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([withPr, noPr]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([withPr, noPr]);
 
         var result = await _sut.QueryGraphAsync(new GraphQuery { LinkedPr = 123 });
 
@@ -802,7 +808,7 @@ public class IssueGraphServiceTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         // Even when filtered, Next/Previous should reflect full graph
         var result = await _sut.QueryGraphAsync(new GraphQuery());
@@ -819,7 +825,7 @@ public class IssueGraphServiceTests
     public async Task BuildGraphAsync_RootIssue_HasNullParentExecutionMode()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Open).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -833,7 +839,7 @@ public class IssueGraphServiceTests
             .WithExecutionMode(ExecutionMode.Series).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -847,7 +853,7 @@ public class IssueGraphServiceTests
             .WithExecutionMode(ExecutionMode.Parallel).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -862,7 +868,7 @@ public class IssueGraphServiceTests
     public async Task GetNextIssuesAsync_WithIdeaTypeIssue_ExcludesIdea()
     {
         var idea = new IssueBuilder().WithId("idea1").WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([idea]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([idea]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -876,7 +882,7 @@ public class IssueGraphServiceTests
         var bug = new IssueBuilder().WithId("bug1").WithStatus(IssueStatus.Open).WithType(IssueType.Bug).Build();
         var idea = new IssueBuilder().WithId("idea1").WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
         var feature = new IssueBuilder().WithId("feature1").WithStatus(IssueStatus.Open).WithType(IssueType.Feature).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([task, bug, idea, feature]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([task, bug, idea, feature]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -889,7 +895,7 @@ public class IssueGraphServiceTests
     {
         var idea = new IssueBuilder().WithId("idea1").WithStatus(IssueStatus.Review).WithType(IssueType.Idea).Build();
         var task = new IssueBuilder().WithId("task1").WithStatus(IssueStatus.Review).WithType(IssueType.Task).Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([idea, task]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([idea, task]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -902,7 +908,7 @@ public class IssueGraphServiceTests
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
         var taskChild = new IssueBuilder().WithId("task-child").WithStatus(IssueStatus.Open).WithType(IssueType.Task).WithParentIssueIdAndOrder("parent", "aaa").Build();
         var ideaChild = new IssueBuilder().WithId("idea-child").WithStatus(IssueStatus.Open).WithType(IssueType.Idea).WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, taskChild, ideaChild]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, taskChild, ideaChild]);
 
         var result = await _sut.GetNextIssuesAsync();
 
@@ -921,7 +927,7 @@ public class IssueGraphServiceTests
         var task = new IssueBuilder().WithId("task1").WithTitle("Task Issue")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([idea, task]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([idea, task]);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -938,7 +944,7 @@ public class IssueGraphServiceTests
         var taskChild = new IssueBuilder().WithId("task-child").WithTitle("Task Child")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Task).WithParentIssueIdAndOrder("parent", "bbb").Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, ideaChild, taskChild]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, ideaChild, taskChild]);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -962,7 +968,7 @@ public class IssueGraphServiceTests
         var task = new IssueBuilder().WithId("task1").WithTitle("Task 1")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([idea1, idea2, task]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([idea1, idea2, task]);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -977,7 +983,7 @@ public class IssueGraphServiceTests
         var task = new IssueBuilder().WithId("task1").WithTitle("Task 1")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([idea, task]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([idea, task]);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -992,7 +998,7 @@ public class IssueGraphServiceTests
         var idea2 = new IssueBuilder().WithId("idea2").WithTitle("Idea 2")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([idea1, idea2]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([idea1, idea2]);
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
@@ -1009,7 +1015,7 @@ public class IssueGraphServiceTests
     {
         var orphan = new IssueBuilder().WithId("orphan").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("nonexistent", "aaa").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([orphan]);
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([orphan]);
 
         var result = await _sut.BuildGraphAsync();
 
@@ -1036,7 +1042,7 @@ public class IssueGraphServiceTests
             .WithParentIssueIdAndOrder("parent2", "aaa").Build();
         var child2b = new IssueBuilder().WithId("child2b").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent2", "bbb").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>())
             .Returns([grandparent, parent1, parent2, child1a, child1b, child2a, child2b]);
 
         var result = await _sut.GetNextIssuesAsync();

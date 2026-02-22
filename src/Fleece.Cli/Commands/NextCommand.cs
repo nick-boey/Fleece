@@ -9,7 +9,7 @@ namespace Fleece.Cli.Commands;
 /// <summary>
 /// Command to find issues that can be worked on next based on dependencies and execution mode.
 /// </summary>
-public sealed class NextCommand(IIssueGraphService graphService, IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider) : AsyncCommand<NextSettings>
+public sealed class NextCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider) : AsyncCommand<NextSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, NextSettings settings)
     {
@@ -51,7 +51,7 @@ public sealed class NextCommand(IIssueGraphService graphService, IIssueServiceFa
             return 1;
         }
 
-        var issues = await graphService.GetNextIssuesAsync(resolvedParentId);
+        var issues = await issueService.GetNextIssuesAsync(resolvedParentId);
 
         if (settings.Json || settings.JsonVerbose)
         {
