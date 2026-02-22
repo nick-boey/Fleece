@@ -14,7 +14,7 @@ public sealed class TreeSettings : FleeceCommandSettings
     public string? Status { get; init; }
 
     [CommandOption("-y|--type <TYPE>")]
-    [Description("Filter by type: task, bug, chore, feature")]
+    [Description("Filter by type: task, bug, chore, feature, idea")]
     public string? Type { get; init; }
 
     [CommandOption("-p|--priority <PRIORITY>")]

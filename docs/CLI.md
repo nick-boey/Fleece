@@ -29,7 +29,7 @@ When run with no arguments, opens your default editor with a YAML template for i
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--title` | `-t` | Issue title (used to generate ID) |
-| `--type` | `-y` | Issue type: task, bug, chore, feature |
+| `--type` | `-y` | Issue type: task, bug, chore, feature, idea |
 
 **Optional Options:**
 | Option | Short | Description |
@@ -410,7 +410,7 @@ Outputs instructions that can be included in prompts to help LLMs understand how
 | `Title` | string | Yes | Issue title |
 | `Description` | string | No | Detailed description |
 | `Status` | enum | Yes | idea, spec, next, progress, review, complete, archived, closed |
-| `Type` | enum | Yes | task, bug, chore, feature |
+| `Type` | enum | Yes | task, bug, chore, feature, idea |
 | `LinkedPR` | int | No | Associated PR number |
 | `LinkedIssues` | string[] | No | Related issue IDs |
 | `ParentIssues` | string[] | No | Parent issue IDs |
@@ -453,7 +453,7 @@ Include the output in your system prompt for AI-assisted issue management:
 
 ```
 When working on this codebase, track issues using the Fleece CLI:
-- Create issues: fleece create --title "..." --type task|bug|feature|chore
+- Create issues: fleece create --title "..." --type task|bug|feature|chore|idea
 - List issues: fleece list
 - Start work: fleece edit <id> --status progress
 - Complete work: fleece edit <id> --status complete

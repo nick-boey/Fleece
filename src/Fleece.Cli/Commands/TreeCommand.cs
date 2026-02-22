@@ -37,7 +37,7 @@ public sealed class TreeCommand(IIssueServiceFactory issueServiceFactory, IStora
         {
             if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var parsedType))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea");
                 return 1;
             }
             type = parsedType;

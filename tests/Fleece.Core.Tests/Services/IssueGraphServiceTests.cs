@@ -856,6 +856,152 @@ public class IssueGraphServiceTests
 
     #endregion
 
+    #region Idea Type Exclusion Tests
+
+    [Test]
+    public async Task GetNextIssuesAsync_WithIdeaTypeIssue_ExcludesIdea()
+    {
+        var idea = new IssueBuilder().WithId("idea1").WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([idea]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_WithMixedTypeIssues_ExcludesOnlyIdeas()
+    {
+        var task = new IssueBuilder().WithId("task1").WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
+        var bug = new IssueBuilder().WithId("bug1").WithStatus(IssueStatus.Open).WithType(IssueType.Bug).Build();
+        var idea = new IssueBuilder().WithId("idea1").WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
+        var feature = new IssueBuilder().WithId("feature1").WithStatus(IssueStatus.Open).WithType(IssueType.Feature).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([task, bug, idea, feature]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        result.Select(i => i.Id).Should().BeEquivalentTo(["task1", "bug1", "feature1"]);
+        result.Select(i => i.Id).Should().NotContain("idea1");
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_WithIdeaInReviewStatus_StillExcludesIdea()
+    {
+        var idea = new IssueBuilder().WithId("idea1").WithStatus(IssueStatus.Review).WithType(IssueType.Idea).Build();
+        var task = new IssueBuilder().WithId("task1").WithStatus(IssueStatus.Review).WithType(IssueType.Task).Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([idea, task]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        result.Should().ContainSingle().Which.Id.Should().Be("task1");
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_ParentWithIdeaChild_IdeaChildNotActionable()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
+        var taskChild = new IssueBuilder().WithId("task-child").WithStatus(IssueStatus.Open).WithType(IssueType.Task).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var ideaChild = new IssueBuilder().WithId("idea-child").WithStatus(IssueStatus.Open).WithType(IssueType.Idea).WithParentIssueIdAndOrder("parent", "bbb").Build();
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, taskChild, ideaChild]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        result.Select(i => i.Id).Should().BeEquivalentTo(["task-child"]);
+    }
+
+    #endregion
+
+    #region Idea Type Task Graph Root Exclusion Tests
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_IdeaTypeRootIssue_ExcludedFromRoots()
+    {
+        var idea = new IssueBuilder().WithId("idea1").WithTitle("Idea Issue")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
+        var task = new IssueBuilder().WithId("task1").WithTitle("Task Issue")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([idea, task]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("task1");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_IdeaAsChildOfTask_IdeaIncludedInGraph()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithTitle("Parent Task")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Task).WithExecutionMode(ExecutionMode.Parallel).Build();
+        var ideaChild = new IssueBuilder().WithId("idea-child").WithTitle("Idea Child")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var taskChild = new IssueBuilder().WithId("task-child").WithTitle("Task Child")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Task).WithParentIssueIdAndOrder("parent", "bbb").Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([parent, ideaChild, taskChild]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        result.Nodes.Should().HaveCount(3);
+        var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
+        nodeLookup.Should().ContainKey("parent");
+        nodeLookup.Should().ContainKey("idea-child");
+        nodeLookup.Should().ContainKey("task-child");
+
+        nodeLookup["idea-child"].IsActionable.Should().BeFalse();
+        nodeLookup["task-child"].IsActionable.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_MultipleIdeaRoots_AllExcluded()
+    {
+        var idea1 = new IssueBuilder().WithId("idea1").WithTitle("Idea 1")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
+        var idea2 = new IssueBuilder().WithId("idea2").WithTitle("Idea 2")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
+        var task = new IssueBuilder().WithId("task1").WithTitle("Task 1")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([idea1, idea2, task]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("task1");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_IdeaWithOrphanedParent_TreatedAsRootAndExcluded()
+    {
+        var idea = new IssueBuilder().WithId("idea1").WithTitle("Orphan Idea")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).WithParentIssueIdAndOrder("nonexistent", "aaa").Build();
+        var task = new IssueBuilder().WithId("task1").WithTitle("Task 1")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([idea, task]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("task1");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_OnlyIdeasInGraph_ReturnsEmptyGraph()
+    {
+        var idea1 = new IssueBuilder().WithId("idea1").WithTitle("Idea 1")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
+        var idea2 = new IssueBuilder().WithId("idea2").WithTitle("Idea 2")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
+
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([idea1, idea2]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        result.Nodes.Should().BeEmpty();
+        result.TotalLanes.Should().Be(0);
+    }
+
+    #endregion
+
     #region Edge Cases
 
     [Test]
