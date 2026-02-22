@@ -58,20 +58,19 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         2. When starting work on an issue, update the status to progress:
            `fleece edit <id> -s progress`
 
-        3. When a PR has been created change the status to ready for review and update the linked PR number:
-           `fleece edit <id> -s review --linked-pr 123`
+        3. **Before creating a PR**, update the issue and commit all fleece changes:
+           `fleece edit <id> -s review --linked-pr <pr-number>`
+           - Either include `.fleece/` changes with your code commits, OR
+           - Use `fleece commit --ci` to commit and allow CI to run
 
         4. When completing work:
            `fleece edit <id> -s complete`
 
-        5. Link PRs to issues:
-           `fleece edit <id> --linked-pr <pr-number>`
+        5. Create follow-up issues as needed with `fleece create -t <title> -s open -y <type> -d <description>`
 
-        6. Create follow-up issues as needed with `fleece create -t <title> -s open -y <type> -d <description>`
+        6. Use `fleece {edit|create} <id> --parent-issues <parent-id>:<lex-order>` to break down large issues into sub-tasks
 
-        7. Use `fleece {edit|create} <id> --parent-issues <parent-id>:<lex-order>` to break down large issues into sub-tasks
-
-        8. Commit changes by including all changes in the `.fleece/` folder with related code commits or using the `fleece commit` command
+        7. Commit changes by including all changes in the `.fleece/` folder with related code commits or using the `fleece commit` command
 
         ## Issue Types
 
