@@ -91,18 +91,18 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         ## Task Hierarchy
 
-        Issues can be organized into parent-child hierarchies to break down complex work. Use `fleece tree` to view the
-        hierarchy and `fleece tree --task-graph` to see the task graph with approximate execution ordering.
+        Issues can be organized into parent-child hierarchies to break down complex work. Use `fleece list --tree` to view the
+        hierarchy and `fleece list --next` to see the task graph with approximate execution ordering.
 
-        - `fleece tree` - Display issues as parent-child tree
-        - `fleece tree --task-graph` - Display issues as a task graph, showing execution order and next tasks
+        - `fleece list --tree` - Display issues as parent-child tree
+        - `fleece list --next` - Display issues as a task graph, showing execution order and next tasks
         - `fleece next` - Find issues that can be worked on next based on dependencies and execution mode
 
         Use `fleece create -t <title> -y <type> --parent-issues <parent-id>:<lex-order>` to create sub-tasks.
 
         ## Filtering
 
-        By default, `list` and `tree` hide terminal statuses (complete, archived, closed).
+        By default, `list` hides terminal statuses (complete, archived, closed).
         Use `--all` to include all: `fleece list --all`
 
         ## JSON
@@ -139,21 +139,22 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         ## Viewing Hierarchy
 
-        - `fleece tree` - Display issues as parent-child tree
-        - `fleece tree --task-graph` - Display issues as a task graph, with next tasks shown next
-        - `fleece tree --json` - Get hierarchy as JSON
+        - `fleece list --tree` - Display issues as parent-child tree
+        - `fleece list --next` - Display issues as a task graph, with next tasks shown next
+        - `fleece list --tree --json` - Get hierarchy as JSON
+        - `fleece list --tree --tree-root <id>` - Scope tree to a specific subtree
 
         ## Hierarchy Workflow
 
         1. Create child issues with `--parent-issues` pointing to parent
-        2. Use `fleece tree` to visualize work breakdown
+        2. Use `fleece list --tree` to visualize work breakdown
         3. Complete children before marking parent complete
         4. Run `fleece validate` to check for circular dependencies
 
         ## Execution order
 
         An issue's children may be executed in parallel or series. This is denoted by the execution order field, which may be given by
-        `fleece edit <id> --execution-order [series|parallel]`. The task graph in `fleece tree --task-graph` orders the tasks appropriately.
+        `fleece edit <id> --execution-order [series|parallel]`. The task graph in `fleece list --next` orders the tasks appropriately.
         """;
 
     private const string CommandsContent = """
@@ -178,8 +179,8 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         - `fleece list [-s STATUS] [-y TYPE] [-p PRIORITY]` - List issues with filters
         - `fleece show <id>` - Display all details for a single issue
-        - `fleece tree` - Display parent-child hierarchy
-        - `fleece tree --task-graph` - Display task graph with execution ordering
+        - `fleece list --tree` - Display parent-child hierarchy
+        - `fleece list --next` - Display task graph with execution ordering
         - `fleece next` - Find issues ready to be worked on next
         - `fleece search "query"` - Search issues by text
 
@@ -253,7 +254,7 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `fleece list --json` - List as JSON array
         - `fleece list --json-verbose` - Include all metadata
         - `fleece show <id> --json` - Single issue as JSON
-        - `fleece tree --json` - Hierarchy as JSON
+        - `fleece list --tree --json` - Hierarchy as JSON
         - `fleece search "query" --json` - Results as JSON
 
         """;
@@ -301,19 +302,20 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         ## Usage
 
-        - `fleece tree` - Display issues as parent-child tree
-        - `fleece tree --task-graph` - Display as a task graph showing approximate execution ordering
-        - `fleece tree --json` - Get hierarchy as JSON
+        - `fleece list --tree` - Display issues as parent-child tree
+        - `fleece list --next` - Display as a task graph showing approximate execution ordering
+        - `fleece list --tree --json` - Get hierarchy as JSON
+        - `fleece list --tree --tree-root <id>` - Scope tree to descendants of an issue
 
         ## Filtering
 
-        - `fleece tree -s <status>` - Filter by status
-        - `fleece tree -y <type>` - Filter by type
-        - `fleece tree -a` - Show all issues including terminal statuses
+        - `fleece list --tree -s <status>` - Filter by status
+        - `fleece list --tree -y <type>` - Filter by type
+        - `fleece list --tree -a` - Show all issues including terminal statuses
 
         ## Task Graph
 
-        The `--task-graph` flag displays issues in a bottom-up task graph that shows the approximate
+        The `--next` flag displays issues in a bottom-up task graph that shows the approximate
         ordering of tasks based on their dependencies and execution mode (series/parallel). This is
         useful for understanding what needs to be done and in what order.
         """;

@@ -1,118 +1,19 @@
-using Fleece.Cli.Output;
-using Fleece.Cli.Settings;
 using Fleece.Core.Models;
-using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
-using Spectre.Console.Cli;
 using System.Text.Json;
 
-namespace Fleece.Cli.Commands;
+namespace Fleece.Cli.Output;
 
-public sealed class TreeCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider, IIssueGraphService graphService) : AsyncCommand<TreeSettings>
+/// <summary>
+/// Renders issues in a tree view based on parent-child relationships.
+/// </summary>
+public static class TreeRenderer
 {
-    public override async Task<int> ExecuteAsync(CommandContext context, TreeSettings settings)
-    {
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        var issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
-        if (hasMultiple)
-        {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
-            return 1;
-        }
-
-        IssueStatus? status = null;
-        if (!string.IsNullOrWhiteSpace(settings.Status))
-        {
-            if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out var parsedStatus))
-            {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, progress, review, complete, archived, closed");
-                return 1;
-            }
-            status = parsedStatus;
-        }
-
-        IssueType? type = null;
-        if (!string.IsNullOrWhiteSpace(settings.Type))
-        {
-            if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var parsedType))
-            {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea");
-                return 1;
-            }
-            type = parsedType;
-        }
-
-        if (settings.TaskGraph)
-        {
-            if (settings.Json)
-            {
-                AnsiConsole.MarkupLine("[red]Error:[/] --task-graph and --json cannot be used together");
-                return 1;
-            }
-
-            if (!string.IsNullOrWhiteSpace(settings.Id))
-            {
-                AnsiConsole.MarkupLine("[red]Error:[/] --task-graph cannot be used with an issue ID");
-                return 1;
-            }
-
-            var graph = await graphService.BuildTaskGraphLayoutAsync();
-            TaskGraphRenderer.Render(graph);
-            return 0;
-        }
-
-        // Resolve optional root issue ID
-        Issue? rootIssue = null;
-        if (!string.IsNullOrWhiteSpace(settings.Id))
-        {
-            var matches = await issueService.ResolveByPartialIdAsync(settings.Id);
-
-            if (matches.Count == 0)
-            {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
-                return 1;
-            }
-
-            if (matches.Count > 1)
-            {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.Id}':");
-                foreach (var match in matches)
-                {
-                    AnsiConsole.MarkupLine($"  {match.Id} {Markup.Escape(match.Title)}");
-                }
-                return 1;
-            }
-
-            rootIssue = matches[0];
-        }
-
-        var issues = await issueService.FilterAsync(status, type, settings.Priority, settings.AssignedTo, settings.Tags, settings.LinkedPr, settings.All);
-        var issueList = issues.ToList();
-
-        // When a root issue is specified, constrain to the root + its transitive descendants
-        if (rootIssue is not null)
-        {
-            issueList = ScopeToDescendants(rootIssue, issueList);
-        }
-
-        if (settings.Json)
-        {
-            RenderJsonTree(issueList);
-        }
-        else
-        {
-            RenderTree(issueList);
-        }
-
-        return 0;
-    }
-
     /// <summary>
     /// Returns a list containing the root issue and all its transitive descendants from the given issue list.
     /// The root issue is always included even if it wasn't in the original filtered list.
     /// </summary>
-    private static List<Issue> ScopeToDescendants(Issue rootIssue, List<Issue> filteredIssues)
+    public static List<Issue> ScopeToDescendants(Issue rootIssue, List<Issue> filteredIssues)
     {
         var lookup = filteredIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
         var descendantIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -151,7 +52,7 @@ public sealed class TreeCommand(IIssueServiceFactory issueServiceFactory, IStora
         return result;
     }
 
-    private static void RenderTree(List<Issue> issues)
+    public static void RenderTree(List<Issue> issues)
     {
         if (issues.Count == 0)
         {
@@ -268,7 +169,7 @@ public sealed class TreeCommand(IIssueServiceFactory issueServiceFactory, IStora
         }
     }
 
-    private static void RenderJsonTree(List<Issue> issues)
+    public static void RenderJsonTree(List<Issue> issues)
     {
         // Build a lookup for quick access
         var issueLookup = issues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);

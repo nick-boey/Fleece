@@ -1,5 +1,4 @@
 using Fleece.Cli.Commands;
-using Fleece.Cli.Output;
 using Fleece.Cli.Settings;
 using Fleece.Core.Models;
 using Fleece.Core.Services.Interfaces;
@@ -19,8 +18,8 @@ public class TreeCommandTests
     private IStorageService _storageService = null!;
     private IStorageServiceProvider _storageServiceProvider = null!;
     private IIssueServiceFactory _issueServiceFactory = null!;
-    private IIssueGraphService _graphService = null!;
-    private TreeCommand _command = null!;
+    private ISyncStatusService _syncStatusService = null!;
+    private ListCommand _command = null!;
     private CommandContext _context = null!;
     private StringWriter _consoleOutput = null!;
     private TextWriter _originalConsole = null!;
@@ -31,9 +30,11 @@ public class TreeCommandTests
     {
         _issueService = Substitute.For<IIssueService>();
         _storageService = Substitute.For<IStorageService>();
-        _graphService = Substitute.For<IIssueGraphService>();
+        _syncStatusService = Substitute.For<ISyncStatusService>();
         _storageService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
             .Returns((false, string.Empty));
+        _storageService.LoadIssuesWithDiagnosticsAsync(Arg.Any<CancellationToken>())
+            .Returns(new LoadIssuesResult());
 
         _storageServiceProvider = Substitute.For<IStorageServiceProvider>();
         _storageServiceProvider.GetStorageService(Arg.Any<string?>())
@@ -43,8 +44,8 @@ public class TreeCommandTests
         _issueServiceFactory.GetIssueService(Arg.Any<string?>())
             .Returns(_issueService);
 
-        _command = new TreeCommand(_issueServiceFactory, _storageServiceProvider, _graphService);
-        _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "tree", null);
+        _command = new ListCommand(_issueServiceFactory, _storageServiceProvider, _syncStatusService);
+        _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;
         _originalAnsiConsole = AnsiConsole.Console;
@@ -92,7 +93,7 @@ public class TreeCommandTests
                 Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(allIssues);
 
-        var settings = new TreeSettings { All = true };
+        var settings = new ListSettings { Tree = true, All = true };
 
         var result = await _command.ExecuteAsync(_context, settings);
 
@@ -101,9 +102,6 @@ public class TreeCommandTests
         var output = _consoleOutput.ToString();
 
         // Tree should use the shared IssueLineFormatter format.
-        // Verify the output contains the formatted issue lines matching
-        // IssueLineFormatter.FormatMarkup output components:
-        // {id} [{type}] [{status}] P{priority} {title}
         output.Should().Contain("parent1");
         output.Should().Contain("[task]");
         output.Should().Contain("[open]");
@@ -134,7 +132,7 @@ public class TreeCommandTests
                 Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { issue });
 
-        var settings = new TreeSettings { All = true };
+        var settings = new ListSettings { Tree = true, All = true };
 
         var result = await _command.ExecuteAsync(_context, settings);
 
@@ -142,12 +140,6 @@ public class TreeCommandTests
 
         var output = _consoleOutput.ToString();
 
-        // The tree output for root issues should contain all the components
-        // that IssueLineFormatter.FormatMarkup produces
-        var expectedMarkup = IssueLineFormatter.FormatMarkup(issue);
-
-        // Verify each component from the formatter appears in the tree output
-        // (markup tags get rendered by Spectre.Console, so verify content portions)
         output.Should().Contain("abc123");
         output.Should().Contain("[feature]");
         output.Should().Contain("[review]");
@@ -187,7 +179,7 @@ public class TreeCommandTests
                 Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { parent, child1, child2 });
 
-        var settings = new TreeSettings { All = true };
+        var settings = new ListSettings { Tree = true, All = true };
 
         var result = await _command.ExecuteAsync(_context, settings);
 
@@ -202,5 +194,44 @@ public class TreeCommandTests
 
         // Tree structure characters should be present
         output.Should().ContainAny("├", "└");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_NextMode_RendersTaskGraph()
+    {
+        var issue = new IssueBuilder()
+            .WithId("task1")
+            .WithTitle("A task")
+            .WithStatus(IssueStatus.Open)
+            .WithType(IssueType.Task)
+            .Build();
+
+        _issueService.BuildTaskGraphLayoutAsync(Arg.Any<CancellationToken>())
+            .Returns(new TaskGraph
+            {
+                Nodes = [new TaskGraphNode { Issue = issue, Row = 0, Lane = 0, IsActionable = true }],
+                TotalLanes = 1
+            });
+
+        var settings = new ListSettings { Next = true };
+
+        var result = await _command.ExecuteAsync(_context, settings);
+
+        result.Should().Be(0);
+
+        var output = _consoleOutput.ToString();
+        output.Should().Contain("task1");
+        output.Should().Contain("A task");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_TreeAndNextMutuallyExclusive_ReturnsError()
+    {
+        var settings = new ListSettings { Tree = true, Next = true };
+
+        var result = await _command.ExecuteAsync(_context, settings);
+
+        result.Should().Be(1);
+        _consoleOutput.ToString().Should().Contain("--tree and --next cannot be used together");
     }
 }

@@ -4,7 +4,6 @@ using Fleece.Cli.Commands;
 using Fleece.Cli.Interceptors;
 using Fleece.Cli.Tui;
 using Fleece.Core.Extensions;
-using Fleece.Core.Services.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console.Cli;
 
@@ -46,14 +45,10 @@ app.Configure(config =>
 
     config.AddCommand<ListCommand>("list")
         .WithDescription("List issues with optional filters")
-        .WithExample("list", "--status", "open", "--type", "bug");
-
-    config.AddCommand<TreeCommand>("tree")
-        .WithDescription("Display issues in a tree view based on parent-child relationships")
-        .WithExample("tree")
-        .WithExample("tree", "abc123")
-        .WithExample("tree", "--status", "open")
-        .WithExample("tree", "--task-graph");
+        .WithExample("list", "--status", "open", "--type", "bug")
+        .WithExample("list", "--tree")
+        .WithExample("list", "--tree", "--tree-root", "abc123")
+        .WithExample("list", "--next");
 
     config.AddCommand<EditCommand>("edit")
         .WithDescription("Edit an existing issue. Run with only an ID to open an interactive editor with the issue's current values.")

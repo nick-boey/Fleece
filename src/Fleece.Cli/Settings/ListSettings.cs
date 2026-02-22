@@ -52,4 +52,16 @@ public sealed class ListSettings : FleeceCommandSettings
     [CommandOption("--sync-status")]
     [Description("Show git sync status for each issue (~=synced, +=committed, *=local)")]
     public bool SyncStatus { get; init; }
+
+    [CommandOption("--tree")]
+    [Description("Display issues in a tree view based on parent-child relationships")]
+    public bool Tree { get; init; }
+
+    [CommandOption("--tree-root <ID>")]
+    [Description("Scope tree view to descendants of this issue ID (implies --tree)")]
+    public string? TreeRoot { get; init; }
+
+    [CommandOption("--next")]
+    [Description("Display as a bottom-up task graph showing approximate task ordering")]
+    public bool Next { get; init; }
 }
