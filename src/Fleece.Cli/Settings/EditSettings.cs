@@ -18,7 +18,7 @@ public sealed class EditSettings : FleeceCommandSettings
     public string? Description { get; init; }
 
     [CommandOption("-s|--status <STATUS>")]
-    [Description("New status: open, progress, review, complete, archived, closed")]
+    [Description("New status: draft, open, progress, review, complete, archived, closed")]
     public string? Status { get; init; }
 
     [CommandOption("-y|--type <TYPE>")]

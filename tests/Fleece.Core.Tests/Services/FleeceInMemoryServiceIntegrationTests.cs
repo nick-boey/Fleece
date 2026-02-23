@@ -467,9 +467,9 @@ public class FleeceInMemoryServiceIntegrationTests
     [Test]
     public async Task FilterAsync_CombinesStatusTypeAndPriority()
     {
-        await _sut.CreateIssueAsync("Bug P1", IssueType.Bug, priority: 1);
-        await _sut.CreateIssueAsync("Task P1", IssueType.Task, priority: 1);
-        await _sut.CreateIssueAsync("Bug P3", IssueType.Bug, priority: 3);
+        await _sut.CreateIssueAsync("Bug P1", IssueType.Bug, priority: 1, status: IssueStatus.Open);
+        await _sut.CreateIssueAsync("Task P1", IssueType.Task, priority: 1, status: IssueStatus.Open);
+        await _sut.CreateIssueAsync("Bug P3", IssueType.Bug, priority: 3, status: IssueStatus.Open);
 
         var result = await _sut.FilterAsync(status: IssueStatus.Open, type: IssueType.Bug, priority: 1);
 

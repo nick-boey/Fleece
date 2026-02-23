@@ -34,7 +34,7 @@ public sealed class EditorService
 
             # Optional fields:
             description:
-            status: open  # Options: open, progress, review, complete, archived, closed
+            status: draft  # Options: draft, open, progress, review, complete, archived, closed
             priority:   # 1-5 (1=highest)
             assignedTo:
             tags:   # Comma-separated list, e.g.: urgent,backend,api
@@ -68,7 +68,7 @@ public sealed class EditorService
 
             # Optional fields:
             description: {EscapeYamlValue(issue.Description)}
-            status: {issue.Status.ToString().ToLowerInvariant()}  # Options: open, progress, review, complete, archived, closed
+            status: {issue.Status.ToString().ToLowerInvariant()}  # Options: draft, open, progress, review, complete, archived, closed
             priority: {(issue.Priority.HasValue ? issue.Priority.Value.ToString() : "")}  # 1-5 (1=highest)
             assignedTo: {EscapeYamlValue(issue.AssignedTo)}
             tags: {tagsStr}  # Comma-separated list, e.g.: urgent,backend,api

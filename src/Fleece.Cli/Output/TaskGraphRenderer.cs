@@ -308,6 +308,7 @@ public static class TaskGraphRenderer
     {
         return status switch
         {
+            IssueStatus.Draft => "dim",
             IssueStatus.Open => "cyan",
             IssueStatus.Progress => "blue",
             IssueStatus.Review => "purple",

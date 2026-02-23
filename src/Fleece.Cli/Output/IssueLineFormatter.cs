@@ -72,6 +72,7 @@ public static class IssueLineFormatter
     /// </summary>
     public static string GetStatusColor(IssueStatus status) => status switch
     {
+        IssueStatus.Draft => "dim",
         IssueStatus.Open => "cyan",
         IssueStatus.Progress => "blue",
         IssueStatus.Review => "purple",

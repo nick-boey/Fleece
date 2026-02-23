@@ -211,7 +211,7 @@
   "$defs": {
     "issueStatus": {
       "type": "string",
-      "enum": ["Open", "Progress", "Review", "Complete", "Archived", "Closed", "Deleted"],
+      "enum": ["Draft", "Open", "Progress", "Review", "Complete", "Archived", "Closed", "Deleted"],
       "description": "Current workflow status of the issue"
     },
     "issueType": {

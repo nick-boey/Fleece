@@ -440,32 +440,20 @@ public class FleeceInMemoryServiceTests
     }
 
     [Test]
-    public async Task CreateIssueAsync_WithNonDefaultStatus_CallsUpdate()
+    public async Task CreateIssueAsync_WithExplicitStatus_PassesStatusToCreate()
     {
-        var created = new IssueBuilder().WithId("new1").WithStatus(IssueStatus.Open).Build();
-        var updated = new IssueBuilder().WithId("new1").WithStatus(IssueStatus.Progress).Build();
+        var created = new IssueBuilder().WithId("new1").WithStatus(IssueStatus.Progress).Build();
 
         _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
         _issueService.CreateAsync(
             Arg.Any<string>(), Arg.Any<IssueType>(),
-            Arg.Any<string?>(), Arg.Any<IssueStatus>(),
+            Arg.Any<string?>(), IssueStatus.Progress,
             Arg.Any<int?>(), Arg.Any<int?>(),
             Arg.Any<IReadOnlyList<string>?>(), Arg.Any<IReadOnlyList<ParentIssueRef>?>(),
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(),
             Arg.Any<string?>(), Arg.Any<ExecutionMode?>(),
             Arg.Any<CancellationToken>())
             .Returns(created);
-        _issueService.UpdateAsync(
-            "new1",
-            Arg.Any<string?>(), Arg.Any<string?>(),
-            IssueStatus.Progress,
-            Arg.Any<IssueType?>(), Arg.Any<int?>(),
-            Arg.Any<int?>(), Arg.Any<IReadOnlyList<string>?>(),
-            Arg.Any<IReadOnlyList<ParentIssueRef>?>(), Arg.Any<string?>(),
-            Arg.Any<IReadOnlyList<string>?>(), Arg.Any<string?>(),
-            Arg.Any<ExecutionMode?>(),
-            Arg.Any<CancellationToken>())
-            .Returns(updated);
 
         var result = await _sut.CreateIssueAsync("New Issue", IssueType.Task, status: IssueStatus.Progress);
 
