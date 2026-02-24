@@ -25,6 +25,7 @@ public sealed class IssueStatusConverter : JsonConverter<IssueStatus>
             "idea" => IssueStatus.Open,
             "spec" => IssueStatus.Open,
             "next" => IssueStatus.Open,
+            "draft" => IssueStatus.Draft,
             "open" => IssueStatus.Open,
             "progress" => IssueStatus.Progress,
             "review" => IssueStatus.Review,

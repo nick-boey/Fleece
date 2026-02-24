@@ -6,6 +6,11 @@ namespace Fleece.Core.Models;
 public enum IssueStatus
 {
     /// <summary>
+    /// Issue is in draft state, not yet fully specified.
+    /// </summary>
+    Draft,
+
+    /// <summary>
     /// Issue is open and available to be worked on.
     /// Replaces the previous Idea, Spec, and Next statuses.
     /// </summary>

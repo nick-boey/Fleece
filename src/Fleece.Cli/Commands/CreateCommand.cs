@@ -84,14 +84,18 @@ public sealed class CreateCommand(IIssueServiceFactory issueServiceFactory, ISto
                 return 1;
             }
 
-            var status = IssueStatus.Open;
+            IssueStatus status;
             if (!string.IsNullOrWhiteSpace(template.Status))
             {
                 if (!Enum.TryParse<IssueStatus>(template.Status, ignoreCase: true, out status))
                 {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: open, progress, review, complete, archived, closed");
+                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{template.Status}'. Use: draft, open, progress, review, complete, archived, closed");
                     return 1;
                 }
+            }
+            else
+            {
+                status = string.IsNullOrWhiteSpace(template.Description) ? IssueStatus.Draft : IssueStatus.Open;
             }
 
             IReadOnlyList<string>? linkedIssues = null;
@@ -152,14 +156,18 @@ public sealed class CreateCommand(IIssueServiceFactory issueServiceFactory, ISto
             return 1;
         }
 
-        var status = IssueStatus.Open;
+        IssueStatus status;
         if (!string.IsNullOrWhiteSpace(settings.Status))
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out status))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, progress, review, complete, archived, closed");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: draft, open, progress, review, complete, archived, closed");
                 return 1;
             }
+        }
+        else
+        {
+            status = string.IsNullOrWhiteSpace(settings.Description) ? IssueStatus.Draft : IssueStatus.Open;
         }
 
         IReadOnlyList<string>? linkedIssues = null;

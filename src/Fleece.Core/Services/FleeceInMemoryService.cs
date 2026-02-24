@@ -191,20 +191,19 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
         ObjectDisposedException.ThrowIf(_disposed, this);
         await EnsureCacheLoadedAsync(ct);
 
+        // Determine effective status: if not provided, use Draft for issues without description, Open otherwise
+        var effectiveStatus = status ?? (string.IsNullOrWhiteSpace(description)
+            ? IssueStatus.Draft : IssueStatus.Open);
+
         // Create via the underlying service (which writes to disk)
         var issue = await _issueService.CreateAsync(
             title: title,
             type: type,
             description: description,
+            status: effectiveStatus,
             priority: priority,
             executionMode: executionMode,
             cancellationToken: ct);
-
-        // If a non-default status was requested, update it
-        if (status.HasValue && status.Value != IssueStatus.Open)
-        {
-            issue = await _issueService.UpdateAsync(issue.Id, status: status.Value, cancellationToken: ct);
-        }
 
         // Update cache
         _cacheLock.EnterWriteLock();

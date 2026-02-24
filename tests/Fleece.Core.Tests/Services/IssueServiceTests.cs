@@ -61,6 +61,16 @@ public class IssueServiceTests
     }
 
     [Test]
+    public async Task CreateAsync_WithDraftStatus_SetsDraftStatus()
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var result = await _sut.CreateAsync("Test Issue", IssueType.Task, status: IssueStatus.Draft);
+
+        result.Status.Should().Be(IssueStatus.Draft);
+    }
+
+    [Test]
     public async Task CreateAsync_SetsAllProvidedFields()
     {
         _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
@@ -617,7 +627,7 @@ public class IssueServiceTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "a", Title = "A", Status = IssueStatus.Draft, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
             new() { Id = "d", Title = "D", Status = IssueStatus.Progress, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
@@ -631,6 +641,7 @@ public class IssueServiceTests
 
         var result = await _sut.FilterAsync();
 
+        // Draft is non-terminal, so it should be included
         result.Should().HaveCount(5);
         result.Select(i => i.Id).Should().Contain(["a", "b", "c", "d", "e"]);
         result.Select(i => i.Id).Should().NotContain(["f", "g", "h", "i"]);
@@ -840,5 +851,21 @@ public class IssueServiceTests
 
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("b");
+    }
+
+    [Test]
+    public async Task FilterAsync_IncludesDraftStatus_ByDefault()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Draft, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync();
+
+        result.Should().HaveCount(2);
+        result.Select(i => i.Id).Should().Contain(["a", "b"]);
     }
 }

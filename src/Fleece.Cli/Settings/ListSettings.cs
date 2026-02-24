@@ -6,7 +6,7 @@ namespace Fleece.Cli.Settings;
 public sealed class ListSettings : FleeceCommandSettings
 {
     [CommandOption("-s|--status <STATUS>")]
-    [Description("Filter by status: open, progress, review, complete, archived, closed")]
+    [Description("Filter by status: draft, open, progress, review, complete, archived, closed")]
     public string? Status { get; init; }
 
     [CommandOption("-y|--type <TYPE>")]

@@ -332,6 +332,18 @@ public class IssueServiceGraphTests
     }
 
     [Test]
+    public async Task GetNextIssuesAsync_WithDraftIssue_ReturnsEmptyList()
+    {
+        // Draft issues are not actionable - they need to be fully specified first
+        var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Draft).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+
+        var result = await _sut.GetNextIssuesAsync();
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task GetNextIssuesAsync_SeriesParent_OnlyFirstChildIsActionable()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)

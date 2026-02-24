@@ -10,6 +10,7 @@ namespace Fleece.Cli.Tui.Styles;
 public static class FleeceTheme
 {
     // Status colors (matching existing TUI)
+    public static readonly Style StatusDraft = Style.None.WithForeground(AnsiColors.BrightBlack);
     public static readonly Style StatusOpen = Style.None.WithForeground(AnsiColors.Cyan);
     public static readonly Style StatusProgress = Style.None.WithForeground(AnsiColors.Yellow);
     public static readonly Style StatusReview = Style.None.WithForeground(AnsiColors.Magenta);
@@ -43,6 +44,7 @@ public static class FleeceTheme
     /// </summary>
     public static Style GetStatusStyle(IssueStatus status) => status switch
     {
+        IssueStatus.Draft => StatusDraft,
         IssueStatus.Open => StatusOpen,
         IssueStatus.Progress => StatusProgress,
         IssueStatus.Review => StatusReview,
