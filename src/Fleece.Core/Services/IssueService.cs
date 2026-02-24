@@ -539,6 +539,123 @@ public sealed partial class IssueService(
         };
     }
 
+    /// <inheritdoc />
+    public async Task<TaskGraph> BuildFilteredTaskGraphLayoutAsync(
+        IReadOnlySet<string> matchedIds,
+        CancellationToken cancellationToken = default)
+    {
+        var allIssues = await GetAllAsync(cancellationToken);
+        var issueList = allIssues.ToList();
+
+        if (issueList.Count == 0 || matchedIds.Count == 0)
+        {
+            return new TaskGraph { Nodes = [], TotalLanes = 0, MatchedIds = matchedIds };
+        }
+
+        // Build full lookup
+        var fullLookup = issueList.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+
+        // Collect matched issues
+        var matchedIssues = new List<Issue>();
+        foreach (var id in matchedIds)
+        {
+            if (fullLookup.TryGetValue(id, out var issue))
+            {
+                matchedIssues.Add(issue);
+            }
+        }
+
+        if (matchedIssues.Count == 0)
+        {
+            return new TaskGraph { Nodes = [], TotalLanes = 0, MatchedIds = matchedIds };
+        }
+
+        // Collect all ancestor issues for context (walk up parent chains)
+        var contextIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var toProcess = new Queue<Issue>(matchedIssues);
+        var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        while (toProcess.Count > 0)
+        {
+            var issue = toProcess.Dequeue();
+            if (!processed.Add(issue.Id))
+            {
+                continue;
+            }
+
+            foreach (var parentRef in issue.ParentIssues)
+            {
+                if (fullLookup.TryGetValue(parentRef.ParentIssue, out var parent))
+                {
+                    if (!matchedIds.Contains(parent.Id) && contextIds.Add(parent.Id))
+                    {
+                        toProcess.Enqueue(parent);
+                    }
+                }
+            }
+        }
+
+        // Combine matched + context issues
+        var issuesToDisplay = new List<Issue>();
+        foreach (var issue in matchedIssues)
+        {
+            issuesToDisplay.Add(issue);
+        }
+        foreach (var id in contextIds)
+        {
+            if (fullLookup.TryGetValue(id, out var issue))
+            {
+                issuesToDisplay.Add(issue);
+            }
+        }
+
+        // Build lookup for display issues
+        var issueLookup = issuesToDisplay.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+
+        // Determine actionable issues
+        var actionableIssues = await GetNextIssuesAsync(cancellationToken: cancellationToken);
+        var actionableIds = new HashSet<string>(
+            actionableIssues.Select(i => i.Id),
+            StringComparer.OrdinalIgnoreCase);
+
+        // Build children lookup
+        var childrenOf = BuildChildrenLookup(issuesToDisplay, issueLookup);
+
+        // Find root issues (no parent in the display set)
+        // Exclude Idea type issues from being roots - they can still appear as children
+        var rootIssues = issuesToDisplay
+            .Where(i => i.ParentIssues.Count == 0 ||
+                        i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
+            .Where(i => i.Type != IssueType.Idea)
+            .OrderBy(i => i.Priority ?? 99)
+            .ThenByDescending(i => FirstActionableIssueHasDescription(i, childrenOf, actionableIds))
+            .ThenBy(i => i.Title)
+            .ToList();
+
+        if (rootIssues.Count == 0)
+        {
+            return new TaskGraph { Nodes = [], TotalLanes = 0, MatchedIds = matchedIds };
+        }
+
+        // Layout each root subtree
+        var nodeList = new List<TaskGraphNode>();
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int maxLane = 0;
+
+        foreach (var root in rootIssues)
+        {
+            var rootMax = LayoutSubtree(root, 0, nodeList, childrenOf, issueLookup, actionableIds, visited, parentExecutionMode: null);
+            maxLane = Math.Max(maxLane, rootMax);
+        }
+
+        return new TaskGraph
+        {
+            Nodes = nodeList,
+            TotalLanes = maxLane + 1,
+            MatchedIds = matchedIds
+        };
+    }
+
     #endregion
 
     #region Graph Building

@@ -55,6 +55,18 @@ public interface IIssueService
     /// <returns>A positioned task graph ready for rendering.</returns>
     Task<TaskGraph> BuildTaskGraphLayoutAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Builds a positioned task graph layout filtered by the given matched issue IDs.
+    /// Includes matched issues and their ancestor issues for context.
+    /// The resulting graph includes a set of matched IDs for highlighting.
+    /// </summary>
+    /// <param name="matchedIds">IDs of the issues that matched the search.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A positioned task graph with matched IDs for highlighting.</returns>
+    Task<TaskGraph> BuildFilteredTaskGraphLayoutAsync(
+        IReadOnlySet<string> matchedIds,
+        CancellationToken cancellationToken = default);
+
     // --- CRUD Methods ---
 
     Task<Issue> CreateAsync(

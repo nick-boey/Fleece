@@ -131,10 +131,23 @@ public static class TaskGraphRenderer
                 // Node row - append issue title
                 int nodeIndex = r / 2;
                 var node = graph.Nodes[nodeIndex];
-                var statusColor = GetStatusColor(node.Issue.Status);
                 var id = Markup.Escape(node.Issue.Id);
                 var title = Markup.Escape(node.Issue.Title);
-                AnsiConsole.MarkupLine($"{graphPart}  [{statusColor}]{id} {title}[/]");
+
+                // Determine color: matched issues get status color, context issues are dimmed
+                bool isContextOnly = graph.MatchedIds is not null &&
+                                    graph.MatchedIds.Count > 0 &&
+                                    !graph.MatchedIds.Contains(node.Issue.Id);
+
+                if (isContextOnly)
+                {
+                    AnsiConsole.MarkupLine($"{graphPart}  [dim]{id} {title}[/]");
+                }
+                else
+                {
+                    var statusColor = GetStatusColor(node.Issue.Status);
+                    AnsiConsole.MarkupLine($"{graphPart}  [{statusColor}]{id} {title}[/]");
+                }
             }
             else
             {

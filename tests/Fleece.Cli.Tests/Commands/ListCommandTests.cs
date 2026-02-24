@@ -2,6 +2,7 @@ using Fleece.Cli.Commands;
 using Fleece.Cli.Output;
 using Fleece.Cli.Settings;
 using Fleece.Core.Models;
+using Fleece.Core.Search;
 using Fleece.Core.Services.Interfaces;
 using Fleece.Core.Tests.TestHelpers;
 using FluentAssertions;
@@ -20,6 +21,7 @@ public class ListCommandTests
     private IStorageServiceProvider _storageServiceProvider = null!;
     private IIssueServiceFactory _issueServiceFactory = null!;
     private ISyncStatusService _syncStatusService = null!;
+    private ISearchService _searchService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
     private StringWriter _consoleOutput = null!;
@@ -48,7 +50,9 @@ public class ListCommandTests
         _syncStatusService.GetSyncStatusesAsync(Arg.Any<CancellationToken>())
             .Returns(new Dictionary<string, SyncStatus>());
 
-        _command = new ListCommand(_issueServiceFactory, _storageServiceProvider, _syncStatusService);
+        _searchService = Substitute.For<ISearchService>();
+
+        _command = new ListCommand(_issueServiceFactory, _storageServiceProvider, _syncStatusService, _searchService);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;
@@ -187,4 +191,182 @@ public class ListCommandTests
 
         output.Should().Contain("No issues found");
     }
+
+    #region Search Integration Tests
+
+    [Test]
+    public async Task ExecuteAsync_WithSearch_CallsSearchService()
+    {
+        var issue = new IssueBuilder()
+            .WithId("abc123")
+            .WithTitle("Login bug")
+            .WithStatus(IssueStatus.Open)
+            .WithType(IssueType.Bug)
+            .Build();
+
+        var query = new SearchQuery { Tokens = [] };
+        _searchService.ParseQuery("login").Returns(query);
+        _searchService.SearchWithFiltersAsync(
+                query,
+                Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+                Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { issue });
+
+        var settings = new ListSettings { Search = "login", OneLine = true };
+
+        var result = await _command.ExecuteAsync(_context, settings);
+
+        result.Should().Be(0);
+
+        // Verify search service was called
+        _searchService.Received(1).ParseQuery("login");
+        await _searchService.Received(1).SearchWithFiltersAsync(
+            query,
+            Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+            Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+
+        // Verify issue service FilterAsync was NOT called
+        await _issueService.DidNotReceive().FilterAsync(
+            Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+            Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExecuteAsync_SearchCombinedWithCliFlag_PassesBothToSearchService()
+    {
+        var issue = new IssueBuilder()
+            .WithId("abc123")
+            .WithTitle("Open bug")
+            .WithStatus(IssueStatus.Open)
+            .WithType(IssueType.Bug)
+            .Build();
+
+        var query = new SearchQuery { Tokens = [] };
+        _searchService.ParseQuery("type:bug").Returns(query);
+        _searchService.SearchWithFiltersAsync(
+                query,
+                IssueStatus.Open,  // CLI status filter
+                Arg.Any<IssueType?>(),
+                Arg.Any<int?>(),
+                Arg.Any<string?>(),
+                Arg.Any<IReadOnlyList<string>?>(),
+                Arg.Any<int?>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { issue });
+
+        var settings = new ListSettings { Search = "type:bug", Status = "open", OneLine = true };
+
+        var result = await _command.ExecuteAsync(_context, settings);
+
+        result.Should().Be(0);
+
+        // Verify search service received CLI status filter
+        await _searchService.Received(1).SearchWithFiltersAsync(
+            query,
+            IssueStatus.Open,  // CLI status passed through
+            Arg.Any<IssueType?>(),
+            Arg.Any<int?>(),
+            Arg.Any<string?>(),
+            Arg.Any<IReadOnlyList<string>?>(),
+            Arg.Any<int?>(),
+            Arg.Any<bool>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExecuteAsync_SearchOneLine_OutputsMatchingIssues()
+    {
+        var issue1 = new IssueBuilder()
+            .WithId("abc123")
+            .WithTitle("Login issue")
+            .WithStatus(IssueStatus.Open)
+            .WithType(IssueType.Bug)
+            .Build();
+
+        var issue2 = new IssueBuilder()
+            .WithId("def456")
+            .WithTitle("Login page")
+            .WithStatus(IssueStatus.Progress)
+            .WithType(IssueType.Feature)
+            .Build();
+
+        var query = new SearchQuery { Tokens = [] };
+        _searchService.ParseQuery("login").Returns(query);
+        _searchService.SearchWithFiltersAsync(
+                query,
+                Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+                Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { issue1, issue2 });
+
+        var settings = new ListSettings { Search = "login", OneLine = true };
+
+        var result = await _command.ExecuteAsync(_context, settings);
+
+        result.Should().Be(0);
+
+        var output = _consoleOutput.ToString();
+        output.Should().Contain("abc123 open bug Login issue");
+        output.Should().Contain("def456 progress feature Login page");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_SearchNoResults_ShowsNoIssuesMessage()
+    {
+        var query = new SearchQuery { Tokens = [] };
+        _searchService.ParseQuery("nonexistent").Returns(query);
+        _searchService.SearchWithFiltersAsync(
+                query,
+                Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+                Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue>());
+
+        var settings = new ListSettings { Search = "nonexistent", OneLine = true };
+
+        var result = await _command.ExecuteAsync(_context, settings);
+
+        result.Should().Be(0);
+
+        var output = _consoleOutput.ToString();
+        output.Should().Contain("No issues found");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WithoutSearch_UsesFilterAsync()
+    {
+        var issue = new IssueBuilder()
+            .WithId("abc123")
+            .WithTitle("Any issue")
+            .WithStatus(IssueStatus.Open)
+            .WithType(IssueType.Task)
+            .Build();
+
+        _issueService.FilterAsync(
+                Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+                Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { issue });
+
+        var settings = new ListSettings { OneLine = true };
+
+        var result = await _command.ExecuteAsync(_context, settings);
+
+        result.Should().Be(0);
+
+        // Verify filter service was called (not search)
+        await _issueService.Received(1).FilterAsync(
+            Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+            Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+
+        // Verify search service was NOT called
+        _searchService.DidNotReceive().ParseQuery(Arg.Any<string?>());
+    }
+
+    #endregion
 }

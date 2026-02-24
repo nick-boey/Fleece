@@ -1,6 +1,7 @@
 using Fleece.Cli.Commands;
 using Fleece.Cli.Settings;
 using Fleece.Core.Models;
+using Fleece.Core.Search;
 using Fleece.Core.Services.Interfaces;
 using Fleece.Core.Tests.TestHelpers;
 using FluentAssertions;
@@ -19,6 +20,7 @@ public class TreeCommandTests
     private IStorageServiceProvider _storageServiceProvider = null!;
     private IIssueServiceFactory _issueServiceFactory = null!;
     private ISyncStatusService _syncStatusService = null!;
+    private ISearchService _searchService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
     private StringWriter _consoleOutput = null!;
@@ -31,6 +33,9 @@ public class TreeCommandTests
         _issueService = Substitute.For<IIssueService>();
         _storageService = Substitute.For<IStorageService>();
         _syncStatusService = Substitute.For<ISyncStatusService>();
+        _syncStatusService.GetSyncStatusesAsync(Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<string, SyncStatus>());
+        _searchService = Substitute.For<ISearchService>();
         _storageService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
             .Returns((false, string.Empty));
         _storageService.LoadIssuesWithDiagnosticsAsync(Arg.Any<CancellationToken>())
@@ -44,7 +49,7 @@ public class TreeCommandTests
         _issueServiceFactory.GetIssueService(Arg.Any<string?>())
             .Returns(_issueService);
 
-        _command = new ListCommand(_issueServiceFactory, _storageServiceProvider, _syncStatusService);
+        _command = new ListCommand(_issueServiceFactory, _storageServiceProvider, _syncStatusService, _searchService);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;
@@ -234,4 +239,245 @@ public class TreeCommandTests
         result.Should().Be(1);
         _consoleOutput.ToString().Should().Contain("--tree and --next cannot be used together");
     }
+
+    #region Search Integration Tests
+
+    [Test]
+    public async Task ExecuteAsync_NextWithSearch_CallsSearchServiceAndBuildsFilteredGraph()
+    {
+        var issue = new IssueBuilder()
+            .WithId("abc123")
+            .WithTitle("Login bug")
+            .WithStatus(IssueStatus.Open)
+            .WithType(IssueType.Bug)
+            .Build();
+
+        var matchedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "abc123" };
+        var searchResult = new SearchResult
+        {
+            MatchedIssues = new List<Issue> { issue },
+            MatchedIds = matchedIds,
+            ContextIssues = new List<Issue>()
+        };
+
+        var query = new SearchQuery { Tokens = [] };
+        _searchService.ParseQuery("login").Returns(query);
+        _searchService.SearchWithContextAsync(
+                query,
+                Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+                Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(searchResult);
+
+        var taskGraph = new TaskGraph
+        {
+            Nodes = new List<TaskGraphNode>
+            {
+                new() { Issue = issue, Row = 0, Lane = 0, IsActionable = true }
+            },
+            TotalLanes = 1,
+            MatchedIds = matchedIds
+        };
+
+        _issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<CancellationToken>())
+            .Returns(taskGraph);
+
+        var settings = new ListSettings { Next = true, Search = "login" };
+
+        var result = await _command.ExecuteAsync(_context, settings);
+
+        result.Should().Be(0);
+
+        // Verify search service was called
+        _searchService.Received(1).ParseQuery("login");
+        await _searchService.Received(1).SearchWithContextAsync(
+            query,
+            Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+            Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+
+        // Verify filtered graph was built
+        await _issueService.Received(1).BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExecuteAsync_NextWithSearchNoResults_ShowsNoIssuesMessage()
+    {
+        var searchResult = new SearchResult
+        {
+            MatchedIssues = new List<Issue>(),
+            MatchedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            ContextIssues = new List<Issue>()
+        };
+
+        var query = new SearchQuery { Tokens = [] };
+        _searchService.ParseQuery("nonexistent").Returns(query);
+        _searchService.SearchWithContextAsync(
+                query,
+                Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+                Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(searchResult);
+
+        var settings = new ListSettings { Next = true, Search = "nonexistent" };
+
+        var result = await _command.ExecuteAsync(_context, settings);
+
+        result.Should().Be(0);
+
+        var output = _consoleOutput.ToString();
+        output.Should().Contain("No issues found matching search");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_NextWithSearch_PassesCliFiltersToSearchService()
+    {
+        var issue = new IssueBuilder()
+            .WithId("abc123")
+            .WithTitle("Open bug")
+            .WithStatus(IssueStatus.Open)
+            .WithType(IssueType.Bug)
+            .Build();
+
+        var matchedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "abc123" };
+        var searchResult = new SearchResult
+        {
+            MatchedIssues = new List<Issue> { issue },
+            MatchedIds = matchedIds,
+            ContextIssues = new List<Issue>()
+        };
+
+        var query = new SearchQuery { Tokens = [] };
+        _searchService.ParseQuery("type:bug").Returns(query);
+        _searchService.SearchWithContextAsync(
+                query,
+                IssueStatus.Open,  // CLI status filter
+                Arg.Any<IssueType?>(),
+                Arg.Any<int?>(),
+                Arg.Any<string?>(),
+                Arg.Any<IReadOnlyList<string>?>(),
+                Arg.Any<int?>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>())
+            .Returns(searchResult);
+
+        var taskGraph = new TaskGraph
+        {
+            Nodes = new List<TaskGraphNode>
+            {
+                new() { Issue = issue, Row = 0, Lane = 0, IsActionable = true }
+            },
+            TotalLanes = 1,
+            MatchedIds = matchedIds
+        };
+
+        _issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<CancellationToken>())
+            .Returns(taskGraph);
+
+        var settings = new ListSettings { Next = true, Search = "type:bug", Status = "open" };
+
+        var result = await _command.ExecuteAsync(_context, settings);
+
+        result.Should().Be(0);
+
+        // Verify search service received CLI status filter
+        await _searchService.Received(1).SearchWithContextAsync(
+            query,
+            IssueStatus.Open,  // CLI status passed through
+            Arg.Any<IssueType?>(),
+            Arg.Any<int?>(),
+            Arg.Any<string?>(),
+            Arg.Any<IReadOnlyList<string>?>(),
+            Arg.Any<int?>(),
+            Arg.Any<bool>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExecuteAsync_NextWithoutSearch_CallsBuildTaskGraphLayoutAsync()
+    {
+        var issue = new IssueBuilder()
+            .WithId("abc123")
+            .WithTitle("Any issue")
+            .WithStatus(IssueStatus.Open)
+            .WithType(IssueType.Task)
+            .Build();
+
+        var taskGraph = new TaskGraph
+        {
+            Nodes = new List<TaskGraphNode>
+            {
+                new() { Issue = issue, Row = 0, Lane = 0, IsActionable = true }
+            },
+            TotalLanes = 1
+        };
+
+        _issueService.BuildTaskGraphLayoutAsync(Arg.Any<CancellationToken>())
+            .Returns(taskGraph);
+
+        var settings = new ListSettings { Next = true };
+
+        var result = await _command.ExecuteAsync(_context, settings);
+
+        result.Should().Be(0);
+
+        // Verify BuildTaskGraphLayoutAsync was called (not BuildFilteredTaskGraphLayoutAsync)
+        await _issueService.Received(1).BuildTaskGraphLayoutAsync(Arg.Any<CancellationToken>());
+
+        // Verify search service was NOT called
+        _searchService.DidNotReceive().ParseQuery(Arg.Any<string?>());
+    }
+
+    [Test]
+    public async Task ExecuteAsync_NextWithSearch_OutputsMatchingIssue()
+    {
+        var issue = new IssueBuilder()
+            .WithId("abc123")
+            .WithTitle("Login bug fix")
+            .WithStatus(IssueStatus.Open)
+            .WithType(IssueType.Bug)
+            .Build();
+
+        var matchedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "abc123" };
+        var searchResult = new SearchResult
+        {
+            MatchedIssues = new List<Issue> { issue },
+            MatchedIds = matchedIds,
+            ContextIssues = new List<Issue>()
+        };
+
+        var query = new SearchQuery { Tokens = [] };
+        _searchService.ParseQuery("login").Returns(query);
+        _searchService.SearchWithContextAsync(
+                query,
+                Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
+                Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(searchResult);
+
+        var taskGraph = new TaskGraph
+        {
+            Nodes = new List<TaskGraphNode>
+            {
+                new() { Issue = issue, Row = 0, Lane = 0, IsActionable = true }
+            },
+            TotalLanes = 1,
+            MatchedIds = matchedIds
+        };
+
+        _issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<CancellationToken>())
+            .Returns(taskGraph);
+
+        var settings = new ListSettings { Next = true, Search = "login" };
+
+        var result = await _command.ExecuteAsync(_context, settings);
+
+        result.Should().Be(0);
+
+        var output = _consoleOutput.ToString();
+        output.Should().Contain("abc123");
+        output.Should().Contain("Login bug fix");
+    }
+
+    #endregion
 }
