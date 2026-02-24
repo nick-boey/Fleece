@@ -1,3 +1,4 @@
+using Fleece.Core.Search;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
@@ -38,6 +39,7 @@ public static class ServiceCollectionExtensions
                 basePath,
                 sp.GetRequiredService<IJsonlSerializer>(),
                 sp.GetRequiredService<IGitService>()));
+        services.AddSingleton<ISearchService, SearchService>();
 
         return services;
     }

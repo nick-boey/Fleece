@@ -1,6 +1,7 @@
 using Fleece.Cli.Output;
 using Fleece.Cli.Settings;
 using Fleece.Core.Models;
+using Fleece.Core.Search;
 using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -10,7 +11,8 @@ namespace Fleece.Cli.Commands;
 public sealed class ListCommand(
     IIssueServiceFactory issueServiceFactory,
     IStorageServiceProvider storageServiceProvider,
-    ISyncStatusService syncStatusService) : AsyncCommand<ListSettings>
+    ISyncStatusService syncStatusService,
+    ISearchService searchService) : AsyncCommand<ListSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ListSettings settings)
     {
@@ -45,27 +47,7 @@ public sealed class ListCommand(
             return 1;
         }
 
-        // --- Next mode ---
-        if (settings.Next)
-        {
-            var graph = await issueService.BuildTaskGraphLayoutAsync();
-            TaskGraphRenderer.Render(graph);
-            return 0;
-        }
-
-        // --- Tree mode and default list mode share filtering/diagnostics ---
-
-        // Load issues with diagnostics (only for non-next modes)
-        var loadResult = await storageService.LoadIssuesWithDiagnosticsAsync();
-        var hasWarnings = DiagnosticFormatter.RenderDiagnostics(loadResult.Diagnostics);
-
-        // Fail early in strict mode if there are warnings
-        if (settings.Strict && hasWarnings)
-        {
-            AnsiConsole.MarkupLine("[red]Error:[/] Schema warnings detected in strict mode.");
-            return 1;
-        }
-
+        // Parse status and type early as they're needed for both --next and list modes
         IssueStatus? status = null;
         if (!string.IsNullOrWhiteSpace(settings.Status))
         {
@@ -88,6 +70,54 @@ public sealed class ListCommand(
             type = parsedType;
         }
 
+        // --- Next mode ---
+        if (settings.Next)
+        {
+            TaskGraph graph;
+            if (!string.IsNullOrWhiteSpace(settings.Search))
+            {
+                // Build filtered graph with search
+                var query = searchService.ParseQuery(settings.Search);
+                var searchResult = await searchService.SearchWithContextAsync(
+                    query,
+                    status,
+                    type,
+                    settings.Priority,
+                    settings.AssignedTo,
+                    settings.Tags,
+                    settings.LinkedPr,
+                    settings.All);
+
+                if (searchResult.MatchedIssues.Count == 0)
+                {
+                    AnsiConsole.MarkupLine("[dim]No issues found matching search[/]");
+                    return 0;
+                }
+
+                graph = await issueService.BuildFilteredTaskGraphLayoutAsync(searchResult.MatchedIds);
+            }
+            else
+            {
+                graph = await issueService.BuildTaskGraphLayoutAsync();
+            }
+
+            TaskGraphRenderer.Render(graph);
+            return 0;
+        }
+
+        // --- Tree mode and default list mode share filtering/diagnostics ---
+
+        // Load issues with diagnostics (only for non-next modes)
+        var loadResult = await storageService.LoadIssuesWithDiagnosticsAsync();
+        var hasWarnings = DiagnosticFormatter.RenderDiagnostics(loadResult.Diagnostics);
+
+        // Fail early in strict mode if there are warnings
+        if (settings.Strict && hasWarnings)
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] Schema warnings detected in strict mode.");
+            return 1;
+        }
+
         // Validate mutually exclusive output options
         if (settings.OneLine && (settings.Json || settings.JsonVerbose))
         {
@@ -95,15 +125,34 @@ public sealed class ListCommand(
             return 1;
         }
 
-        // Apply filtering via the issue service
-        var issues = await issueService.FilterAsync(
-            status,
-            type,
-            settings.Priority,
-            settings.AssignedTo,
-            settings.Tags,
-            settings.LinkedPr,
-            settings.All);
+        // Apply filtering via the issue service or search service
+        IReadOnlyList<Issue> issues;
+        if (!string.IsNullOrWhiteSpace(settings.Search))
+        {
+            // Use search service when --search is specified
+            var query = searchService.ParseQuery(settings.Search);
+            issues = await searchService.SearchWithFiltersAsync(
+                query,
+                status,
+                type,
+                settings.Priority,
+                settings.AssignedTo,
+                settings.Tags,
+                settings.LinkedPr,
+                settings.All);
+        }
+        else
+        {
+            // Use standard filtering
+            issues = await issueService.FilterAsync(
+                status,
+                type,
+                settings.Priority,
+                settings.AssignedTo,
+                settings.Tags,
+                settings.LinkedPr,
+                settings.All);
+        }
 
         // --- Tree mode ---
         if (isTree)

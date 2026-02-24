@@ -29,6 +29,10 @@ public sealed class ListSettings : FleeceCommandSettings
     [Description("Filter by linked PR number")]
     public int? LinkedPr { get; init; }
 
+    [CommandOption("--search <QUERY>")]
+    [Description("Search using query syntax (e.g., 'status:open type:bug login')")]
+    public string? Search { get; init; }
+
     [CommandOption("--json")]
     [Description("Output as JSON")]
     public bool Json { get; init; }

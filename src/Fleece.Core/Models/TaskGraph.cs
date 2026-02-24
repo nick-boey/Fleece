@@ -48,4 +48,11 @@ public sealed record TaskGraph
     /// Total number of lanes (columns) used in the graph.
     /// </summary>
     public required int TotalLanes { get; init; }
+
+    /// <summary>
+    /// IDs of issues that matched a search query.
+    /// Empty when no search filtering is applied.
+    /// Used by the renderer to highlight matched vs context nodes.
+    /// </summary>
+    public IReadOnlySet<string>? MatchedIds { get; init; }
 }
