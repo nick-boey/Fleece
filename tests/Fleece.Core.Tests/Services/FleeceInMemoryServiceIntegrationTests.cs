@@ -55,7 +55,8 @@ public class FleeceInMemoryServiceIntegrationTests
         var schemaValidator = new SchemaValidator();
 
         _storageService = new JsonlStorageService(_tempDir, serializer, schemaValidator);
-        _issueService = new IssueService(_storageService, _idGenerator, _gitConfigService);
+        var tagService = new TagService();
+        _issueService = new IssueService(_storageService, _idGenerator, _gitConfigService, tagService);
 
         _queueService = new IssueSerializationQueueService();
         _queueService.StartProcessing();
@@ -357,7 +358,8 @@ public class FleeceInMemoryServiceIntegrationTests
         var serializer = new JsonlSerializer();
         var schemaValidator = new SchemaValidator();
         var storage = new JsonlStorageService(emptyDir, serializer, schemaValidator);
-        var issueService = new IssueService(storage, _idGenerator, _gitConfigService);
+        var tagService = new TagService();
+        var issueService = new IssueService(storage, _idGenerator, _gitConfigService, tagService);
 
         var queue = new IssueSerializationQueueService();
         queue.StartProcessing();

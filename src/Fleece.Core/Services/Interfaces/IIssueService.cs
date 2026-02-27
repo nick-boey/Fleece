@@ -123,6 +123,7 @@ public interface IIssueService
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
         bool includeTerminal = false,
+        IReadOnlyList<(string Key, string Value)>? keyedTags = null,
         CancellationToken cancellationToken = default);
 
     Task<Issue> UpdateQuestionsAsync(

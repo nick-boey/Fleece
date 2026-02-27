@@ -51,7 +51,8 @@ public class CleanIntegrationTests
 
         _idGenerator = new Sha256IdGenerator();
         _storageService = new JsonlStorageService(_tempDir, serializer, schemaValidator);
-        _issueService = new IssueService(_storageService, _idGenerator, _gitConfigService);
+        var tagService = new TagService();
+        _issueService = new IssueService(_storageService, _idGenerator, _gitConfigService, tagService);
         _cleanService = new CleanService(_storageService, _gitConfigService);
         _mergeService = new MergeService(_storageService, _gitConfigService, serializer);
     }

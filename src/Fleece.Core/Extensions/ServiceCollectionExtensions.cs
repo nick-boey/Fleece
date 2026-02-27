@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IGitConfigService>(sp =>
             new GitConfigService(sp.GetRequiredService<ISettingsService>()));
         services.AddSingleton<IGitService>(sp => new GitService(basePath));
+        services.AddSingleton<ITagService, TagService>();
         services.AddSingleton<IIssueService, IssueService>();
         services.AddSingleton<IMergeService, MergeService>();
         services.AddSingleton<IMigrationService, MigrationService>();
