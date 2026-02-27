@@ -11,7 +11,8 @@ namespace Fleece.Core.Services;
 public sealed partial class IssueService(
     IStorageService storage,
     IIdGenerator idGenerator,
-    IGitConfigService gitConfigService) : IIssueService
+    IGitConfigService gitConfigService,
+    ITagService tagService) : IIssueService
 {
     // Regex pattern for invalid Git branch name characters
     // Valid: alphanumeric, hyphen, underscore, forward slash (not at start/end), dot (not at start, not consecutive)
@@ -61,6 +62,16 @@ public sealed partial class IssueService(
         if (!IsValidGitBranchName(workingBranchId))
         {
             throw new ArgumentException("Working branch ID contains invalid characters for a Git branch name.", nameof(workingBranchId));
+        }
+
+        // Validate tags
+        if (tags is not null)
+        {
+            var tagErrors = tagService.ValidateTags(tags);
+            if (tagErrors.Count > 0)
+            {
+                throw new ArgumentException($"Invalid tags: {string.Join("; ", tagErrors)}", nameof(tags));
+            }
         }
 
         var id = idGenerator.Generate(title);
@@ -186,6 +197,16 @@ public sealed partial class IssueService(
             throw new ArgumentException("Working branch ID contains invalid characters for a Git branch name.", nameof(workingBranchId));
         }
 
+        // Validate tags
+        if (tags is not null)
+        {
+            var tagErrors = tagService.ValidateTags(tags);
+            if (tagErrors.Count > 0)
+            {
+                throw new ArgumentException($"Invalid tags: {string.Join("; ", tagErrors)}", nameof(tags));
+            }
+        }
+
         var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
         var existingIndex = issues.FindIndex(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
@@ -285,6 +306,18 @@ public sealed partial class IssueService(
         }
 
         var issues = await storage.LoadIssuesAsync(cancellationToken);
+
+        // Check for key:value pattern (keyed tag search)
+        // Pattern must have colon, no spaces, and content on both sides
+        var colonIndex = query.IndexOf(':');
+        if (colonIndex > 0 && colonIndex < query.Length - 1 && !query.Contains(' '))
+        {
+            var searchKey = query[..colonIndex];
+            var searchValue = query[(colonIndex + 1)..];
+            return issues.Where(i => tagService.HasKeyedTag(i, searchKey, searchValue)).ToList();
+        }
+
+        // Existing substring search
         return issues
             .Where(i =>
                 i.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
@@ -307,6 +340,7 @@ public sealed partial class IssueService(
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
         bool includeTerminal = false,
+        IReadOnlyList<(string Key, string Value)>? keyedTags = null,
         CancellationToken cancellationToken = default)
     {
         var issues = await storage.LoadIssuesAsync(cancellationToken);
@@ -320,6 +354,8 @@ public sealed partial class IssueService(
             .Where(i => assignedTo is null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
             .Where(i => tags is null || tags.Count == 0 || tags.Any(t => i.Tags?.Contains(t, StringComparer.OrdinalIgnoreCase) ?? false))
             .Where(i => linkedPr is null || i.LinkedPR == linkedPr)
+            .Where(i => keyedTags is null || keyedTags.Count == 0 ||
+                keyedTags.All(kt => tagService.HasKeyedTag(i, kt.Key, kt.Value)))
             .ToList();
     }
 

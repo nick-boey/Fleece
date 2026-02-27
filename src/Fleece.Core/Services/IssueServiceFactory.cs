@@ -11,23 +11,26 @@ public sealed class IssueServiceFactory : IIssueServiceFactory
     private readonly IStorageServiceProvider _storageServiceProvider;
     private readonly IIdGenerator _idGenerator;
     private readonly IGitConfigService _gitConfigService;
+    private readonly ITagService _tagService;
 
     public IssueServiceFactory(
         IIssueService defaultIssueService,
         IStorageServiceProvider storageServiceProvider,
         IIdGenerator idGenerator,
-        IGitConfigService gitConfigService)
+        IGitConfigService gitConfigService,
+        ITagService tagService)
     {
         _defaultIssueService = defaultIssueService;
         _storageServiceProvider = storageServiceProvider;
         _idGenerator = idGenerator;
         _gitConfigService = gitConfigService;
+        _tagService = tagService;
     }
 
     /// <inheritdoc/>
     public IIssueService Create(IStorageService storageService)
     {
-        return new IssueService(storageService, _idGenerator, _gitConfigService);
+        return new IssueService(storageService, _idGenerator, _gitConfigService, _tagService);
     }
 
     /// <inheritdoc/>

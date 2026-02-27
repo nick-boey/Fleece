@@ -13,6 +13,7 @@ public class IssueServiceTests
     private IStorageService _storage = null!;
     private IIdGenerator _idGenerator = null!;
     private IGitConfigService _gitConfigService = null!;
+    private ITagService _tagService = null!;
     private IssueService _sut = null!;
 
     [SetUp]
@@ -21,10 +22,11 @@ public class IssueServiceTests
         _storage = Substitute.For<IStorageService>();
         _idGenerator = Substitute.For<IIdGenerator>();
         _gitConfigService = Substitute.For<IGitConfigService>();
+        _tagService = new TagService();
         _gitConfigService.GetUserName().Returns("Test User");
         _storage.LoadTombstonesAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IReadOnlyList<Tombstone>>([]));
-        _sut = new IssueService(_storage, _idGenerator, _gitConfigService);
+        _sut = new IssueService(_storage, _idGenerator, _gitConfigService, _tagService);
     }
 
     [Test]
@@ -868,4 +870,262 @@ public class IssueServiceTests
         result.Should().HaveCount(2);
         result.Select(i => i.Id).Should().Contain(["a", "b"]);
     }
+
+    #region Tag Validation
+
+    [Test]
+    public void CreateAsync_ThrowsOnTagWithSpaces()
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var act = async () => await _sut.CreateAsync(
+            title: "Test Issue",
+            type: IssueType.Task,
+            tags: ["bad tag"]);
+
+        act.Should().ThrowAsync<ArgumentException>()
+            .WithParameterName("tags");
+    }
+
+    [Test]
+    public void CreateAsync_ThrowsOnTagWithReservedKey()
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var act = async () => await _sut.CreateAsync(
+            title: "Test Issue",
+            type: IssueType.Task,
+            tags: ["status=open"]);
+
+        act.Should().ThrowAsync<ArgumentException>()
+            .WithParameterName("tags");
+    }
+
+    [Test]
+    public async Task CreateAsync_AcceptsKeyValueTag()
+    {
+        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+
+        var result = await _sut.CreateAsync(
+            title: "Test Issue",
+            type: IssueType.Task,
+            tags: ["project=frontend"]);
+
+        result.Tags.Should().Contain("project=frontend");
+    }
+
+    [Test]
+    public void UpdateAsync_ThrowsOnTagWithSpaces()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var act = async () => await _sut.UpdateAsync("abc123", tags: ["bad tag"]);
+
+        act.Should().ThrowAsync<ArgumentException>()
+            .WithParameterName("tags");
+    }
+
+    [Test]
+    public void UpdateAsync_ThrowsOnTagWithReservedKey()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "abc123", Title = "Original", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var act = async () => await _sut.UpdateAsync("abc123", tags: ["status=open"]);
+
+        act.Should().ThrowAsync<ArgumentException>()
+            .WithParameterName("tags");
+    }
+
+    #endregion
+
+    #region Keyed Tag Search
+
+    [Test]
+    public async Task SearchAsync_FindsIssuesByKeyedTagSyntax()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Frontend Task", Tags = ["project=frontend", "api"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Backend Task", Tags = ["project=backend"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "Other Task", Tags = ["misc"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.SearchAsync("project:frontend");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task SearchAsync_KeyedTagSearch_IsCaseInsensitive()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Frontend Task", Tags = ["PROJECT=FRONTEND"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.SearchAsync("project:frontend");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task SearchAsync_FallsBackToSubstringSearch_WhenNoColonPattern()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Fix login bug", Tags = ["project=frontend"], Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Add feature", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.SearchAsync("login");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task SearchAsync_UsesSubstringSearch_WhenQueryHasSpaces()
+    {
+        // If query has spaces, it can't be a keyed tag search
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Fix project:frontend issue", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.SearchAsync("Fix project:frontend");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task SearchAsync_UsesSubstringSearch_WhenColonAtStart()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Issue with :value", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        // ":value" should not trigger keyed tag search
+        var result = await _sut.SearchAsync(":value");
+
+        result.Should().HaveCount(1);
+    }
+
+    [Test]
+    public async Task SearchAsync_UsesSubstringSearch_WhenColonAtEnd()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Issue with key:", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        // "key:" should not trigger keyed tag search
+        var result = await _sut.SearchAsync("key:");
+
+        result.Should().HaveCount(1);
+    }
+
+    #endregion
+
+    #region FilterAsync with Keyed Tags
+
+    [Test]
+    public async Task FilterAsync_FiltersByKeyedTags()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=backend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(keyedTags: [("project", "frontend")]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task FilterAsync_FiltersByMultipleKeyedTags_AllMustMatch()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend", "priority=high"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend", "priority=low"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["priority=high"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(keyedTags: [("project", "frontend"), ("priority", "high")]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task FilterAsync_ReturnsAllIssues_WhenKeyedTagsIsNull()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(keyedTags: null);
+
+        result.Should().HaveCount(2);
+    }
+
+    [Test]
+    public async Task FilterAsync_ReturnsAllIssues_WhenKeyedTagsIsEmpty()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(keyedTags: []);
+
+        result.Should().HaveCount(2);
+    }
+
+    [Test]
+    public async Task FilterAsync_CombinesKeyedTagsWithOtherFilters()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Bug, Tags = ["project=backend"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(type: IssueType.Bug, keyedTags: [("project", "frontend")]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    #endregion
 }

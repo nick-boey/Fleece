@@ -93,7 +93,8 @@ public class ListCommandTests
         _issueService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string Key, string Value)>?>(),
+                Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { issue1, issue2 });
 
         var settings = new ListSettings { OneLine = true, All = true };
@@ -130,7 +131,8 @@ public class ListCommandTests
         _issueService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string Key, string Value)>?>(),
+                Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { issue });
 
         var settings = new ListSettings { OneLine = true, All = true };
@@ -157,7 +159,8 @@ public class ListCommandTests
         _issueService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string Key, string Value)>?>(),
+                Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { issue });
 
         var settings = new ListSettings { OneLine = true, All = true };
@@ -178,7 +181,8 @@ public class ListCommandTests
         _issueService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string Key, string Value)>?>(),
+                Arg.Any<CancellationToken>())
             .Returns(new List<Issue>());
 
         var settings = new ListSettings { OneLine = true, All = true };
@@ -210,7 +214,7 @@ public class ListCommandTests
                 query,
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string, string)>?>(), Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { issue });
 
         var settings = new ListSettings { Search = "login", OneLine = true };
@@ -225,13 +229,13 @@ public class ListCommandTests
             query,
             Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+            Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string, string)>?>(), Arg.Any<CancellationToken>());
 
         // Verify issue service FilterAsync was NOT called
         await _issueService.DidNotReceive().FilterAsync(
             Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+            Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string, string)>?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -255,6 +259,7 @@ public class ListCommandTests
                 Arg.Any<IReadOnlyList<string>?>(),
                 Arg.Any<int?>(),
                 Arg.Any<bool>(),
+                Arg.Any<IReadOnlyList<(string, string)>?>(),
                 Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { issue });
 
@@ -274,6 +279,7 @@ public class ListCommandTests
             Arg.Any<IReadOnlyList<string>?>(),
             Arg.Any<int?>(),
             Arg.Any<bool>(),
+            Arg.Any<IReadOnlyList<(string, string)>?>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -300,7 +306,7 @@ public class ListCommandTests
                 query,
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string, string)>?>(), Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { issue1, issue2 });
 
         var settings = new ListSettings { Search = "login", OneLine = true };
@@ -323,7 +329,7 @@ public class ListCommandTests
                 query,
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string, string)>?>(), Arg.Any<CancellationToken>())
             .Returns(new List<Issue>());
 
         var settings = new ListSettings { Search = "nonexistent", OneLine = true };
@@ -349,7 +355,7 @@ public class ListCommandTests
         _issueService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string, string)>?>(), Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { issue });
 
         var settings = new ListSettings { OneLine = true };
@@ -362,7 +368,7 @@ public class ListCommandTests
         await _issueService.Received(1).FilterAsync(
             Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+            Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string, string)>?>(), Arg.Any<CancellationToken>());
 
         // Verify search service was NOT called
         _searchService.DidNotReceive().ParseQuery(Arg.Any<string?>());

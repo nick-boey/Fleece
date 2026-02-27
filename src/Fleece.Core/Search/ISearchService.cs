@@ -38,6 +38,7 @@ public interface ISearchService
     /// <param name="tags">CLI tags filter override (null = use query).</param>
     /// <param name="linkedPr">CLI linked PR filter override (null = use query).</param>
     /// <param name="includeTerminal">Whether to include terminal statuses.</param>
+    /// <param name="keyedTags">Keyed tag filters (key=value pairs).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of matching issues.</returns>
     Task<IReadOnlyList<Issue>> SearchWithFiltersAsync(
@@ -49,6 +50,7 @@ public interface ISearchService
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
         bool includeTerminal = false,
+        IReadOnlyList<(string Key, string Value)>? keyedTags = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -63,6 +65,7 @@ public interface ISearchService
     /// <param name="tags">CLI tags filter override.</param>
     /// <param name="linkedPr">CLI linked PR filter override.</param>
     /// <param name="includeTerminal">Whether to include terminal statuses.</param>
+    /// <param name="keyedTags">Keyed tag filters (key=value pairs).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Search result with matched and context issues.</returns>
     Task<SearchResult> SearchWithContextAsync(
@@ -74,6 +77,7 @@ public interface ISearchService
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
         bool includeTerminal = false,
+        IReadOnlyList<(string Key, string Value)>? keyedTags = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

@@ -24,7 +24,8 @@ public class IssueServiceGraphTests
         _storageService = Substitute.For<IStorageService>();
         var idGenerator = Substitute.For<IIdGenerator>();
         var gitConfigService = Substitute.For<IGitConfigService>();
-        _sut = new IssueService(_storageService, idGenerator, gitConfigService);
+        var tagService = new TagService();
+        _sut = new IssueService(_storageService, idGenerator, gitConfigService, tagService);
     }
 
     #region BuildGraphAsync Basic Tests
