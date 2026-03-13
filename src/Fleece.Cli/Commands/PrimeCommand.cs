@@ -14,7 +14,8 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         ["json"] = JsonContent,
         ["questions"] = QuestionsContent,
         ["next"] = NextContent,
-        ["tree"] = TreeContent
+        ["tree"] = TreeContent,
+        ["merge"] = MergeContent
     };
 
     public override int Execute(CommandContext context, PrimeSettings settings)
@@ -72,6 +73,9 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         7. Commit changes by including all changes in the `.fleece/` folder with related code commits or using the `fleece commit` command
 
+        9. When encountering git merge conflicts in `.fleece/` files, ALWAYS use `fleece merge` to resolve them.
+           Never delete conflicting files manually.
+
         ## Issue Types
 
         - `task`
@@ -120,6 +124,7 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `questions`
         - `next`
         - `tree`
+        - `merge`
 
         Any command when run with `-h` will provide additional information on the command usage.
         """;
@@ -318,5 +323,56 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         The `--next` flag displays issues in a bottom-up task graph that shows the approximate
         ordering of tasks based on their dependencies and execution mode (series/parallel). This is
         useful for understanding what needs to be done and in what order.
+        """;
+
+    private const string MergeContent = """
+        # Resolving Merge Conflicts in .fleece/
+
+        When git merge conflicts occur in the `.fleece/` folder, you MUST use `fleece merge` to resolve them.
+        DO NOT manually resolve conflicts by deleting one version of the file.
+
+        ## Why Use fleece merge
+
+        The `fleece merge` command intelligently merges conflicting issue data:
+        - **Property-level merging**: Each field is merged individually, not whole files
+        - **Timestamp-based resolution**: Scalar properties use the newer timestamp
+        - **Collection union**: Tags, linked issues, and parent issues combine both versions
+        - **No data loss**: Both versions contribute to the final merged result
+
+        ## Handling Git Merge Conflicts
+
+        When you encounter a merge conflict in `.fleece/` files:
+
+        1. **Accept both versions** during git merge (keep both conflicting files)
+        2. **Run `fleece merge`** to intelligently combine duplicates
+        3. **Verify the merge** with `fleece list` or `fleece show <id>`
+        4. **Commit the resolved files**
+
+        ## Example Workflow
+
+        ```bash
+        # After a git merge/pull with conflicts in .fleece/
+        git add .fleece/          # Stage all versions
+        fleece merge              # Intelligently merge duplicates
+        fleece list               # Verify issues look correct
+        git add .fleece/          # Stage merged result
+        git commit -m "Resolve fleece merge conflicts"
+        ```
+
+        ## Dry Run
+
+        Preview what would be merged without making changes:
+        ```
+        fleece merge --dry-run
+        ```
+
+        ## IMPORTANT
+
+        NEVER resolve .fleece/ conflicts by:
+        - Deleting one version of an issue file
+        - Manually editing JSONL files
+        - Using git checkout --ours/--theirs
+
+        ALWAYS use `fleece merge` which preserves data from both branches.
         """;
 }
