@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Fleece.Core.Models;
 
 public sealed record Issue
@@ -61,4 +63,15 @@ public sealed record Issue
 
     public required DateTimeOffset LastUpdate { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>
+    /// Gets the linked PR numbers from keyed tags.
+    /// This is the preferred way to access linked PRs.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<int> LinkedPRs => KeyedTag.GetValues(Tags, KeyedTag.LinkedPrKey)
+        .Select(v => int.TryParse(v, out var pr) ? pr : (int?)null)
+        .Where(pr => pr.HasValue)
+        .Select(pr => pr!.Value)
+        .ToList();
 }

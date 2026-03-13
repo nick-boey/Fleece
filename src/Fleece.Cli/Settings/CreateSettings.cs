@@ -25,10 +25,6 @@ public sealed class CreateSettings : FleeceCommandSettings
     [Description("Priority 1-5 (1=highest)")]
     public int? Priority { get; init; }
 
-    [CommandOption("--linked-pr <PR>")]
-    [Description("Associated PR number")]
-    public int? LinkedPr { get; init; }
-
     [CommandOption("--linked-issues <ISSUES>")]
     [Description("Comma-separated linked issue IDs")]
     public string? LinkedIssues { get; init; }

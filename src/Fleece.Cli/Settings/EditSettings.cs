@@ -29,10 +29,6 @@ public sealed class EditSettings : FleeceCommandSettings
     [Description("New priority 1-5")]
     public int? Priority { get; init; }
 
-    [CommandOption("--linked-pr <PR>")]
-    [Description("New associated PR number")]
-    public int? LinkedPr { get; init; }
-
     [CommandOption("--linked-issues <ISSUES>")]
     [Description("Replace linked issue IDs (comma-separated)")]
     public string? LinkedIssues { get; init; }

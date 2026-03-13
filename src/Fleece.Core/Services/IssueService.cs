@@ -93,6 +93,14 @@ public sealed partial class IssueService(
 
         var now = DateTimeOffset.UtcNow;
         var createdBy = gitConfigService.GetUserName();
+
+        // Convert deprecated linkedPr parameter to tag
+        var effectiveTags = tags ?? [];
+        if (linkedPr.HasValue)
+        {
+            effectiveTags = KeyedTag.AddValue(effectiveTags, KeyedTag.LinkedPrKey, linkedPr.Value.ToString());
+        }
+
         var issue = new Issue
         {
             Id = id,
@@ -111,9 +119,6 @@ public sealed partial class IssueService(
             Priority = priority,
             PriorityLastUpdate = priority is not null ? now : null,
             PriorityModifiedBy = priority is not null ? createdBy : null,
-            LinkedPR = linkedPr,
-            LinkedPRLastUpdate = linkedPr is not null ? now : null,
-            LinkedPRModifiedBy = linkedPr is not null ? createdBy : null,
             LinkedIssues = linkedIssues ?? [],
             LinkedIssuesLastUpdate = now,
             LinkedIssuesModifiedBy = createdBy,
@@ -123,7 +128,7 @@ public sealed partial class IssueService(
             AssignedTo = assignedTo,
             AssignedToLastUpdate = assignedTo is not null ? now : null,
             AssignedToModifiedBy = assignedTo is not null ? createdBy : null,
-            Tags = tags ?? [],
+            Tags = effectiveTags,
             TagsLastUpdate = now,
             TagsModifiedBy = createdBy,
             WorkingBranchId = workingBranchId,
@@ -220,6 +225,15 @@ public sealed partial class IssueService(
         var modifiedBy = gitConfigService.GetUserName();
         var newId = existing.Id;
 
+        // Determine effective tags - apply linkedPr if provided (deprecated parameter)
+        var effectiveTags = tags ?? existing.Tags;
+        var tagsModified = tags is not null;
+        if (linkedPr.HasValue)
+        {
+            effectiveTags = KeyedTag.AddValue(effectiveTags, KeyedTag.LinkedPrKey, linkedPr.Value.ToString());
+            tagsModified = true;
+        }
+
         var updated = new Issue
         {
             Id = newId,
@@ -238,9 +252,6 @@ public sealed partial class IssueService(
             Priority = priority ?? existing.Priority,
             PriorityLastUpdate = priority is not null ? now : existing.PriorityLastUpdate,
             PriorityModifiedBy = priority is not null ? modifiedBy : existing.PriorityModifiedBy,
-            LinkedPR = linkedPr ?? existing.LinkedPR,
-            LinkedPRLastUpdate = linkedPr is not null ? now : existing.LinkedPRLastUpdate,
-            LinkedPRModifiedBy = linkedPr is not null ? modifiedBy : existing.LinkedPRModifiedBy,
             LinkedIssues = linkedIssues ?? existing.LinkedIssues,
             LinkedIssuesLastUpdate = linkedIssues is not null ? now : existing.LinkedIssuesLastUpdate,
             LinkedIssuesModifiedBy = linkedIssues is not null ? modifiedBy : existing.LinkedIssuesModifiedBy,
@@ -250,9 +261,9 @@ public sealed partial class IssueService(
             AssignedTo = assignedTo ?? existing.AssignedTo,
             AssignedToLastUpdate = assignedTo is not null ? now : existing.AssignedToLastUpdate,
             AssignedToModifiedBy = assignedTo is not null ? modifiedBy : existing.AssignedToModifiedBy,
-            Tags = tags ?? existing.Tags,
-            TagsLastUpdate = tags is not null ? now : existing.TagsLastUpdate,
-            TagsModifiedBy = tags is not null ? modifiedBy : existing.TagsModifiedBy,
+            Tags = effectiveTags,
+            TagsLastUpdate = tagsModified ? now : existing.TagsLastUpdate,
+            TagsModifiedBy = tagsModified ? modifiedBy : existing.TagsModifiedBy,
             WorkingBranchId = workingBranchId ?? existing.WorkingBranchId,
             WorkingBranchIdLastUpdate = workingBranchId is not null ? now : existing.WorkingBranchIdLastUpdate,
             WorkingBranchIdModifiedBy = workingBranchId is not null ? modifiedBy : existing.WorkingBranchIdModifiedBy,
@@ -353,7 +364,7 @@ public sealed partial class IssueService(
             .Where(i => priority is null || i.Priority == priority)
             .Where(i => assignedTo is null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
             .Where(i => tags is null || tags.Count == 0 || tags.Any(t => i.Tags?.Contains(t, StringComparer.OrdinalIgnoreCase) ?? false))
-            .Where(i => linkedPr is null || i.LinkedPR == linkedPr)
+            .Where(i => linkedPr is null || i.LinkedPRs.Contains(linkedPr.Value) || i.LinkedPR == linkedPr)
             .Where(i => keyedTags is null || keyedTags.Count == 0 ||
                 keyedTags.All(kt => tagService.HasKeyedTag(i, kt.Key, kt.Value)))
             .ToList();

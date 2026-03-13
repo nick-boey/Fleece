@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using Fleece.Core.Models;
 using Fleece.Core.Services.Interfaces;
 
+#pragma warning disable CS0618 // Type or member is obsolete - Internal service uses obsolete linkedPr param intentionally
+
 namespace Fleece.Core.Services;
 
 /// <summary>
@@ -165,7 +167,7 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
                 .Where(i => priority is null || i.Priority == priority)
                 .Where(i => assignedTo is null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
                 .Where(i => tags is null || tags.Count == 0 || tags.Any(t => i.Tags?.Contains(t, StringComparer.OrdinalIgnoreCase) ?? false))
-                .Where(i => linkedPr is null || i.LinkedPR == linkedPr)
+                .Where(i => linkedPr is null || i.LinkedPRs.Contains(linkedPr.Value) || i.LinkedPR == linkedPr)
                 .ToList();
         }
         finally

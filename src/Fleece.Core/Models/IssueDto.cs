@@ -11,6 +11,7 @@ public sealed record IssueDto
     public required IssueStatus Status { get; init; }
     public required IssueType Type { get; init; }
     public int? LinkedPR { get; init; }
+    public IReadOnlyList<int> LinkedPRs { get; init; } = [];
     public IReadOnlyList<string> LinkedIssues { get; init; } = [];
     public IReadOnlyList<ParentIssueRef> ParentIssues { get; init; } = [];
     public int? Priority { get; init; }
@@ -31,6 +32,7 @@ public sealed record IssueDto
         Status = issue.Status,
         Type = issue.Type,
         LinkedPR = issue.LinkedPR,
+        LinkedPRs = issue.LinkedPRs,
         LinkedIssues = issue.LinkedIssues,
         ParentIssues = issue.ParentIssues,
         Priority = issue.Priority,

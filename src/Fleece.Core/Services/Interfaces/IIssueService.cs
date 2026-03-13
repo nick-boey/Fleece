@@ -69,6 +69,26 @@ public interface IIssueService
 
     // --- CRUD Methods ---
 
+    /// <summary>
+    /// Creates a new issue.
+    /// </summary>
+    /// <param name="title">The issue title (required).</param>
+    /// <param name="type">The issue type (required).</param>
+    /// <param name="description">Optional issue description.</param>
+    /// <param name="status">Initial status (default: Open).</param>
+    /// <param name="priority">Optional priority (1-5, 1=highest).</param>
+    /// <param name="linkedPr">
+    /// Deprecated: Use tags with hsp-linked-pr key instead.
+    /// If provided, this value will be converted to an hsp-linked-pr tag.
+    /// </param>
+    /// <param name="linkedIssues">Optional list of linked issue IDs.</param>
+    /// <param name="parentIssues">Optional list of parent issue references.</param>
+    /// <param name="assignedTo">Optional assignee username.</param>
+    /// <param name="tags">Optional list of tags. Use hsp-linked-pr=N tags for linked PRs.</param>
+    /// <param name="workingBranchId">Optional working branch ID.</param>
+    /// <param name="executionMode">Optional execution mode for child issues.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The created issue.</returns>
     Task<Issue> CreateAsync(
         string title,
         IssueType type,
@@ -95,6 +115,13 @@ public interface IIssueService
     /// </summary>
     Task<IReadOnlyList<Issue>> ResolveByPartialIdAsync(string partialId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Updates an existing issue.
+    /// </summary>
+    /// <param name="linkedPr">
+    /// Deprecated: Use tags with hsp-linked-pr key instead.
+    /// If provided, this value will be converted to an hsp-linked-pr tag.
+    /// </param>
     Task<Issue> UpdateAsync(
         string id,
         string? title = null,
@@ -115,6 +142,13 @@ public interface IIssueService
 
     Task<IReadOnlyList<Issue>> SearchAsync(string query, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Filters issues by various criteria.
+    /// </summary>
+    /// <param name="linkedPr">
+    /// Deprecated: Use tags filter with hsp-linked-pr=N value instead.
+    /// If provided, will filter issues that have this PR number in their hsp-linked-pr tags.
+    /// </param>
     Task<IReadOnlyList<Issue>> FilterAsync(
         IssueStatus? status = null,
         IssueType? type = null,

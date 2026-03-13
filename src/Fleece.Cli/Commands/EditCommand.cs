@@ -101,7 +101,6 @@ public sealed class EditCommand(IIssueServiceFactory issueServiceFactory, IStora
                 status: status,
                 type: type,
                 priority: settings.Priority,
-                linkedPr: settings.LinkedPr,
                 linkedIssues: linkedIssues,
                 assignedTo: settings.AssignedTo,
                 tags: tags,
@@ -138,7 +137,6 @@ public sealed class EditCommand(IIssueServiceFactory issueServiceFactory, IStora
         string.IsNullOrWhiteSpace(settings.Status) &&
         string.IsNullOrWhiteSpace(settings.Type) &&
         !settings.Priority.HasValue &&
-        !settings.LinkedPr.HasValue &&
         string.IsNullOrWhiteSpace(settings.LinkedIssues) &&
         string.IsNullOrWhiteSpace(settings.AssignedTo) &&
         string.IsNullOrWhiteSpace(settings.Tags) &&
@@ -231,7 +229,6 @@ public sealed class EditCommand(IIssueServiceFactory issueServiceFactory, IStora
                 status: status,
                 type: issueType,
                 priority: template.Priority,
-                linkedPr: template.LinkedPr,
                 linkedIssues: linkedIssues,
                 assignedTo: template.AssignedTo,
                 tags: tags,

@@ -34,6 +34,9 @@ public interface IFleeceInMemoryService : IDisposable
     /// Filters issues with multiple criteria. Excludes terminal statuses by default
     /// unless <paramref name="includeTerminal"/> is true or a specific status is requested.
     /// </summary>
+    /// <param name="linkedPr">
+    /// Deprecated: Use tags filter with hsp-linked-pr=N value instead.
+    /// </param>
     Task<IReadOnlyList<Issue>> FilterAsync(
         IssueStatus? status = null,
         IssueType? type = null,
@@ -79,6 +82,9 @@ public interface IFleeceInMemoryService : IDisposable
     /// Updates all properties of an existing issue, updating the cache immediately and queuing persistence to disk.
     /// Returns null if the issue is not found.
     /// </summary>
+    /// <param name="linkedPr">
+    /// Deprecated: Use tags with hsp-linked-pr key instead.
+    /// </param>
     Task<Issue?> UpdateIssueFullAsync(
         string issueId,
         string? title = null,
