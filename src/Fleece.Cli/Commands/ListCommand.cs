@@ -64,7 +64,7 @@ public sealed class ListCommand(
         {
             if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var parsedType))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea, verify");
                 return 1;
             }
             type = parsedType;

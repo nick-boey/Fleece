@@ -216,7 +216,7 @@
     },
     "issueType": {
       "type": "string",
-      "enum": ["Task", "Bug", "Chore", "Feature", "Idea"],
+      "enum": ["Task", "Bug", "Chore", "Feature", "Idea", "Verify"],
       "description": "Type/category of the issue"
     },
     "parentIssueRef": {

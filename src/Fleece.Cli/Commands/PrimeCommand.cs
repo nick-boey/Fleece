@@ -78,10 +78,20 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         ## Issue Types
 
-        - `task`
-        - `bug`
-        - `chore`
-        - `feature`
+        - `task` - General work item
+        - `bug` - Defect or error to fix
+        - `chore` - Maintenance or housekeeping work
+        - `feature` - New functionality
+        - `verify` - Verification task that confirms grouped work is complete
+
+        ### Verify Issues
+
+        The `verify` type is used to create a parent issue that groups related work together.
+        When all child issues are complete, the verify issue serves as a checkpoint to confirm
+        the work was done correctly. Use verify issues when:
+        - Multiple related tasks need to be completed as a unit
+        - You need a final review/confirmation step after completing sub-tasks
+        - Work needs explicit sign-off before being considered done
 
         ## Issue Status Workflow
 
@@ -168,7 +178,7 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         ## Creating and Editing
 
         - `fleece create` - Open interactive editor with YAML template
-        - `fleece create -t <title> -y {task|bug|chore|feature} [OPTIONS]` - Create from command line
+        - `fleece create -t <title> -y {task|bug|chore|feature|verify} [OPTIONS]` - Create from command line
         - `fleece edit <id> [OPTIONS]` - Update from command line
 
         **Create/Edit Options:**

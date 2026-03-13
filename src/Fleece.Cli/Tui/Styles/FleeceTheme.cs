@@ -24,6 +24,7 @@ public static class FleeceTheme
     public static readonly Style TypeBug = Style.None.WithForeground(AnsiColors.Red);
     public static readonly Style TypeChore = Style.None.WithForeground(AnsiColors.BrightBlack);
     public static readonly Style TypeFeature = Style.None.WithForeground(AnsiColors.Magenta);
+    public static readonly Style TypeVerify = Style.None.WithForeground(AnsiColors.Green);
 
     // Priority colors
     public static readonly Style PriorityHigh = Style.None.WithForeground(AnsiColors.Red);
@@ -64,6 +65,7 @@ public static class FleeceTheme
         IssueType.Bug => TypeBug,
         IssueType.Chore => TypeChore,
         IssueType.Feature => TypeFeature,
+        IssueType.Verify => TypeVerify,
         _ => Style.None
     };
 
