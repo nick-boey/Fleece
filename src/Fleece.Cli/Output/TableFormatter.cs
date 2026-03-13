@@ -47,6 +47,7 @@ public static class TableFormatter
                 IssueType.Feature => "cyan",
                 IssueType.Task => "white",
                 IssueType.Chore => "dim",
+                IssueType.Verify => "green",
                 _ => "white"
             };
 

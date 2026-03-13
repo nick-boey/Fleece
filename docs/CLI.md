@@ -29,7 +29,7 @@ When run with no arguments, opens your default editor with a YAML template for i
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--title` | `-t` | Issue title (used to generate ID) |
-| `--type` | `-y` | Issue type: task, bug, chore, feature, idea |
+| `--type` | `-y` | Issue type: task, bug, chore, feature, idea, verify |
 
 **Optional Options:**
 | Option | Short | Description |
@@ -410,7 +410,7 @@ Outputs instructions that can be included in prompts to help LLMs understand how
 | `Title` | string | Yes | Issue title |
 | `Description` | string | No | Detailed description |
 | `Status` | enum | Yes | idea, spec, next, progress, review, complete, archived, closed |
-| `Type` | enum | Yes | task, bug, chore, feature, idea |
+| `Type` | enum | Yes | task, bug, chore, feature, idea, verify |
 | `LinkedPR` | int | No | Associated PR number |
 | `LinkedIssues` | string[] | No | Related issue IDs |
 | `ParentIssues` | string[] | No | Parent issue IDs |
