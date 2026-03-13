@@ -224,7 +224,7 @@ public static class TreeRenderer
             priority = issue.Priority,
             executionMode = issue.ExecutionMode.ToString().ToLowerInvariant(),
             assignedTo = issue.AssignedTo,
-            linkedPR = issue.LinkedPR,
+            linkedPRs = issue.LinkedPRs,
             tags = issue.Tags,
             children = children.Select(c => BuildJsonNode(c, issueLookup, rendered, allIssues)).ToList()
         };

@@ -355,4 +355,136 @@ public class MigrationServiceTests
     }
 
     #endregion
+
+    #region LinkedPR to Tags Migration Tests
+
+    [Test]
+    public async Task MigrateAsync_MigratesLinkedPrToTags()
+    {
+        var timestamp = new DateTimeOffset(2024, 6, 15, 12, 0, 0, TimeSpan.Zero);
+        var issue = new IssueBuilder()
+            .WithId("abc123")
+            .WithTitle("Test")
+            .Build() with
+        {
+            LinkedPR = 42,
+            LinkedPRLastUpdate = timestamp,
+            LinkedPRModifiedBy = "test-user"
+        };
+        SetupLoadResult(
+            issues: [issue],
+            diagnostics: [CreateDiagnostic()]);
+
+        Issue? savedIssue = null;
+        await _storage.SaveIssuesAsync(
+            Arg.Do<IReadOnlyList<Issue>>(issues => savedIssue = issues[0]),
+            Arg.Any<CancellationToken>());
+
+        var result = await _sut.MigrateAsync();
+
+        result.MigratedIssues.Should().Be(1);
+        savedIssue.Should().NotBeNull();
+        savedIssue!.LinkedPR.Should().BeNull();
+        savedIssue.Tags.Should().Contain("hsp-linked-pr=42");
+        savedIssue.TagsLastUpdate.Should().Be(timestamp);
+        savedIssue.TagsModifiedBy.Should().Be("test-user");
+    }
+
+    [Test]
+    public async Task MigrateAsync_PreservesExistingTags_WhenMigratingLinkedPr()
+    {
+        var issue = new IssueBuilder()
+            .WithId("abc123")
+            .WithTitle("Test")
+            .Build() with
+        {
+            LinkedPR = 42,
+            Tags = ["existing-tag", "backend"]
+        };
+        SetupLoadResult(
+            issues: [issue],
+            diagnostics: [CreateDiagnostic()]);
+
+        Issue? savedIssue = null;
+        await _storage.SaveIssuesAsync(
+            Arg.Do<IReadOnlyList<Issue>>(issues => savedIssue = issues[0]),
+            Arg.Any<CancellationToken>());
+
+        await _sut.MigrateAsync();
+
+        savedIssue.Should().NotBeNull();
+        savedIssue!.Tags.Should().Contain("existing-tag");
+        savedIssue.Tags.Should().Contain("backend");
+        savedIssue.Tags.Should().Contain("hsp-linked-pr=42");
+    }
+
+    [Test]
+    public async Task MigrateAsync_DoesNotMigrate_WhenNoLinkedPr()
+    {
+        var issue = new IssueBuilder()
+            .WithId("abc123")
+            .WithTitle("Test")
+            .Build() with { LinkedPR = null };
+        SetupLoadResult(
+            issues: [issue],
+            diagnostics: [CreateDiagnostic()]);
+
+        var result = await _sut.MigrateAsync();
+
+        result.MigratedIssues.Should().Be(0);
+        result.WasMigrationNeeded.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task IsMigrationNeededAsync_ReturnsTrue_WhenLinkedPrNeedsMigration()
+    {
+        var issue = new IssueBuilder()
+            .WithId("abc123")
+            .WithTitle("Test")
+            .Build() with { LinkedPR = 42 };
+        SetupLoadResult(
+            issues: [issue],
+            diagnostics: [CreateDiagnostic()]);
+
+        var result = await _sut.IsMigrationNeededAsync();
+
+        result.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task MigrateLinkedPrToTags_Internal_ConvertsFieldToTag()
+    {
+        var timestamp = DateTimeOffset.UtcNow;
+        var issue = new Issue
+        {
+            Id = "test123",
+            Title = "Test",
+            TitleLastUpdate = timestamp,
+            Status = IssueStatus.Open,
+            StatusLastUpdate = timestamp,
+            Type = IssueType.Task,
+            TypeLastUpdate = timestamp,
+            LinkedPR = 123,
+            LinkedPRLastUpdate = timestamp,
+            LinkedPRModifiedBy = "migrator",
+            LinkedIssues = [],
+            ParentIssues = [],
+            Tags = [],
+            TagsLastUpdate = timestamp,
+            Questions = [],
+            LastUpdate = timestamp,
+            CreatedAt = timestamp
+        };
+
+        var result = MigrationService.MigrateLinkedPrToTags(issue);
+
+        result.LinkedPR.Should().BeNull();
+        result.LinkedPRLastUpdate.Should().BeNull();
+        result.LinkedPRModifiedBy.Should().BeNull();
+        result.Tags.Should().Contain("hsp-linked-pr=123");
+        result.TagsLastUpdate.Should().Be(timestamp);
+        result.TagsModifiedBy.Should().Be("migrator");
+    }
+
+    #endregion
 }

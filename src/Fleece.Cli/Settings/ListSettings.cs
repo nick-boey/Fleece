@@ -30,7 +30,7 @@ public sealed class ListSettings : FleeceCommandSettings
     public string[]? KeyedTags { get; init; }
 
     [CommandOption("--linked-pr <PR>")]
-    [Description("Filter by linked PR number")]
+    [Description("Filter by linked PR number (checks hsp-linked-pr tags)")]
     public int? LinkedPr { get; init; }
 
     [CommandOption("--search <QUERY>")]

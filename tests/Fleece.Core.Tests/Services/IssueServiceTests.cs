@@ -83,14 +83,14 @@ public class IssueServiceTests
             description: "A description",
             status: IssueStatus.Complete,
             priority: 2,
-            linkedPr: 42,
             linkedIssues: ["issue1"],
-            parentIssues: [new ParentIssueRef { ParentIssue = "parent1", SortOrder = "aaa" }]);
+            parentIssues: [new ParentIssueRef { ParentIssue = "parent1", SortOrder = "aaa" }],
+            tags: ["hsp-linked-pr=42"]);
 
         result.Description.Should().Be("A description");
         result.Status.Should().Be(IssueStatus.Complete);
         result.Priority.Should().Be(2);
-        result.LinkedPR.Should().Be(42);
+        result.LinkedPRs.Should().ContainSingle().Which.Should().Be(42);
         result.LinkedIssues.Should().ContainSingle("issue1");
         result.ParentIssues.Should().ContainSingle().Which.ParentIssue.Should().Be("parent1");
     }
@@ -449,13 +449,30 @@ public class IssueServiceTests
     }
 
     [Test]
-    public async Task FilterAsync_FiltersByLinkedPr()
+    public async Task FilterAsync_FiltersByLinkedPr_FromTags()
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, LinkedPR = 123, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, LinkedPR = 456, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Progress, Type = IssueType.Task, LinkedPR = null, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["hsp-linked-pr=123"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["hsp-linked-pr=456"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = [], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(linkedPr: 123);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task FilterAsync_FiltersByLinkedPr_FallsBackToLegacyField()
+    {
+        // Test backward compatibility with deprecated LinkedPR field
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, LinkedPR = 123, Tags = [], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["hsp-linked-pr=456"], LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 

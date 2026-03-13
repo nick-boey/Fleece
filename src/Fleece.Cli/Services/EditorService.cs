@@ -37,9 +37,8 @@ public sealed class EditorService
             status: draft  # Options: draft, open, progress, review, complete, archived, closed
             priority:   # 1-5 (1=highest)
             assignedTo:
-            tags:   # Comma-separated list, e.g.: urgent,backend,api
+            tags:   # Comma-separated list, e.g.: urgent,backend,api (use hsp-linked-pr=123 for linked PRs)
             workingBranchId:   # Git branch name for this issue
-            linkedPr:
             linkedIssues:   # Comma-separated issue IDs
             parentIssues:   # Comma-separated issue IDs with optional sort order (e.g., abc123,def456:bbb)
             """;
@@ -71,9 +70,8 @@ public sealed class EditorService
             status: {issue.Status.ToString().ToLowerInvariant()}  # Options: draft, open, progress, review, complete, archived, closed
             priority: {(issue.Priority.HasValue ? issue.Priority.Value.ToString() : "")}  # 1-5 (1=highest)
             assignedTo: {EscapeYamlValue(issue.AssignedTo)}
-            tags: {tagsStr}  # Comma-separated list, e.g.: urgent,backend,api
+            tags: {tagsStr}  # Comma-separated list, e.g.: urgent,backend,api (use hsp-linked-pr=123 for linked PRs)
             workingBranchId: {EscapeYamlValue(issue.WorkingBranchId)}  # Git branch name for this issue
-            linkedPr: {(issue.LinkedPR.HasValue ? issue.LinkedPR.Value.ToString() : "")}
             linkedIssues: {linkedIssuesStr}  # Comma-separated issue IDs
             """;
 
@@ -211,7 +209,6 @@ public sealed class IssueTemplate
     public int? Priority { get; set; }
     public string? AssignedTo { get; set; }
     public string? Tags { get; set; }
-    public int? LinkedPr { get; set; }
     public string? LinkedIssues { get; set; }
     public string? ParentIssues { get; set; }
     public string? WorkingBranchId { get; set; }

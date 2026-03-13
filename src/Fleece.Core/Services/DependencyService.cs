@@ -2,6 +2,8 @@ using Fleece.Core.Models;
 using Fleece.Core.Services.Interfaces;
 using Fleece.Core.Utilities;
 
+#pragma warning disable CS0618 // Type or member is obsolete - Internal service uses obsolete linkedPr param intentionally
+
 namespace Fleece.Core.Services;
 
 /// <summary>

@@ -138,8 +138,14 @@ public static class TableFormatter
             lines.Add($"[bold]Working Branch:[/] {Markup.Escape(issue.WorkingBranchId)}");
         }
 
-        if (issue.LinkedPR.HasValue)
+        if (issue.LinkedPRs.Count > 0)
         {
+            var prList = string.Join(", ", issue.LinkedPRs.Select(pr => $"#{pr}"));
+            lines.Add($"[bold]Linked PRs:[/] {prList}");
+        }
+        else if (issue.LinkedPR.HasValue)
+        {
+            // Fallback for legacy LinkedPR field (before migration)
             lines.Add($"[bold]Linked PR:[/] #{issue.LinkedPR}");
         }
 

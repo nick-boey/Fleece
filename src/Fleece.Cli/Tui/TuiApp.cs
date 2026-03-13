@@ -172,7 +172,7 @@ public sealed class TuiApp
             BuildPropertyRow("Assigned To", issue.AssignedTo ?? "-"),
             BuildPropertyRow("Execution Mode", issue.ExecutionMode.ToString()),
             BuildPropertyRow("Working Branch", issue.WorkingBranchId ?? "-"),
-            BuildPropertyRow("Linked PR", issue.LinkedPR?.ToString() ?? "-"),
+            BuildPropertyRow("Linked PRs", issue.LinkedPRs.Count > 0 ? string.Join(", ", issue.LinkedPRs.Select(pr => $"#{pr}")) : (issue.LinkedPR?.ToString() ?? "-")),
             new TextBlock("")
         };
 

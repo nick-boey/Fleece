@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Fleece.Core.Models;
 using FluentAssertions;
 using NUnit.Framework;
@@ -45,6 +46,7 @@ public class SchemaValidityTests
         var schemaProperties = _issueSchema.RootElement.GetProperty("properties");
 
         var issueProperties = typeof(Issue).GetProperties()
+            .Where(p => p.GetCustomAttribute<JsonIgnoreAttribute>() is null)
             .Select(ToCamelCase)
             .ToHashSet();
 
@@ -64,6 +66,7 @@ public class SchemaValidityTests
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var issueProperties = typeof(Issue).GetProperties()
+            .Where(p => p.GetCustomAttribute<JsonIgnoreAttribute>() is null)
             .Select(ToCamelCase)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
