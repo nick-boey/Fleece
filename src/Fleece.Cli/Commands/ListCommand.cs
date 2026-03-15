@@ -12,7 +12,8 @@ public sealed class ListCommand(
     IIssueServiceFactory issueServiceFactory,
     IStorageServiceProvider storageServiceProvider,
     ISyncStatusService syncStatusService,
-    ISearchService searchService) : AsyncCommand<ListSettings>
+    ISearchService searchService,
+    ISettingsService settingsService) : AsyncCommand<ListSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ListSettings settings)
     {
@@ -73,6 +74,26 @@ public sealed class ListCommand(
         // --- Next mode ---
         if (settings.Next)
         {
+            // Validate --me and --assigned are mutually exclusive
+            if (settings.Me && !string.IsNullOrWhiteSpace(settings.AssignedTo))
+            {
+                AnsiConsole.MarkupLine("[red]Error:[/] --me and --assigned cannot be used together");
+                return 1;
+            }
+
+            // Resolve assignee for --me filter
+            string? assignedTo = settings.AssignedTo;
+            if (settings.Me)
+            {
+                var effectiveSettings = await settingsService.GetEffectiveSettingsAsync();
+                if (string.IsNullOrWhiteSpace(effectiveSettings.Identity))
+                {
+                    AnsiConsole.MarkupLine("[red]Error:[/] No identity configured. Run 'fleece config --set identity=<name>' or set git user.name");
+                    return 1;
+                }
+                assignedTo = effectiveSettings.Identity;
+            }
+
             TaskGraph graph;
             if (!string.IsNullOrWhiteSpace(settings.Search))
             {
@@ -83,7 +104,7 @@ public sealed class ListCommand(
                     status,
                     type,
                     settings.Priority,
-                    settings.AssignedTo,
+                    assignedTo,
                     settings.Tags,
                     settings.LinkedPr,
                     settings.All);
@@ -98,7 +119,9 @@ public sealed class ListCommand(
             }
             else
             {
-                graph = await issueService.BuildTaskGraphLayoutAsync();
+                graph = await issueService.BuildTaskGraphLayoutAsync(
+                    includeTerminal: settings.All,
+                    assignedTo: assignedTo);
             }
 
             TaskGraphRenderer.Render(graph);

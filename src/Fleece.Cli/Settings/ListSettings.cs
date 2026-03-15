@@ -72,4 +72,8 @@ public sealed class ListSettings : FleeceCommandSettings
     [CommandOption("--next")]
     [Description("Display as a bottom-up task graph showing approximate task ordering")]
     public bool Next { get; init; }
+
+    [CommandOption("--me")]
+    [Description("Filter to issues assigned to current user")]
+    public bool Me { get; init; }
 }

@@ -1021,6 +1021,127 @@ public class IssueServiceGraphTests
 
     #endregion
 
+    #region BuildTaskGraphLayoutAsync Filter Tests
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_ExcludesDraftByDefault()
+    {
+        var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
+        var draft = new IssueBuilder().WithId("draft1").WithStatus(IssueStatus.Draft).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, draft]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("open1");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_IncludeTerminal_IncludesDraftAndTerminalStatuses()
+    {
+        var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
+        var draft = new IssueBuilder().WithId("draft1").WithStatus(IssueStatus.Draft).Build();
+        var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
+        var closed = new IssueBuilder().WithId("closed1").WithStatus(IssueStatus.Closed).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, draft, complete, closed]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync(includeTerminal: true);
+
+        result.Nodes.Should().HaveCount(4);
+        result.Nodes.Select(n => n.Issue.Id).Should().Contain(["open1", "draft1", "complete1", "closed1"]);
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_AssignedToFilter_ReturnsOnlyMatchingAssignee()
+    {
+        var johnIssue = new IssueBuilder().WithId("john1").WithStatus(IssueStatus.Open).WithAssignedTo("john").Build();
+        var janeIssue = new IssueBuilder().WithId("jane1").WithStatus(IssueStatus.Open).WithAssignedTo("jane").Build();
+        var unassigned = new IssueBuilder().WithId("unassigned1").WithStatus(IssueStatus.Open).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([johnIssue, janeIssue, unassigned]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync(assignedTo: "john");
+
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("john1");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_AssignedToFilter_IsCaseInsensitive()
+    {
+        var johnIssue = new IssueBuilder().WithId("john1").WithStatus(IssueStatus.Open).WithAssignedTo("John").Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([johnIssue]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync(assignedTo: "john");
+
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("john1");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_CombinedFilters_IncludeTerminalAndAssignedTo()
+    {
+        var johnOpen = new IssueBuilder().WithId("john-open").WithStatus(IssueStatus.Open).WithAssignedTo("john").Build();
+        var johnComplete = new IssueBuilder().WithId("john-complete").WithStatus(IssueStatus.Complete).WithAssignedTo("john").Build();
+        var janeOpen = new IssueBuilder().WithId("jane-open").WithStatus(IssueStatus.Open).WithAssignedTo("jane").Build();
+        var janeComplete = new IssueBuilder().WithId("jane-complete").WithStatus(IssueStatus.Complete).WithAssignedTo("jane").Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([johnOpen, johnComplete, janeOpen, janeComplete]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync(includeTerminal: true, assignedTo: "john");
+
+        result.Nodes.Should().HaveCount(2);
+        result.Nodes.Select(n => n.Issue.Id).Should().Contain(["john-open", "john-complete"]);
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_ParentWithFilteredChild_ParentStillIncludedAsAncestor()
+    {
+        // When a child passes the filter, its parent should be included for context even if parent doesn't pass
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithAssignedTo("jane").Build();
+        var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open).WithAssignedTo("john")
+            .WithParentIssueIdAndOrder("parent", "aaa").Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync(assignedTo: "john");
+
+        // Only john's child should be in the filtered set (parent filtered out)
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("child");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_NoMatchingAssignee_ReturnsEmptyGraph()
+    {
+        var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Open).WithAssignedTo("john").Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync(assignedTo: "nonexistent");
+
+        result.Nodes.Should().BeEmpty();
+        result.TotalLanes.Should().Be(0);
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_DefaultFilters_ExcludesProgressIssuesCorrectly()
+    {
+        // Progress issues should still be included (they are not terminal or draft)
+        var progress = new IssueBuilder().WithId("progress1").WithStatus(IssueStatus.Progress).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([progress]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("progress1");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_DefaultFilters_ExcludesReviewIssuesCorrectly()
+    {
+        // Review issues should still be included (they are not terminal or draft)
+        var review = new IssueBuilder().WithId("review1").WithStatus(IssueStatus.Review).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([review]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("review1");
+    }
+
+    #endregion
+
     #region Edge Cases
 
     [Test]

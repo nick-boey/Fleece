@@ -21,6 +21,7 @@ public class TreeCommandTests
     private IIssueServiceFactory _issueServiceFactory = null!;
     private ISyncStatusService _syncStatusService = null!;
     private ISearchService _searchService = null!;
+    private ISettingsService _settingsService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
     private StringWriter _consoleOutput = null!;
@@ -49,7 +50,22 @@ public class TreeCommandTests
         _issueServiceFactory.GetIssueService(Arg.Any<string?>())
             .Returns(_issueService);
 
-        _command = new ListCommand(_issueServiceFactory, _storageServiceProvider, _syncStatusService, _searchService);
+        _settingsService = Substitute.For<ISettingsService>();
+        _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
+            .Returns(new EffectiveSettings
+            {
+                AutoMerge = false,
+                Identity = "testuser",
+                SyncBranch = null,
+                Sources = new SettingsSources
+                {
+                    AutoMerge = SettingSource.Default,
+                    Identity = SettingSource.Default,
+                    SyncBranch = SettingSource.Default
+                }
+            });
+
+        _command = new ListCommand(_issueServiceFactory, _storageServiceProvider, _syncStatusService, _searchService, _settingsService);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;
@@ -214,7 +230,7 @@ public class TreeCommandTests
             .WithType(IssueType.Task)
             .Build();
 
-        _issueService.BuildTaskGraphLayoutAsync(Arg.Any<CancellationToken>())
+        _issueService.BuildTaskGraphLayoutAsync(Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(new TaskGraph
             {
                 Nodes = [new TaskGraphNode { Issue = issue, Row = 0, Lane = 0, IsActionable = true }],
@@ -417,7 +433,7 @@ public class TreeCommandTests
             TotalLanes = 1
         };
 
-        _issueService.BuildTaskGraphLayoutAsync(Arg.Any<CancellationToken>())
+        _issueService.BuildTaskGraphLayoutAsync(Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(taskGraph);
 
         var settings = new ListSettings { Next = true };
@@ -427,7 +443,7 @@ public class TreeCommandTests
         result.Should().Be(0);
 
         // Verify BuildTaskGraphLayoutAsync was called (not BuildFilteredTaskGraphLayoutAsync)
-        await _issueService.Received(1).BuildTaskGraphLayoutAsync(Arg.Any<CancellationToken>());
+        await _issueService.Received(1).BuildTaskGraphLayoutAsync(Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
 
         // Verify search service was NOT called
         _searchService.DidNotReceive().ParseQuery(Arg.Any<string?>());
