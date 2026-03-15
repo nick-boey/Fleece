@@ -516,7 +516,10 @@ public sealed partial class IssueService(
     }
 
     /// <inheritdoc />
-    public async Task<TaskGraph> BuildTaskGraphLayoutAsync(CancellationToken cancellationToken = default)
+    public async Task<TaskGraph> BuildTaskGraphLayoutAsync(
+        bool includeTerminal = false,
+        string? assignedTo = null,
+        CancellationToken cancellationToken = default)
     {
         var allIssues = await GetAllAsync(cancellationToken);
         var issueList = allIssues.ToList();
@@ -529,8 +532,13 @@ public sealed partial class IssueService(
         // Build a lookup for ALL issues (needed to find terminal parents)
         var fullLookup = issueList.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
-        // Start with non-terminal issues
-        var activeIssues = issueList.Where(i => !i.Status.IsTerminal()).ToList();
+        // Filter issues based on parameters:
+        // - By default (includeTerminal=false), exclude terminal statuses AND Draft
+        // - When assignedTo is provided, filter to only matching assignees
+        var activeIssues = issueList.Where(i =>
+            (includeTerminal || (!i.Status.IsTerminal() && i.Status != IssueStatus.Draft)) &&
+            (assignedTo == null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
+        ).ToList();
 
         if (activeIssues.Count == 0)
         {
@@ -1373,15 +1381,17 @@ public sealed partial class IssueService(
 
         // Return issues in a consistent order
         var result = new List<Issue>();
+        var addedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var issue in activeIssues)
         {
             result.Add(issue);
+            addedIds.Add(issue.Id);
         }
 
-        // Add terminal ancestors that weren't in the active set
+        // Add terminal ancestors that weren't already in the active set
         foreach (var id in displayIds)
         {
-            if (fullLookup.TryGetValue(id, out var issue) && issue.Status.IsTerminal())
+            if (!addedIds.Contains(id) && fullLookup.TryGetValue(id, out var issue) && issue.Status.IsTerminal())
             {
                 result.Add(issue);
             }

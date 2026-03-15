@@ -51,9 +51,14 @@ public interface IIssueService
     /// The graph is organized bottom-up, with actionable tasks at the left (lane 0)
     /// and root/parent tasks at the right (higher lanes).
     /// </summary>
+    /// <param name="includeTerminal">When true, includes terminal statuses (Complete, Archived, Closed, Deleted) and Draft in the graph.</param>
+    /// <param name="assignedTo">When provided, filters to only issues assigned to this user.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A positioned task graph ready for rendering.</returns>
-    Task<TaskGraph> BuildTaskGraphLayoutAsync(CancellationToken cancellationToken = default);
+    Task<TaskGraph> BuildTaskGraphLayoutAsync(
+        bool includeTerminal = false,
+        string? assignedTo = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Builds a positioned task graph layout filtered by the given matched issue IDs.

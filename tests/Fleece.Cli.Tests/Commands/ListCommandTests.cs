@@ -22,6 +22,7 @@ public class ListCommandTests
     private IIssueServiceFactory _issueServiceFactory = null!;
     private ISyncStatusService _syncStatusService = null!;
     private ISearchService _searchService = null!;
+    private ISettingsService _settingsService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
     private StringWriter _consoleOutput = null!;
@@ -52,7 +53,22 @@ public class ListCommandTests
 
         _searchService = Substitute.For<ISearchService>();
 
-        _command = new ListCommand(_issueServiceFactory, _storageServiceProvider, _syncStatusService, _searchService);
+        _settingsService = Substitute.For<ISettingsService>();
+        _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
+            .Returns(new EffectiveSettings
+            {
+                AutoMerge = false,
+                Identity = "testuser",
+                SyncBranch = null,
+                Sources = new SettingsSources
+                {
+                    AutoMerge = SettingSource.Default,
+                    Identity = SettingSource.Default,
+                    SyncBranch = SettingSource.Default
+                }
+            });
+
+        _command = new ListCommand(_issueServiceFactory, _storageServiceProvider, _syncStatusService, _searchService, _settingsService);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;
