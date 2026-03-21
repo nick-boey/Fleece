@@ -1024,7 +1024,7 @@ public class IssueServiceGraphTests
     #region BuildTaskGraphLayoutAsync Filter Tests
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_ExcludesDraftByDefault()
+    public async Task BuildTaskGraphLayoutAsync_IncludesDraftByDefault()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var draft = new IssueBuilder().WithId("draft1").WithStatus(IssueStatus.Draft).Build();
@@ -1032,11 +1032,12 @@ public class IssueServiceGraphTests
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
-        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("open1");
+        result.Nodes.Should().HaveCount(2);
+        result.Nodes.Select(n => n.Issue.Id).Should().Contain(["open1", "draft1"]);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_IncludeTerminal_IncludesDraftAndTerminalStatuses()
+    public async Task BuildTaskGraphLayoutAsync_IncludeTerminal_IncludesTerminalStatuses()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var draft = new IssueBuilder().WithId("draft1").WithStatus(IssueStatus.Draft).Build();
