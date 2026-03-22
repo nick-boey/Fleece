@@ -34,6 +34,14 @@ public sealed class DependencySettings : FleeceCommandSettings
     [Description("Place at the end of the sort order")]
     public bool Last { get; init; }
 
+    [CommandOption("--replace")]
+    [Description("Replace all existing parents instead of adding to them")]
+    public bool Replace { get; init; }
+
+    [CommandOption("--primary")]
+    [Description("Make the new parent the primary (first in parent list)")]
+    public bool Primary { get; init; }
+
     [CommandOption("--json")]
     [Description("Output as JSON")]
     public bool Json { get; init; }
@@ -62,6 +70,16 @@ public sealed class DependencySettings : FleeceCommandSettings
         if (Remove && positionFlags > 0)
         {
             return ValidationResult.Error("Position flags cannot be used with --remove");
+        }
+
+        if (Remove && Replace)
+        {
+            return ValidationResult.Error("--replace cannot be used with --remove");
+        }
+
+        if (Remove && Primary)
+        {
+            return ValidationResult.Error("--primary cannot be used with --remove");
         }
 
         return ValidationResult.Success();
