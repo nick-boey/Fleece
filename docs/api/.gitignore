@@ -1,0 +1,4 @@
+# Ignore generated DocFX API files
+*.yml
+!toc.yml
+.manifest

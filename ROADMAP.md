@@ -3,7 +3,7 @@
 ## Phase 1: Documentation
 - [x] README.md - Project overview and quick start
 - [x] ROADMAP.md - Development tracking
-- [x] docs/CLI.md - Complete CLI reference
+- [x] docs/articles/cli-reference.md - Complete CLI reference
 
 ## Phase 2: Foundation
 - [x] Create Fleece.slnx solution

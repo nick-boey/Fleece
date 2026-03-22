@@ -11,5 +11,9 @@
     <PackageProjectUrl>https://github.com/nick-boey/Fleece</PackageProjectUrl>
     <!-- Default version for local builds; overridden by -p:Version= during release -->
     <Version>1.6.1</Version>
+    <!-- Generate XML documentation for DocFX API reference -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Suppress missing/incomplete XML comment warnings until full documentation coverage -->
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
   </PropertyGroup>
 </Project>

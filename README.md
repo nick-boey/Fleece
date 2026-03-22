@@ -177,7 +177,7 @@ Outputs instructions that help Claude Code understand how to work with Fleece is
 
 ## CLI Reference
 
-See [docs/CLI.md](docs/CLI.md) for complete command documentation.
+See the [CLI Reference](docs/articles/cli-reference.md) for complete command documentation.
 
 ## Contributing
 
