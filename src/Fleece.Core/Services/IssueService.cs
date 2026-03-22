@@ -159,6 +159,59 @@ public sealed partial class IssueService(
         return issues.FirstOrDefault(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
     }
 
+    public async Task<IReadOnlyList<Issue>> GetIssueHierarchyAsync(
+        string issueId,
+        bool includeParents = true,
+        bool includeChildren = true,
+        CancellationToken cancellationToken = default)
+    {
+        var graph = await BuildGraphAsync(cancellationToken);
+
+        // Check if issue exists in the graph
+        if (!graph.Nodes.ContainsKey(issueId))
+        {
+            return [];
+        }
+
+        var resultIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { issueId };
+
+        if (includeParents)
+        {
+            CollectAncestorIds(issueId, graph, resultIds);
+        }
+
+        if (includeChildren)
+        {
+            var descendants = GetDescendantIds(issueId, graph);
+            foreach (var id in descendants)
+            {
+                resultIds.Add(id);
+            }
+        }
+
+        return graph.Nodes.Values
+            .Where(n => resultIds.Contains(n.Issue.Id))
+            .Select(n => n.Issue)
+            .ToList();
+    }
+
+    private static void CollectAncestorIds(string issueId, IssueGraph graph, HashSet<string> resultIds)
+    {
+        var node = graph.GetNode(issueId);
+        if (node == null)
+        {
+            return;
+        }
+
+        foreach (var parentId in node.ParentIssueIds)
+        {
+            if (resultIds.Add(parentId))
+            {
+                CollectAncestorIds(parentId, graph, resultIds);
+            }
+        }
+    }
+
     public async Task<IReadOnlyList<Issue>> ResolveByPartialIdAsync(string partialId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(partialId))

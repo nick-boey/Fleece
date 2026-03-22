@@ -114,6 +114,20 @@ public interface IIssueService
     Task<Issue?> GetByIdAsync(string id, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets an issue and its hierarchy (parents and/or children).
+    /// </summary>
+    /// <param name="issueId">The issue ID to get hierarchy for.</param>
+    /// <param name="includeParents">When true, includes all ancestor issues.</param>
+    /// <param name="includeChildren">When true, includes all descendant issues.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of issues including the target and its hierarchy.</returns>
+    Task<IReadOnlyList<Issue>> GetIssueHierarchyAsync(
+        string issueId,
+        bool includeParents = true,
+        bool includeChildren = true,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Resolves a partial ID (3+ characters) to matching issues.
     /// Returns issues whose ID starts with the given partial ID (case-insensitive).
     /// If the partial ID is less than 3 characters, requires exact match.
