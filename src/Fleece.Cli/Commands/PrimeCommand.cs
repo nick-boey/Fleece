@@ -113,6 +113,7 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `fleece next` - Find issues that can be worked on next based on dependencies and execution mode
 
         Use `fleece create -t <title> -y <type> --parent-issues <parent-id>:<lex-order>` to create sub-tasks.
+        Use `fleece dependency --parent <id> --child <id>` to manage dependencies on existing issues.
 
         ## Filtering
 
@@ -151,6 +152,34 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         `lex-order` is an optional string used for lexical ordering of issues, e.g. "aaa", "bbb". Use a minimum of three characters by default.
 
         Multiple parents are comma delimited: `--parent-issues "id-1,id-2"`
+
+        ## Managing Dependencies
+
+        Use `fleece dependency` to add, remove, or reorder parent-child relationships on existing issues.
+
+        ### Add Dependency
+
+        `fleece dependency --parent <parent-id> --child <child-id>`
+
+        ### Positioning
+
+        Control sibling order when adding:
+        - `--first` - Place at beginning
+        - `--last` - Place at end (default)
+        - `--after <sibling-id>` - Place after a sibling
+        - `--before <sibling-id>` - Place before a sibling
+
+        Example: `fleece dependency --parent abc123 --child def456 --after ghi789`
+
+        ### Remove Dependency
+
+        `fleece dependency --parent <parent-id> --child <child-id> --remove`
+
+        ### When to Use
+
+        - **`fleece create --parent-issues`** - When creating a new issue with known parent(s)
+        - **`fleece edit --parent-issues`** - When replacing all parents at once
+        - **`fleece dependency`** - When adding/removing individual parent relationships or when precise sibling ordering is needed
 
         ## Viewing Hierarchy
 
@@ -202,6 +231,7 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         ## Managing
 
         - `fleece delete <id>` - Delete an issue
+        - `fleece dependency --parent <id> --child <id>` - Add/remove parent-child dependency
         - `fleece validate` - Check for cyclic dependencies in issue hierarchy
 
         ## Collaboration
