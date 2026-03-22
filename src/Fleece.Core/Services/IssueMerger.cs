@@ -301,9 +301,13 @@ public sealed class IssueMerger
 
         var newerTimestamp = timestampA > timestampB ? timestampA : timestampB;
 
-        // Create dictionaries keyed by ParentIssue ID
-        var dictA = safeListA.ToDictionary(p => p.ParentIssue, StringComparer.OrdinalIgnoreCase);
-        var dictB = safeListB.ToDictionary(p => p.ParentIssue, StringComparer.OrdinalIgnoreCase);
+        // Create dictionaries keyed by ParentIssue ID, deduplicating by keeping first occurrence
+        var dictA = safeListA
+            .GroupBy(p => p.ParentIssue, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var dictB = safeListB
+            .GroupBy(p => p.ParentIssue, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         // Union by ParentIssue ID, keeping newer SortOrder based on timestamp
         var allParentIds = new HashSet<string>(dictA.Keys.Concat(dictB.Keys), StringComparer.OrdinalIgnoreCase);
