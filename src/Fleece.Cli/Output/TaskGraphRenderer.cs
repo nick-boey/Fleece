@@ -107,6 +107,12 @@ public static class TaskGraphRenderer
                     DrawVerticalSegment(grid, connections, parentCol, childGridRow, parentGridRow);
                 }
             }
+            else // childCol > parentCol (cascading: child is to the RIGHT of parent)
+            {
+                // Cascading series flow: vertical down from parent column, then horizontal to child at child's row
+                DrawVerticalSegment(grid, connections, parentCol, childGridRow, parentGridRow);
+                DrawHorizontalSegment(grid, connections, childGridRow, parentCol, childCol);
+            }
         }
 
         // Resolve junction characters
@@ -159,13 +165,23 @@ public static class TaskGraphRenderer
 
     /// <summary>
     /// Finds the parent node of the given node within the graph.
-    /// Returns the first parent that exists in the graph, preferring the parent
-    /// that appears later (lower) in the node list.
+    /// First checks for an explicit RenderingParentId (used for cascading series flow),
+    /// then falls back to finding the best actual parent from ParentIssues.
     /// </summary>
     private static TaskGraphNode? FindParentNodeInGraph(
         TaskGraphNode node,
         Dictionary<string, TaskGraphNode> nodeLookup)
     {
+        // Use explicit rendering parent if specified (for cascading series)
+        if (!string.IsNullOrEmpty(node.RenderingParentId))
+        {
+            if (nodeLookup.TryGetValue(node.RenderingParentId, out var explicitParent))
+            {
+                return explicitParent;
+            }
+        }
+
+        // Fall back to existing actual parent lookup
         if (node.Issue.ParentIssues.Count == 0)
         {
             return null;

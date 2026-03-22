@@ -653,6 +653,113 @@ public class IssueServiceGraphTests
         result.Nodes.Should().HaveCount(3);
     }
 
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_SeriesNestedSiblings_RenderingParentSetForCascading()
+    {
+        // Create a hierarchy with nested series siblings:
+        // Parent 1 (series)
+        //   ├── Parent 2 (series) → Child 2.1, Child 2.2
+        //   └── Parent 3 (series) → Child 3.1, Child 3.2
+        //
+        // In cascading flow, Child 3.1 should have RenderingParentId = Parent 2
+        // (because Parent 2 is the previous sibling of Parent 3)
+
+        var parent1 = new IssueBuilder().WithId("parent1").WithTitle("Parent 1")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var parent2 = new IssueBuilder().WithId("parent2").WithTitle("Parent 2")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series)
+            .WithParentIssueIdAndOrder("parent1", "aaa").Build();
+        var parent3 = new IssueBuilder().WithId("parent3").WithTitle("Parent 3")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series)
+            .WithParentIssueIdAndOrder("parent1", "bbb").Build();
+        var child21 = new IssueBuilder().WithId("child21").WithTitle("Child 2.1")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent2", "aaa").Build();
+        var child22 = new IssueBuilder().WithId("child22").WithTitle("Child 2.2")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent2", "bbb").Build();
+        var child31 = new IssueBuilder().WithId("child31").WithTitle("Child 3.1")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent3", "aaa").Build();
+        var child32 = new IssueBuilder().WithId("child32").WithTitle("Child 3.2")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent3", "bbb").Build();
+
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>())
+            .Returns([parent1, parent2, parent3, child21, child22, child31, child32]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
+
+        // First child of first sibling subtree should have no rendering parent override
+        nodeLookup["child21"].RenderingParentId.Should().BeNull();
+
+        // Second child in same subtree should have first child as rendering parent (cascading within subtree)
+        nodeLookup["child22"].RenderingParentId.Should().Be("child21");
+
+        // First child of second sibling subtree should connect to previous sibling (parent2)
+        nodeLookup["child31"].RenderingParentId.Should().Be("parent2");
+
+        // Second child in second subtree should connect to first child of that subtree
+        nodeLookup["child32"].RenderingParentId.Should().Be("child31");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_SeriesLeafSiblings_RenderingParentSetForCascading()
+    {
+        // Simple case: series parent with leaf children
+        // Parent (series)
+        //   ├── Child 1
+        //   ├── Child 2
+        //   └── Child 3
+        //
+        // Child 2 should have RenderingParentId = Child 1
+        // Child 3 should have RenderingParentId = Child 2
+
+        var parent = new IssueBuilder().WithId("parent").WithTitle("Parent")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithTitle("Child 1")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithTitle("Child 2")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
+        var child3 = new IssueBuilder().WithId("child3").WithTitle("Child 3")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "ccc").Build();
+
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>())
+            .Returns([parent, child1, child2, child3]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
+
+        // First child has no rendering parent override
+        nodeLookup["child1"].RenderingParentId.Should().BeNull();
+
+        // Subsequent children should cascade to previous sibling
+        nodeLookup["child2"].RenderingParentId.Should().Be("child1");
+        nodeLookup["child3"].RenderingParentId.Should().Be("child2");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_ParallelChildren_NoRenderingParentOverride()
+    {
+        // Parallel mode should not set cascading rendering parent
+        var parent = new IssueBuilder().WithId("parent").WithTitle("Parent")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
+        var child1 = new IssueBuilder().WithId("child1").WithTitle("Child 1")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2").WithTitle("Child 2")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
+
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>())
+            .Returns([parent, child1, child2]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
+
+        // Parallel children should not have rendering parent override
+        nodeLookup["child1"].RenderingParentId.Should().BeNull();
+        nodeLookup["child2"].RenderingParentId.Should().BeNull();
+    }
+
     #endregion
 
     #region QueryGraphAsync Tests

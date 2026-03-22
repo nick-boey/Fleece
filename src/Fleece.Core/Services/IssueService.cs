@@ -1021,6 +1021,11 @@ public sealed partial class IssueService(
     /// Recursively lays out a subtree, emitting nodes in depth-first order.
     /// Returns the maximum lane used by the subtree.
     /// </summary>
+    /// <param name="renderingParentIdForFirstLeaf">
+    /// If provided, the first leaf node emitted by this subtree will use this ID
+    /// as its RenderingParentId, overriding the normal parent connection.
+    /// Used for cascading series flow.
+    /// </param>
     private static int LayoutSubtree(
         Issue issue,
         int startLane,
@@ -1029,7 +1034,8 @@ public sealed partial class IssueService(
         Dictionary<string, Issue> issueLookup,
         HashSet<string> actionableIds,
         HashSet<string> visited,
-        ExecutionMode? parentExecutionMode)
+        ExecutionMode? parentExecutionMode,
+        string? renderingParentIdForFirstLeaf = null)
     {
         // Skip issues already placed by a previous parent traversal (DAG support)
         if (!visited.Add(issue.Id))
@@ -1049,7 +1055,8 @@ public sealed partial class IssueService(
                 Row = nodeList.Count,
                 Lane = startLane,
                 IsActionable = actionableIds.Contains(issue.Id),
-                ParentExecutionMode = parentExecutionMode
+                ParentExecutionMode = parentExecutionMode,
+                RenderingParentId = renderingParentIdForFirstLeaf
             });
             return startLane;
         }
@@ -1058,11 +1065,11 @@ public sealed partial class IssueService(
 
         if (issue.ExecutionMode == ExecutionMode.Parallel)
         {
-            maxLane = LayoutParallelChildren(issue, startLane, incompleteChildren, nodeList, childrenOf, issueLookup, actionableIds, visited);
+            maxLane = LayoutParallelChildren(issue, startLane, incompleteChildren, nodeList, childrenOf, issueLookup, actionableIds, visited, renderingParentIdForFirstLeaf);
         }
         else // Series (default)
         {
-            maxLane = LayoutSeriesChildren(issue, startLane, incompleteChildren, nodeList, childrenOf, issueLookup, actionableIds, visited);
+            maxLane = LayoutSeriesChildren(issue, startLane, incompleteChildren, nodeList, childrenOf, issueLookup, actionableIds, visited, renderingParentIdForFirstLeaf);
         }
 
         // Place the parent issue itself at maxLane + 1
@@ -1082,6 +1089,9 @@ public sealed partial class IssueService(
     /// <summary>
     /// Lays out children of a parallel parent. All children start at the same lane.
     /// </summary>
+    /// <param name="renderingParentIdForFirstLeaf">
+    /// If provided, the first leaf node emitted will use this ID as its RenderingParentId.
+    /// </param>
     private static int LayoutParallelChildren(
         Issue parent,
         int startLane,
@@ -1090,9 +1100,11 @@ public sealed partial class IssueService(
         Dictionary<string, List<Issue>> childrenOf,
         Dictionary<string, Issue> issueLookup,
         HashSet<string> actionableIds,
-        HashSet<string> visited)
+        HashSet<string> visited,
+        string? renderingParentIdForFirstLeaf = null)
     {
         int maxChildLane = startLane;
+        bool isFirstChild = true;
 
         foreach (var child in children)
         {
@@ -1104,6 +1116,10 @@ public sealed partial class IssueService(
 
             var childIncomplete = GetIncompleteChildrenForLayout(child, childrenOf);
 
+            // Determine rendering parent override for this child
+            // Only the first child gets the override; parallel siblings connect normally
+            string? childRenderingParent = isFirstChild ? renderingParentIdForFirstLeaf : null;
+
             if (childIncomplete.Count == 0)
             {
                 // Leaf child — mark visited and add node
@@ -1114,15 +1130,18 @@ public sealed partial class IssueService(
                     Row = nodeList.Count,
                     Lane = startLane,
                     IsActionable = actionableIds.Contains(child.Id),
-                    ParentExecutionMode = ExecutionMode.Parallel
+                    ParentExecutionMode = ExecutionMode.Parallel,
+                    RenderingParentId = childRenderingParent
                 });
             }
             else
             {
                 // Subtree child — LayoutSubtree handles visited tracking
-                var childMax = LayoutSubtree(child, startLane, nodeList, childrenOf, issueLookup, actionableIds, visited, parentExecutionMode: ExecutionMode.Parallel);
+                var childMax = LayoutSubtree(child, startLane, nodeList, childrenOf, issueLookup, actionableIds, visited, parentExecutionMode: ExecutionMode.Parallel, renderingParentIdForFirstLeaf: childRenderingParent);
                 maxChildLane = Math.Max(maxChildLane, childMax);
             }
+
+            isFirstChild = false;
         }
 
         return maxChildLane;
@@ -1132,6 +1151,11 @@ public sealed partial class IssueService(
     /// Lays out children of a series parent. Children share the same lane,
     /// with subtrees pushing the current lane rightward.
     /// </summary>
+    /// <param name="renderingParentIdForFirstLeaf">
+    /// If provided, the first leaf node emitted will use this ID as its RenderingParentId.
+    /// For subsequent siblings in series mode, we pass the previous sibling's ID as the
+    /// rendering parent to create cascading connections.
+    /// </param>
     private static int LayoutSeriesChildren(
         Issue parent,
         int startLane,
@@ -1140,10 +1164,12 @@ public sealed partial class IssueService(
         Dictionary<string, List<Issue>> childrenOf,
         Dictionary<string, Issue> issueLookup,
         HashSet<string> actionableIds,
-        HashSet<string> visited)
+        HashSet<string> visited,
+        string? renderingParentIdForFirstLeaf = null)
     {
         int currentLane = startLane;
         bool isFirstChild = true;
+        string? previousSiblingId = null;
 
         for (int i = 0; i < children.Count; i++)
         {
@@ -1157,6 +1183,11 @@ public sealed partial class IssueService(
 
             var childIncomplete = GetIncompleteChildrenForLayout(child, childrenOf);
 
+            // Determine rendering parent override for this child's first leaf
+            // First child uses the passed-in override (if any)
+            // Subsequent children use the previous sibling's ID to create cascading flow
+            string? childRenderingParent = isFirstChild ? renderingParentIdForFirstLeaf : previousSiblingId;
+
             if (childIncomplete.Count == 0)
             {
                 // Leaf child: place at currentLane, mark visited
@@ -1167,7 +1198,8 @@ public sealed partial class IssueService(
                     Row = nodeList.Count,
                     Lane = currentLane,
                     IsActionable = actionableIds.Contains(child.Id),
-                    ParentExecutionMode = ExecutionMode.Series
+                    ParentExecutionMode = ExecutionMode.Series,
+                    RenderingParentId = childRenderingParent
                 });
             }
             else
@@ -1175,10 +1207,12 @@ public sealed partial class IssueService(
                 // Subtree child
                 // First non-skipped child starts at currentLane; subsequent start at currentLane + 1
                 int subtreeStart = isFirstChild ? currentLane : currentLane + 1;
-                var childMax = LayoutSubtree(child, subtreeStart, nodeList, childrenOf, issueLookup, actionableIds, visited, parentExecutionMode: ExecutionMode.Series);
+                var childMax = LayoutSubtree(child, subtreeStart, nodeList, childrenOf, issueLookup, actionableIds, visited, parentExecutionMode: ExecutionMode.Series, renderingParentIdForFirstLeaf: childRenderingParent);
                 currentLane = childMax;
             }
 
+            // Track this child as the previous sibling for cascading
+            previousSiblingId = child.Id;
             isFirstChild = false;
         }
 
