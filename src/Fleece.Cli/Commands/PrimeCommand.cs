@@ -186,7 +186,9 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `fleece list --tree` - Display issues as parent-child tree
         - `fleece list --next` - Display issues as a task graph, with next tasks shown next
         - `fleece list --tree --json` - Get hierarchy as JSON
-        - `fleece list --tree --tree-root <id>` - Scope tree to a specific subtree
+        - `fleece list <id>` - Show an issue with its entire parent and child hierarchy
+        - `fleece list <id> --parents` - Show an issue with only its parent hierarchy
+        - `fleece list <id> --children` - Show an issue with only its child hierarchy
 
         ## Hierarchy Workflow
 
@@ -225,6 +227,9 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `fleece show <id>` - Display all details for a single issue
         - `fleece list --tree` - Display parent-child hierarchy
         - `fleece list --next` - Display task graph with execution ordering
+        - `fleece list <id>` - Show an issue with its full hierarchy (parents + children)
+        - `fleece list <id> --parents` - Show an issue with only its parent hierarchy
+        - `fleece list <id> --children` - Show an issue with only its child hierarchy
         - `fleece next` - Find issues ready to be worked on next
         - `fleece search "query"` - Search issues by text
 
@@ -350,7 +355,15 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `fleece list --tree` - Display issues as parent-child tree
         - `fleece list --next` - Display as a task graph showing approximate execution ordering
         - `fleece list --tree --json` - Get hierarchy as JSON
-        - `fleece list --tree --tree-root <id>` - Scope tree to descendants of an issue
+        - `fleece list <id>` - Show an issue with its entire parent and child hierarchy
+        - `fleece list <id> --parents` - Show an issue with only its parent hierarchy
+        - `fleece list <id> --children` - Show an issue with only its child hierarchy
+        - `fleece list <id> --tree` - Show issue hierarchy in tree format
+        - `fleece list <id> --next` - Show issue hierarchy in task graph format
+
+        ## Deprecated Options
+
+        - `fleece list --tree --tree-root <id>` - [DEPRECATED] Use `fleece list <id> --children` instead
 
         ## Filtering
 

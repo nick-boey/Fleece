@@ -48,6 +48,29 @@ public sealed class ListCommand(
             return 1;
         }
 
+        // Validate --parents and --children flags
+        if (settings.ParentsOnly && settings.ChildrenOnly)
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] --parents and --children cannot be used together");
+            return 1;
+        }
+
+        if ((settings.ParentsOnly || settings.ChildrenOnly) && string.IsNullOrWhiteSpace(settings.IssueId))
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] --parents and --children require an issue ID to be specified");
+            return 1;
+        }
+
+        // Warn about deprecated --tree-root when <id> is also specified
+        if (!string.IsNullOrWhiteSpace(settings.IssueId) && !string.IsNullOrWhiteSpace(settings.TreeRoot))
+        {
+            AnsiConsole.MarkupLine("[yellow]Warning:[/] --tree-root is deprecated and ignored when an issue ID is specified. Use '<id> --children' instead.");
+        }
+        else if (!string.IsNullOrWhiteSpace(settings.TreeRoot))
+        {
+            AnsiConsole.MarkupLine("[yellow]Warning:[/] --tree-root is deprecated. Use '<id> --children' instead.");
+        }
+
         // Parse status and type early as they're needed for both --next and list modes
         IssueStatus? status = null;
         if (!string.IsNullOrWhiteSpace(settings.Status))
@@ -94,6 +117,41 @@ public sealed class ListCommand(
                 assignedTo = effectiveSettings.Identity;
             }
 
+            // Resolve issue ID for hierarchy filtering in --next mode
+            HashSet<string>? nextHierarchyIds = null;
+            if (!string.IsNullOrWhiteSpace(settings.IssueId))
+            {
+                var matches = await issueService.ResolveByPartialIdAsync(settings.IssueId);
+
+                if (matches.Count == 0)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.IssueId}' not found");
+                    return 1;
+                }
+
+                if (matches.Count > 1)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.IssueId}':");
+                    foreach (var match in matches)
+                    {
+                        AnsiConsole.MarkupLine($"  {match.Id} {Markup.Escape(match.Title)}");
+                    }
+                    return 1;
+                }
+
+                var targetIssue = matches[0];
+
+                // Get hierarchy-filtered issues
+                var hierarchyIssues = await issueService.GetIssueHierarchyAsync(
+                    targetIssue.Id,
+                    includeParents: !settings.ChildrenOnly,
+                    includeChildren: !settings.ParentsOnly);
+
+                nextHierarchyIds = new HashSet<string>(
+                    hierarchyIssues.Select(i => i.Id),
+                    StringComparer.OrdinalIgnoreCase);
+            }
+
             TaskGraph graph;
             if (!string.IsNullOrWhiteSpace(settings.Search))
             {
@@ -115,7 +173,23 @@ public sealed class ListCommand(
                     return 0;
                 }
 
-                graph = await issueService.BuildFilteredTaskGraphLayoutAsync(searchResult.MatchedIds);
+                // Combine with hierarchy filter if specified
+                var matchedIds = nextHierarchyIds is not null
+                    ? new HashSet<string>(searchResult.MatchedIds.Where(id => nextHierarchyIds.Contains(id)), StringComparer.OrdinalIgnoreCase)
+                    : searchResult.MatchedIds;
+
+                if (matchedIds.Count == 0)
+                {
+                    AnsiConsole.MarkupLine("[dim]No issues found matching search within hierarchy[/]");
+                    return 0;
+                }
+
+                graph = await issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds);
+            }
+            else if (nextHierarchyIds is not null)
+            {
+                // Use hierarchy filter for --next mode
+                graph = await issueService.BuildFilteredTaskGraphLayoutAsync(nextHierarchyIds);
             }
             else
             {
@@ -165,6 +239,41 @@ public sealed class ListCommand(
             }
         }
 
+        // Resolve optional issue ID for hierarchy filtering
+        HashSet<string>? hierarchyIds = null;
+        if (!string.IsNullOrWhiteSpace(settings.IssueId))
+        {
+            var matches = await issueService.ResolveByPartialIdAsync(settings.IssueId);
+
+            if (matches.Count == 0)
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.IssueId}' not found");
+                return 1;
+            }
+
+            if (matches.Count > 1)
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.IssueId}':");
+                foreach (var match in matches)
+                {
+                    AnsiConsole.MarkupLine($"  {match.Id} {Markup.Escape(match.Title)}");
+                }
+                return 1;
+            }
+
+            var targetIssue = matches[0];
+
+            // Get hierarchy-filtered issues
+            var hierarchyIssues = await issueService.GetIssueHierarchyAsync(
+                targetIssue.Id,
+                includeParents: !settings.ChildrenOnly,
+                includeChildren: !settings.ParentsOnly);
+
+            hierarchyIds = new HashSet<string>(
+                hierarchyIssues.Select(i => i.Id),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
         // Apply filtering via the issue service or search service
         IReadOnlyList<Issue> issues;
         if (!string.IsNullOrWhiteSpace(settings.Search))
@@ -194,6 +303,12 @@ public sealed class ListCommand(
                 settings.LinkedPr,
                 settings.All,
                 keyedTags);
+        }
+
+        // Apply hierarchy filtering if an issue ID was specified
+        if (hierarchyIds is not null)
+        {
+            issues = issues.Where(i => hierarchyIds.Contains(i.Id)).ToList();
         }
 
         // --- Tree mode ---
@@ -231,9 +346,10 @@ public sealed class ListCommand(
         List<Issue> issueList,
         ListSettings settings)
     {
-        // Resolve optional root issue ID
+        // Resolve optional root issue ID (deprecated --tree-root)
+        // Only apply if no IssueId is specified (hierarchy filtering handles that case)
         Issue? rootIssue = null;
-        if (!string.IsNullOrWhiteSpace(settings.TreeRoot))
+        if (string.IsNullOrWhiteSpace(settings.IssueId) && !string.IsNullOrWhiteSpace(settings.TreeRoot))
         {
             var matches = await issueService.ResolveByPartialIdAsync(settings.TreeRoot);
 
@@ -256,7 +372,8 @@ public sealed class ListCommand(
             rootIssue = matches[0];
         }
 
-        // When a root issue is specified, constrain to the root + its transitive descendants
+        // When a tree-root is specified (deprecated), constrain to the root + its transitive descendants
+        // Note: When IssueId is specified, hierarchy filtering is already applied before this method
         if (rootIssue is not null)
         {
             issueList = TreeRenderer.ScopeToDescendants(rootIssue, issueList);
