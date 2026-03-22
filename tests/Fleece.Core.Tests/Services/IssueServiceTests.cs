@@ -1145,4 +1145,207 @@ public class IssueServiceTests
     }
 
     #endregion
+
+    #region GetIssueHierarchyAsync
+
+    [Test]
+    public async Task GetIssueHierarchyAsync_ReturnsEmpty_WhenIssueNotFound()
+    {
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
+
+        var result = await _sut.GetIssueHierarchyAsync("nonexistent");
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task GetIssueHierarchyAsync_ReturnsSingleIssue_WhenNoParentsOrChildren()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "abc123", Title = "Standalone", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.GetIssueHierarchyAsync("abc123");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("abc123");
+    }
+
+    [Test]
+    public async Task GetIssueHierarchyAsync_ReturnsIssueAndAllAncestors()
+    {
+        // Hierarchy: grandparent -> parent -> child
+        var issues = new List<Issue>
+        {
+            new() { Id = "grandparent", Title = "Grandparent", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "parent", Title = "Parent", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "grandparent", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "child", Title = "Child", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "parent", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.GetIssueHierarchyAsync("child");
+
+        result.Should().HaveCount(3);
+        result.Select(i => i.Id).Should().BeEquivalentTo(["grandparent", "parent", "child"]);
+    }
+
+    [Test]
+    public async Task GetIssueHierarchyAsync_ReturnsIssueAndAllDescendants()
+    {
+        // Hierarchy: root -> child1, root -> child2, child1 -> grandchild
+        var issues = new List<Issue>
+        {
+            new() { Id = "root", Title = "Root", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "child1", Title = "Child1", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "root", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "child2", Title = "Child2", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "root", SortOrder = "b" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "grandchild", Title = "Grandchild", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "child1", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.GetIssueHierarchyAsync("root");
+
+        result.Should().HaveCount(4);
+        result.Select(i => i.Id).Should().BeEquivalentTo(["root", "child1", "child2", "grandchild"]);
+    }
+
+    [Test]
+    public async Task GetIssueHierarchyAsync_ReturnsOnlyAncestors_WhenIncludeChildrenIsFalse()
+    {
+        // Hierarchy: grandparent -> parent -> child -> grandchild
+        var issues = new List<Issue>
+        {
+            new() { Id = "grandparent", Title = "Grandparent", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "parent", Title = "Parent", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "grandparent", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "child", Title = "Child", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "parent", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "grandchild", Title = "Grandchild", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "child", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.GetIssueHierarchyAsync("child", includeParents: true, includeChildren: false);
+
+        result.Should().HaveCount(3);
+        result.Select(i => i.Id).Should().BeEquivalentTo(["grandparent", "parent", "child"]);
+    }
+
+    [Test]
+    public async Task GetIssueHierarchyAsync_ReturnsOnlyDescendants_WhenIncludeParentsIsFalse()
+    {
+        // Hierarchy: grandparent -> parent -> child -> grandchild
+        var issues = new List<Issue>
+        {
+            new() { Id = "grandparent", Title = "Grandparent", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "parent", Title = "Parent", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "grandparent", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "child", Title = "Child", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "parent", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "grandchild", Title = "Grandchild", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "child", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.GetIssueHierarchyAsync("parent", includeParents: false, includeChildren: true);
+
+        result.Should().HaveCount(3);
+        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "child", "grandchild"]);
+    }
+
+    [Test]
+    public async Task GetIssueHierarchyAsync_HandlesDAG_MultipleParents()
+    {
+        // DAG: parent1 -> child, parent2 -> child (child has two parents)
+        var issues = new List<Issue>
+        {
+            new() { Id = "parent1", Title = "Parent1", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "parent2", Title = "Parent2", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "child", Title = "Child", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [
+                    new ParentIssueRef { ParentIssue = "parent1", SortOrder = "a" },
+                    new ParentIssueRef { ParentIssue = "parent2", SortOrder = "b" }
+                ], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.GetIssueHierarchyAsync("child");
+
+        result.Should().HaveCount(3);
+        result.Select(i => i.Id).Should().BeEquivalentTo(["parent1", "parent2", "child"]);
+    }
+
+    [Test]
+    public async Task GetIssueHierarchyAsync_ReturnsFullHierarchy_WhenBothDirectionsRequested()
+    {
+        // Hierarchy: grandparent -> parent -> targetIssue -> child -> grandchild
+        var issues = new List<Issue>
+        {
+            new() { Id = "grandparent", Title = "Grandparent", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "parent", Title = "Parent", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "grandparent", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "target", Title = "Target", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "parent", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "child", Title = "Child", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "target", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "grandchild", Title = "Grandchild", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "child", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.GetIssueHierarchyAsync("target", includeParents: true, includeChildren: true);
+
+        result.Should().HaveCount(5);
+        result.Select(i => i.Id).Should().BeEquivalentTo(["grandparent", "parent", "target", "child", "grandchild"]);
+    }
+
+    [Test]
+    public async Task GetIssueHierarchyAsync_ReturnsSingleIssue_WhenBothDirectionsDisabled()
+    {
+        // Hierarchy: parent -> targetIssue -> child
+        var issues = new List<Issue>
+        {
+            new() { Id = "parent", Title = "Parent", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "target", Title = "Target", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "parent", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "child", Title = "Child", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "target", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.GetIssueHierarchyAsync("target", includeParents: false, includeChildren: false);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("target");
+    }
+
+    [Test]
+    public async Task GetIssueHierarchyAsync_ExcludesUnrelatedIssues()
+    {
+        // target has parent and child, but there's also an unrelated issue
+        var issues = new List<Issue>
+        {
+            new() { Id = "parent", Title = "Parent", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "target", Title = "Target", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "parent", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "child", Title = "Child", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "target", SortOrder = "a" }], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "unrelated", Title = "Unrelated", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.GetIssueHierarchyAsync("target");
+
+        result.Should().HaveCount(3);
+        result.Select(i => i.Id).Should().BeEquivalentTo(["parent", "target", "child"]);
+        result.Select(i => i.Id).Should().NotContain("unrelated");
+    }
+
+    #endregion
 }

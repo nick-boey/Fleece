@@ -5,6 +5,18 @@ namespace Fleece.Cli.Settings;
 
 public sealed class ListSettings : FleeceCommandSettings
 {
+    [CommandArgument(0, "[ID]")]
+    [Description("Optional issue ID to show with its hierarchy (parents and children)")]
+    public string? IssueId { get; init; }
+
+    [CommandOption("--parents")]
+    [Description("When showing a specific issue, only include parent issues (not children)")]
+    public bool ParentsOnly { get; init; }
+
+    [CommandOption("--children")]
+    [Description("When showing a specific issue, only include child issues (not parents)")]
+    public bool ChildrenOnly { get; init; }
+
     [CommandOption("-s|--status <STATUS>")]
     [Description("Filter by status: draft, open, progress, review, complete, archived, closed")]
     public string? Status { get; init; }
@@ -66,7 +78,7 @@ public sealed class ListSettings : FleeceCommandSettings
     public bool Tree { get; init; }
 
     [CommandOption("--tree-root <ID>")]
-    [Description("Scope tree view to descendants of this issue ID (implies --tree)")]
+    [Description("(Deprecated: Use '<id> --children' instead) Scope tree view to descendants of this issue ID (implies --tree)")]
     public string? TreeRoot { get; init; }
 
     [CommandOption("--next")]
