@@ -45,7 +45,11 @@ public sealed class DependencyCommand(IDependencyService dependencyService, ISto
                 var position = MapPosition(settings);
 
                 result = await dependencyService.AddDependencyAsync(
-                    settings.ParentId!, settings.ChildId!, position);
+                    settings.ParentId!,
+                    settings.ChildId!,
+                    position,
+                    replaceExisting: settings.Replace,
+                    makePrimary: settings.Primary);
 
                 if (settings.Json)
                 {
@@ -53,8 +57,9 @@ public sealed class DependencyCommand(IDependencyService dependencyService, ISto
                 }
                 else
                 {
+                    var action = settings.Replace ? "Set" : "Added";
                     AnsiConsole.MarkupLine(
-                        $"[green]Added[/] [bold]{settings.ParentId}[/] as parent of [bold]{settings.ChildId}[/]");
+                        $"[green]{action}[/] [bold]{settings.ParentId}[/] as parent of [bold]{settings.ChildId}[/]");
                     TableFormatter.RenderIssue(result);
                 }
             }

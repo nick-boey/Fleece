@@ -346,6 +346,268 @@ public class DependencyServiceTests
 
     #endregion
 
+    #region AddDependencyAsync_ReplaceExisting
+
+    [Test]
+    public async Task AddDependencyAsync_ReplaceExisting_True_ReplacesAllParents()
+    {
+        // Arrange
+        var parent1 = new IssueBuilder().WithId("parent1").Build();
+        var parent2 = new IssueBuilder().WithId("parent2").Build();
+        var child = new IssueBuilder().WithId("child1")
+            .WithParentIssueIds("parent1").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent2", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent2 });
+        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child });
+        _validationService.WouldCreateCycleAsync("parent2", "child1", Arg.Any<CancellationToken>())
+            .Returns(false);
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent1, parent2, child });
+
+        var updatedChild = new IssueBuilder().WithId("child1")
+            .WithParentIssueIds("parent2").Build();
+        _issueService.UpdateAsync(
+                id: "child1",
+                parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(updatedChild);
+
+        // Act
+        var result = await _sut.AddDependencyAsync("parent2", "child1", replaceExisting: true);
+
+        // Assert - should only have parent2, not parent1
+        result.Id.Should().Be("child1");
+        await _issueService.Received(1).UpdateAsync(
+            id: "child1",
+            parentIssues: Arg.Is<IReadOnlyList<ParentIssueRef>>(p =>
+                p.Count == 1 && p[0].ParentIssue == "parent2"),
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AddDependencyAsync_ReplaceExisting_False_PreservesExistingParents()
+    {
+        // Arrange
+        var parent1 = new IssueBuilder().WithId("parent1").Build();
+        var parent2 = new IssueBuilder().WithId("parent2").Build();
+        var child = new IssueBuilder().WithId("child1")
+            .WithParentIssueIds("parent1").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent2", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent2 });
+        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child });
+        _validationService.WouldCreateCycleAsync("parent2", "child1", Arg.Any<CancellationToken>())
+            .Returns(false);
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent1, parent2, child });
+
+        var updatedChild = new IssueBuilder().WithId("child1")
+            .WithParentIssueIds("parent1", "parent2").Build();
+        _issueService.UpdateAsync(
+                id: "child1",
+                parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(updatedChild);
+
+        // Act
+        var result = await _sut.AddDependencyAsync("parent2", "child1", replaceExisting: false);
+
+        // Assert - should have both parent1 and parent2
+        result.Id.Should().Be("child1");
+        await _issueService.Received(1).UpdateAsync(
+            id: "child1",
+            parentIssues: Arg.Is<IReadOnlyList<ParentIssueRef>>(p =>
+                p.Count == 2 &&
+                p[0].ParentIssue == "parent1" &&
+                p[1].ParentIssue == "parent2"),
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AddDependencyAsync_ReplaceExisting_AllowsSameParent()
+    {
+        // Arrange - child already has parent1, re-adding with replace should succeed
+        var parent = new IssueBuilder().WithId("parent1").Build();
+        var child = new IssueBuilder().WithId("child1")
+            .WithParentIssueIds("parent1").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent });
+        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child });
+        _validationService.WouldCreateCycleAsync("parent1", "child1", Arg.Any<CancellationToken>())
+            .Returns(false);
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent, child });
+
+        var updatedChild = new IssueBuilder().WithId("child1")
+            .WithParentIssueIds("parent1").Build();
+        _issueService.UpdateAsync(
+                id: "child1",
+                parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(updatedChild);
+
+        // Act - should not throw even though relationship exists
+        var result = await _sut.AddDependencyAsync("parent1", "child1", replaceExisting: true);
+
+        // Assert
+        result.Id.Should().Be("child1");
+        await _issueService.Received(1).UpdateAsync(
+            id: "child1",
+            parentIssues: Arg.Is<IReadOnlyList<ParentIssueRef>>(p =>
+                p.Count == 1 && p[0].ParentIssue == "parent1"),
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AddDependencyAsync_NotReplacing_DuplicateRelationship_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var parent = new IssueBuilder().WithId("parent1").Build();
+        var child = new IssueBuilder().WithId("child1").WithParentIssueIds("parent1").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent });
+        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child });
+
+        // Act - replaceExisting defaults to false
+        var act = () => _sut.AddDependencyAsync("parent1", "child1", replaceExisting: false);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*already a child*");
+    }
+
+    #endregion
+
+    #region AddDependencyAsync_MakePrimary
+
+    [Test]
+    public async Task AddDependencyAsync_MakePrimary_True_InsertsAtFront()
+    {
+        // Arrange
+        var parent1 = new IssueBuilder().WithId("parent1").Build();
+        var parent2 = new IssueBuilder().WithId("parent2").Build();
+        var child = new IssueBuilder().WithId("child1")
+            .WithParentIssueIds("parent1").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent2", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent2 });
+        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child });
+        _validationService.WouldCreateCycleAsync("parent2", "child1", Arg.Any<CancellationToken>())
+            .Returns(false);
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent1, parent2, child });
+
+        var updatedChild = new IssueBuilder().WithId("child1")
+            .WithParentIssueIds("parent2", "parent1").Build();
+        _issueService.UpdateAsync(
+                id: "child1",
+                parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(updatedChild);
+
+        // Act
+        var result = await _sut.AddDependencyAsync("parent2", "child1", makePrimary: true);
+
+        // Assert - parent2 should be first (primary), then parent1
+        result.Id.Should().Be("child1");
+        await _issueService.Received(1).UpdateAsync(
+            id: "child1",
+            parentIssues: Arg.Is<IReadOnlyList<ParentIssueRef>>(p =>
+                p.Count == 2 &&
+                p[0].ParentIssue == "parent2" &&
+                p[1].ParentIssue == "parent1"),
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AddDependencyAsync_MakePrimary_False_AppendsAtEnd()
+    {
+        // Arrange
+        var parent1 = new IssueBuilder().WithId("parent1").Build();
+        var parent2 = new IssueBuilder().WithId("parent2").Build();
+        var child = new IssueBuilder().WithId("child1")
+            .WithParentIssueIds("parent1").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent2", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent2 });
+        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child });
+        _validationService.WouldCreateCycleAsync("parent2", "child1", Arg.Any<CancellationToken>())
+            .Returns(false);
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent1, parent2, child });
+
+        var updatedChild = new IssueBuilder().WithId("child1")
+            .WithParentIssueIds("parent1", "parent2").Build();
+        _issueService.UpdateAsync(
+                id: "child1",
+                parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(updatedChild);
+
+        // Act
+        var result = await _sut.AddDependencyAsync("parent2", "child1", makePrimary: false);
+
+        // Assert - parent1 should be first (primary), then parent2
+        result.Id.Should().Be("child1");
+        await _issueService.Received(1).UpdateAsync(
+            id: "child1",
+            parentIssues: Arg.Is<IReadOnlyList<ParentIssueRef>>(p =>
+                p.Count == 2 &&
+                p[0].ParentIssue == "parent1" &&
+                p[1].ParentIssue == "parent2"),
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AddDependencyAsync_ReplaceAndMakePrimary_Together()
+    {
+        // Arrange - child has parent1, replace with parent2 as primary
+        var parent1 = new IssueBuilder().WithId("parent1").Build();
+        var parent2 = new IssueBuilder().WithId("parent2").Build();
+        var child = new IssueBuilder().WithId("child1")
+            .WithParentIssueIds("parent1").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent2", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent2 });
+        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child });
+        _validationService.WouldCreateCycleAsync("parent2", "child1", Arg.Any<CancellationToken>())
+            .Returns(false);
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent1, parent2, child });
+
+        var updatedChild = new IssueBuilder().WithId("child1")
+            .WithParentIssueIds("parent2").Build();
+        _issueService.UpdateAsync(
+                id: "child1",
+                parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(updatedChild);
+
+        // Act
+        var result = await _sut.AddDependencyAsync("parent2", "child1",
+            replaceExisting: true, makePrimary: true);
+
+        // Assert - should only have parent2 (parent1 replaced)
+        result.Id.Should().Be("child1");
+        await _issueService.Received(1).UpdateAsync(
+            id: "child1",
+            parentIssues: Arg.Is<IReadOnlyList<ParentIssueRef>>(p =>
+                p.Count == 1 && p[0].ParentIssue == "parent2"),
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    #endregion
+
     #region RemoveDependencyAsync
 
     [Test]

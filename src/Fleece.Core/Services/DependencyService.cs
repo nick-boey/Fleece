@@ -25,6 +25,8 @@ public class DependencyService : IDependencyService
         string parentId,
         string childId,
         DependencyPosition? position = null,
+        bool replaceExisting = false,
+        bool makePrimary = false,
         CancellationToken ct = default)
     {
         position ??= new DependencyPosition();
@@ -33,8 +35,8 @@ public class DependencyService : IDependencyService
         var resolvedParent = await ResolveIssueAsync(parentId, "parent", ct);
         var resolvedChild = await ResolveIssueAsync(childId, "child", ct);
 
-        // Check relationship doesn't already exist
-        if (resolvedChild.ParentIssues.Any(p =>
+        // Check relationship doesn't already exist (only when not replacing)
+        if (!replaceExisting && resolvedChild.ParentIssues.Any(p =>
             string.Equals(p.ParentIssue, resolvedParent.Id, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException(
@@ -52,12 +54,33 @@ public class DependencyService : IDependencyService
         var sortOrder = await ComputeSortOrderAsync(resolvedParent.Id, position, ct);
 
         // Build new parent issues list
-        var newParentIssues = resolvedChild.ParentIssues.ToList();
-        newParentIssues.Add(new ParentIssueRef
+        List<ParentIssueRef> newParentIssues;
+
+        if (replaceExisting)
+        {
+            // Replace all existing parents with just the new one
+            newParentIssues = new List<ParentIssueRef>();
+        }
+        else
+        {
+            // Preserve existing parents and add the new one (default)
+            newParentIssues = resolvedChild.ParentIssues.ToList();
+        }
+
+        var newParentRef = new ParentIssueRef
         {
             ParentIssue = resolvedParent.Id,
             SortOrder = sortOrder
-        });
+        };
+
+        if (makePrimary)
+        {
+            newParentIssues.Insert(0, newParentRef);
+        }
+        else
+        {
+            newParentIssues.Add(newParentRef);
+        }
 
         return await _issueService.UpdateAsync(
             id: resolvedChild.Id,
