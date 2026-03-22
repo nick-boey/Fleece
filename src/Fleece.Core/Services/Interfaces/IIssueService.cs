@@ -51,7 +51,7 @@ public interface IIssueService
     /// The graph is organized bottom-up, with actionable tasks at the left (lane 0)
     /// and root/parent tasks at the right (higher lanes).
     /// </summary>
-    /// <param name="includeTerminal">When true, includes terminal statuses (Complete, Archived, Closed, Deleted) and Draft in the graph.</param>
+    /// <param name="includeTerminal">When true, includes terminal statuses (Complete, Archived, Closed, Deleted) in the graph.</param>
     /// <param name="assignedTo">When provided, filters to only issues assigned to this user.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A positioned task graph ready for rendering.</returns>

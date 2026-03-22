@@ -533,10 +533,10 @@ public sealed partial class IssueService(
         var fullLookup = issueList.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
         // Filter issues based on parameters:
-        // - By default (includeTerminal=false), exclude terminal statuses AND Draft
+        // - By default (includeTerminal=false), exclude terminal statuses
         // - When assignedTo is provided, filter to only matching assignees
         var activeIssues = issueList.Where(i =>
-            (includeTerminal || (!i.Status.IsTerminal() && i.Status != IssueStatus.Draft)) &&
+            (includeTerminal || !i.Status.IsTerminal()) &&
             (assignedTo == null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
         ).ToList();
 
