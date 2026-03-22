@@ -32,6 +32,14 @@ public sealed record TaskGraphNode
     /// Used by the renderer to determine connection style (series = vertical-first, parallel = horizontal-first).
     /// </summary>
     public ExecutionMode? ParentExecutionMode { get; init; }
+
+    /// <summary>
+    /// The issue ID that this node should visually connect to in the graph.
+    /// When null, the renderer uses the issue's actual parent from ParentIssues.
+    /// Used for cascading series flow where a sibling subtree connects to the
+    /// previous sibling's parent node instead of its actual parent.
+    /// </summary>
+    public string? RenderingParentId { get; init; }
 }
 
 /// <summary>
