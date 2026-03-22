@@ -89,8 +89,13 @@ public sealed class MergeService(
         var issues1 = serializer.DeserializeIssues(content1);
         var issues2 = serializer.DeserializeIssues(content2);
 
-        var dict1 = issues1.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
-        var dict2 = issues2.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+        // Deduplicate by issue ID, keeping newest version (consistent with LoadIssuesAsync)
+        var dict1 = issues1
+            .GroupBy(i => i.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.LastUpdate).First(), StringComparer.OrdinalIgnoreCase);
+        var dict2 = issues2
+            .GroupBy(i => i.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.LastUpdate).First(), StringComparer.OrdinalIgnoreCase);
 
         var differences = new List<(Issue, Issue)>();
 

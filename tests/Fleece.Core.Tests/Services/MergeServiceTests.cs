@@ -124,4 +124,46 @@ public class MergeServiceTests
         // Still saves once because we have files to consolidate
         await _storage.Received(1).SaveIssuesWithHashAsync(Arg.Any<IReadOnlyList<Issue>>(), Arg.Any<CancellationToken>());
     }
+
+    [Test]
+    public async Task CompareFilesAsync_WithDuplicateIssueIds_DeduplicatesAndSucceeds()
+    {
+        // Arrange - Create temp files with duplicate issue IDs
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        var file1 = Path.Combine(tempDir, "issues1.jsonl");
+        var file2 = Path.Combine(tempDir, "issues2.jsonl");
+
+        try
+        {
+            var older = DateTimeOffset.UtcNow.AddHours(-1);
+            var newer = DateTimeOffset.UtcNow;
+
+            // File 1 has duplicate issue IDs
+            var issues1 = new List<Issue>
+            {
+                new IssueBuilder().WithId("abc123").WithTitle("Version1").WithLastUpdate(older).Build(),
+                new IssueBuilder().WithId("abc123").WithTitle("Version2").WithLastUpdate(newer).Build() // Duplicate ID!
+            };
+
+            // File 2 has a single issue with same ID but different content
+            var issues2 = new List<Issue>
+            {
+                new IssueBuilder().WithId("abc123").WithTitle("Version3").WithLastUpdate(newer).Build()
+            };
+
+            await File.WriteAllTextAsync(file1, string.Join("\n", issues1.Select(i => _serializer.SerializeIssue(i))));
+            await File.WriteAllTextAsync(file2, string.Join("\n", issues2.Select(i => _serializer.SerializeIssue(i))));
+
+            // Act
+            var result = await _sut.CompareFilesAsync(file1, file2);
+
+            // Assert - Should succeed without throwing ArgumentException
+            result.Should().NotBeNull();
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
 }
