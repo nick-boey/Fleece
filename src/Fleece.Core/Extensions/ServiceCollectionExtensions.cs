@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITagService, TagService>();
         services.AddSingleton<IIssueService, IssueService>();
         services.AddSingleton<IMergeService, MergeService>();
+        services.AddSingleton<IDiffService, DiffService>();
         services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton<IValidationService, ValidationService>();
         services.AddSingleton<IDependencyService, DependencyService>();

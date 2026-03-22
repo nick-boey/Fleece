@@ -1,13 +1,11 @@
 using Fleece.Core.Models;
-using Fleece.Core.Serialization;
 using Fleece.Core.Services.Interfaces;
 
 namespace Fleece.Core.Services;
 
 public sealed class MergeService(
     IStorageService storage,
-    IGitConfigService gitConfigService,
-    IJsonlSerializer serializer) : IMergeService
+    IGitConfigService gitConfigService) : IMergeService
 {
     private readonly IssueMerger _merger = new();
 
@@ -78,52 +76,4 @@ public sealed class MergeService(
         return mergedCount;
     }
 
-    public async Task<IReadOnlyList<(Issue, Issue)>> CompareFilesAsync(
-        string file1Path,
-        string file2Path,
-        CancellationToken cancellationToken = default)
-    {
-        var content1 = await File.ReadAllTextAsync(file1Path, cancellationToken);
-        var content2 = await File.ReadAllTextAsync(file2Path, cancellationToken);
-
-        var issues1 = serializer.DeserializeIssues(content1);
-        var issues2 = serializer.DeserializeIssues(content2);
-
-        // Deduplicate by issue ID, keeping newest version (consistent with LoadIssuesAsync)
-        var dict1 = issues1
-            .GroupBy(i => i.Id, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.LastUpdate).First(), StringComparer.OrdinalIgnoreCase);
-        var dict2 = issues2
-            .GroupBy(i => i.Id, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.LastUpdate).First(), StringComparer.OrdinalIgnoreCase);
-
-        var differences = new List<(Issue, Issue)>();
-
-        foreach (var kvp in dict1)
-        {
-            if (dict2.TryGetValue(kvp.Key, out var issue2))
-            {
-                // Both files have this issue - check if different
-                if (!AreIssuesEqual(kvp.Value, issue2))
-                {
-                    differences.Add((kvp.Value, issue2));
-                }
-            }
-        }
-
-        return differences;
-    }
-
-    private static bool AreIssuesEqual(Issue a, Issue b)
-    {
-        return a.Id == b.Id &&
-               a.Title == b.Title &&
-               a.Description == b.Description &&
-               a.Status == b.Status &&
-               a.Type == b.Type &&
-               a.Priority == b.Priority &&
-               a.LinkedPR == b.LinkedPR &&
-               a.LinkedIssues.SequenceEqual(b.LinkedIssues) &&
-               a.ParentIssues.SequenceEqual(b.ParentIssues);
-    }
 }

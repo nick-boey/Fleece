@@ -54,7 +54,7 @@ public class CleanIntegrationTests
         var tagService = new TagService();
         _issueService = new IssueService(_storageService, _idGenerator, _gitConfigService, tagService);
         _cleanService = new CleanService(_storageService, _gitConfigService);
-        _mergeService = new MergeService(_storageService, _gitConfigService, serializer);
+        _mergeService = new MergeService(_storageService, _gitConfigService);
     }
 
     [TearDown]
