@@ -404,7 +404,6 @@ public sealed partial class IssueService(
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
         bool includeTerminal = false,
-        IReadOnlyList<(string Key, string Value)>? keyedTags = null,
         CancellationToken cancellationToken = default)
     {
         var issues = await storage.LoadIssuesAsync(cancellationToken);
@@ -416,11 +415,30 @@ public sealed partial class IssueService(
             .Where(i => type is null || i.Type == type)
             .Where(i => priority is null || i.Priority == priority)
             .Where(i => assignedTo is null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
-            .Where(i => tags is null || tags.Count == 0 || tags.Any(t => i.Tags?.Contains(t, StringComparer.OrdinalIgnoreCase) ?? false))
+            .Where(i => tags is null || tags.Count == 0 || tags.Any(t => MatchesTag(i, t)))
             .Where(i => linkedPr is null || i.LinkedPRs.Contains(linkedPr.Value) || i.LinkedPR == linkedPr)
-            .Where(i => keyedTags is null || keyedTags.Count == 0 ||
-                keyedTags.All(kt => tagService.HasKeyedTag(i, kt.Key, kt.Value)))
             .ToList();
+    }
+
+    /// <summary>
+    /// Matches a tag filter value against an issue's tags.
+    /// If the filter contains '=', matches as an exact key=value keyed tag.
+    /// Otherwise, matches as a simple tag (exact match) or as a key-only keyed tag match.
+    /// </summary>
+    private bool MatchesTag(Issue issue, string tagFilter)
+    {
+        var equalsIndex = tagFilter.IndexOf('=');
+        if (equalsIndex > 0 && equalsIndex < tagFilter.Length - 1)
+        {
+            // key=value format: exact keyed tag match
+            var key = tagFilter[..equalsIndex];
+            var value = tagFilter[(equalsIndex + 1)..];
+            return tagService.HasKeyedTag(issue, key, value);
+        }
+
+        // Key-only or simple tag: match exact simple tags OR any keyed tag with this key
+        return (issue.Tags?.Contains(tagFilter, StringComparer.OrdinalIgnoreCase) ?? false)
+            || tagService.HasTagKey(issue, tagFilter);
     }
 
     public async Task<Issue> UpdateQuestionsAsync(

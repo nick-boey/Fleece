@@ -34,12 +34,8 @@ public sealed class ListSettings : FleeceCommandSettings
     public string? AssignedTo { get; init; }
 
     [CommandOption("--tag <TAG>")]
-    [Description("Filter by tag (can specify multiple times)")]
+    [Description("Filter by tag. Use 'key' to match all issues with that tag key, or 'key=value' for exact match. Can specify multiple times.")]
     public string[]? Tags { get; init; }
-
-    [CommandOption("--tag-key <KEY=VALUE>")]
-    [Description("Filter by keyed tag (e.g., project=frontend). Can specify multiple times.")]
-    public string[]? KeyedTags { get; init; }
 
     [CommandOption("--linked-pr <PR>")]
     [Description("Filter by linked PR number (checks hsp-linked-pr tags)")]

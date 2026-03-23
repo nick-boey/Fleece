@@ -145,6 +145,26 @@ public sealed class TagService : ITagService
         return false;
     }
 
+    public bool HasTagKey(Issue issue, string key)
+    {
+        if (issue.Tags is null || issue.Tags.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var tag in issue.Tags)
+        {
+            var (tagKey, _) = ParseTag(tag);
+
+            if (tagKey.Equals(key, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public IReadOnlyDictionary<string, IReadOnlyList<string>> GetKeyedTags(Issue issue)
     {
         var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);

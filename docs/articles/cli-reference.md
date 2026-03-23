@@ -40,7 +40,7 @@ When run with no arguments, opens your default editor with a YAML template for i
 | `--linked-pr` | | Associated PR number |
 | `--linked-issues` | | Comma-separated issue IDs or #numbers |
 | `--parent-issues` | | Comma-separated parent issue IDs |
-| `--tags` | | Comma-separated tags (no whitespace) |
+| `--tags` | | Comma-separated tags. Supports simple tags and key=value keyed tags (no whitespace). |
 | `--json` | | Output as JSON |
 | `--json-verbose` | | Output as JSON with all metadata |
 
@@ -84,6 +84,7 @@ fleece list [options]
 | `--priority` | `-p` | Filter by priority |
 | `--group` | `-g` | Filter by group |
 | `--assigned` | | Filter by assignee |
+| `--tag` | | Filter by tag. Use `key` for key-only match or `key=value` for exact match. Can specify multiple times (OR logic). |
 | `--json` | | Output as JSON (simplified format) |
 | `--json-verbose` | | Output as JSON with all metadata fields |
 
@@ -100,6 +101,12 @@ fleece list --status open --type bug
 
 # List high-priority items
 fleece list --priority 1
+
+# Filter by tag key (matches all values for that key)
+fleece list --tag project
+
+# Filter by exact keyed tag
+fleece list --tag project=frontend
 
 # Output as JSON for scripting
 fleece list --json

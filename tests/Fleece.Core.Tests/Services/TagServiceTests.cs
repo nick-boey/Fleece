@@ -466,4 +466,68 @@ public class TagServiceTests
     }
 
     #endregion
+
+    #region HasTagKey
+
+    [Test]
+    public void HasTagKey_ReturnsTrue_WhenKeyedTagWithKeyExists()
+    {
+        var issue = new Issue
+        {
+            Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task,
+            Tags = ["project=frontend", "urgent"], LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _sut.HasTagKey(issue, "project").Should().BeTrue();
+    }
+
+    [Test]
+    public void HasTagKey_ReturnsTrue_WhenSimpleTagMatchesKey()
+    {
+        var issue = new Issue
+        {
+            Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task,
+            Tags = ["urgent", "backend"], LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _sut.HasTagKey(issue, "urgent").Should().BeTrue();
+    }
+
+    [Test]
+    public void HasTagKey_ReturnsFalse_WhenKeyNotFound()
+    {
+        var issue = new Issue
+        {
+            Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task,
+            Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _sut.HasTagKey(issue, "team").Should().BeFalse();
+    }
+
+    [Test]
+    public void HasTagKey_IsCaseInsensitive()
+    {
+        var issue = new Issue
+        {
+            Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task,
+            Tags = ["Project=frontend"], LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _sut.HasTagKey(issue, "project").Should().BeTrue();
+    }
+
+    [Test]
+    public void HasTagKey_ReturnsFalse_WhenTagsEmpty()
+    {
+        var issue = new Issue
+        {
+            Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task,
+            Tags = [], LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _sut.HasTagKey(issue, "project").Should().BeFalse();
+    }
+
+    #endregion
 }

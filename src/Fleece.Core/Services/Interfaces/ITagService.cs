@@ -30,6 +30,13 @@ public interface ITagService
     bool HasKeyedTag(Issue issue, string key, string value);
 
     /// <summary>
+    /// Checks if an issue has any tag with the given key, regardless of value.
+    /// Matches both simple tags (exact match) and keyed tags (key portion match).
+    /// Uses case-insensitive matching.
+    /// </summary>
+    bool HasTagKey(Issue issue, string key);
+
+    /// <summary>
     /// Gets all keyed tags from an issue as key-value pairs.
     /// Only returns tags that contain '='.
     /// </summary>

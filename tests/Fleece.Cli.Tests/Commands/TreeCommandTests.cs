@@ -111,7 +111,7 @@ public class TreeCommandTests
         _issueService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string Key, string Value)>?>(),
+                Arg.Any<bool>(),
                 Arg.Any<CancellationToken>())
             .Returns(allIssues);
 
@@ -151,7 +151,7 @@ public class TreeCommandTests
         _issueService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string Key, string Value)>?>(),
+                Arg.Any<bool>(),
                 Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { issue });
 
@@ -199,7 +199,7 @@ public class TreeCommandTests
         _issueService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string Key, string Value)>?>(),
+                Arg.Any<bool>(),
                 Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { parent, child1, child2 });
 
@@ -285,7 +285,7 @@ public class TreeCommandTests
                 query,
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string, string)>?>(), Arg.Any<CancellationToken>())
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(searchResult);
 
         var taskGraph = new TaskGraph
@@ -313,7 +313,7 @@ public class TreeCommandTests
             query,
             Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-            Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string, string)>?>(), Arg.Any<CancellationToken>());
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
 
         // Verify filtered graph was built
         await _issueService.Received(1).BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<CancellationToken>());
@@ -335,7 +335,7 @@ public class TreeCommandTests
                 query,
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string, string)>?>(), Arg.Any<CancellationToken>())
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(searchResult);
 
         var settings = new ListSettings { Next = true, Search = "nonexistent" };
@@ -377,7 +377,6 @@ public class TreeCommandTests
                 Arg.Any<IReadOnlyList<string>?>(),
                 Arg.Any<int?>(),
                 Arg.Any<bool>(),
-                Arg.Any<IReadOnlyList<(string, string)>?>(),
                 Arg.Any<CancellationToken>())
             .Returns(searchResult);
 
@@ -410,7 +409,6 @@ public class TreeCommandTests
             Arg.Any<IReadOnlyList<string>?>(),
             Arg.Any<int?>(),
             Arg.Any<bool>(),
-            Arg.Any<IReadOnlyList<(string, string)>?>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -473,7 +471,7 @@ public class TreeCommandTests
                 query,
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
-                Arg.Any<bool>(), Arg.Any<IReadOnlyList<(string, string)>?>(), Arg.Any<CancellationToken>())
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(searchResult);
 
         var taskGraph = new TaskGraph
