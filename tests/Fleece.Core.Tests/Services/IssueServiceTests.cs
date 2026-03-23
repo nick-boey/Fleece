@@ -1061,10 +1061,10 @@ public class IssueServiceTests
 
     #endregion
 
-    #region FilterAsync with Keyed Tags
+    #region FilterAsync with Keyed Tags via --tag
 
     [Test]
-    public async Task FilterAsync_FiltersByKeyedTags()
+    public async Task FilterAsync_FiltersByKeyedTagWithKeyValue()
     {
         var issues = new List<Issue>
         {
@@ -1074,14 +1074,31 @@ public class IssueServiceTests
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var result = await _sut.FilterAsync(keyedTags: [("project", "frontend")]);
+        var result = await _sut.FilterAsync(tags: ["project=frontend"]);
 
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("a");
     }
 
     [Test]
-    public async Task FilterAsync_FiltersByMultipleKeyedTags_AllMustMatch()
+    public async Task FilterAsync_FiltersByTagKeyOnly_MatchesAllValues()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=backend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(tags: ["project"]);
+
+        result.Should().HaveCount(2);
+        result.Select(i => i.Id).Should().BeEquivalentTo(["a", "b"]);
+    }
+
+    [Test]
+    public async Task FilterAsync_FiltersByMultipleKeyedTags_OrLogic()
     {
         var issues = new List<Issue>
         {
@@ -1091,44 +1108,13 @@ public class IssueServiceTests
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var result = await _sut.FilterAsync(keyedTags: [("project", "frontend"), ("priority", "high")]);
+        var result = await _sut.FilterAsync(tags: ["project=frontend", "priority=high"]);
 
-        result.Should().HaveCount(1);
-        result[0].Id.Should().Be("a");
+        result.Should().HaveCount(3);
     }
 
     [Test]
-    public async Task FilterAsync_ReturnsAllIssues_WhenKeyedTagsIsNull()
-    {
-        var issues = new List<Issue>
-        {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
-        };
-        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
-
-        var result = await _sut.FilterAsync(keyedTags: null);
-
-        result.Should().HaveCount(2);
-    }
-
-    [Test]
-    public async Task FilterAsync_ReturnsAllIssues_WhenKeyedTagsIsEmpty()
-    {
-        var issues = new List<Issue>
-        {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
-        };
-        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
-
-        var result = await _sut.FilterAsync(keyedTags: []);
-
-        result.Should().HaveCount(2);
-    }
-
-    [Test]
-    public async Task FilterAsync_CombinesKeyedTagsWithOtherFilters()
+    public async Task FilterAsync_CombinesKeyedTagWithOtherFilters()
     {
         var issues = new List<Issue>
         {
@@ -1138,7 +1124,24 @@ public class IssueServiceTests
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var result = await _sut.FilterAsync(type: IssueType.Bug, keyedTags: [("project", "frontend")]);
+        var result = await _sut.FilterAsync(type: IssueType.Bug, tags: ["project=frontend"]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public async Task FilterAsync_TagKeyOnly_MatchesSimpleTagsToo()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["urgent"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
+
+        var result = await _sut.FilterAsync(tags: ["urgent"]);
 
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("a");

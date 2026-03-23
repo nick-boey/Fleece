@@ -219,7 +219,18 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `--linked-issues` - Related issue ids (comma-separated)
         - `--linked-pr` - Link to pull request number
         - `--assign` - Assign to a user
-        - `--tags` - Add tags (comma-separated)
+        - `--tags` - Add tags (comma-separated, supports simple tags and key=value keyed tags)
+
+        ## Tags
+
+        Issues support two types of tags:
+        - **Simple tags**: Plain labels like `urgent`, `backend`
+        - **Keyed tags**: Key-value pairs like `project=frontend`, `team=platform`
+
+        Adding tags: `fleece edit <id> --tags "project=frontend,urgent"`
+        Filtering by key only (matches all values): `fleece list --tag project`
+        Filtering by exact key=value: `fleece list --tag project=frontend`
+        The `--tag` option can be specified multiple times (OR logic).
 
         ## Viewing
 

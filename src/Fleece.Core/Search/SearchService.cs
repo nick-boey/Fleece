@@ -39,7 +39,6 @@ public sealed class SearchService : ISearchService
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
         bool includeTerminal = false,
-        IReadOnlyList<(string Key, string Value)>? keyedTags = null,
         CancellationToken cancellationToken = default)
     {
         var allIssues = await _issueService.GetAllAsync(cancellationToken);
@@ -60,35 +59,11 @@ public sealed class SearchService : ISearchService
             // Check all filters
             if (MatchesFilters(issue, query, effectiveFilters))
             {
-                // Check keyed tags filter
-                if (keyedTags is { Count: > 0 })
-                {
-                    if (!MatchesKeyedTags(issue.Tags, keyedTags))
-                    {
-                        continue;
-                    }
-                }
                 results.Add(issue);
             }
         }
 
         return results;
-    }
-
-    /// <summary>
-    /// Checks if issue tags contain all specified keyed tags.
-    /// </summary>
-    private static bool MatchesKeyedTags(IReadOnlyList<string> issueTags, IReadOnlyList<(string Key, string Value)> keyedTags)
-    {
-        foreach (var (key, value) in keyedTags)
-        {
-            var expectedTag = $"{key}={value}";
-            if (!issueTags.Any(t => string.Equals(t, expectedTag, StringComparison.OrdinalIgnoreCase)))
-            {
-                return false;
-            }
-        }
-        return true;
     }
 
     /// <inheritdoc />
@@ -101,7 +76,6 @@ public sealed class SearchService : ISearchService
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
         bool includeTerminal = false,
-        IReadOnlyList<(string Key, string Value)>? keyedTags = null,
         CancellationToken cancellationToken = default)
     {
         // Get all issues for context lookup
@@ -110,7 +84,7 @@ public sealed class SearchService : ISearchService
 
         // Get matched issues
         var matchedIssues = await SearchWithFiltersAsync(
-            query, status, type, priority, assignedTo, tags, linkedPr, includeTerminal, keyedTags, cancellationToken);
+            query, status, type, priority, assignedTo, tags, linkedPr, includeTerminal, cancellationToken);
 
         var matchedIds = new HashSet<string>(matchedIssues.Select(i => i.Id), StringComparer.OrdinalIgnoreCase);
 

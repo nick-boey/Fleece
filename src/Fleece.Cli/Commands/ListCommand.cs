@@ -222,23 +222,6 @@ public sealed class ListCommand(
             return 1;
         }
 
-        // Parse keyed tags
-        List<(string Key, string Value)>? keyedTags = null;
-        if (settings.KeyedTags is { Length: > 0 })
-        {
-            keyedTags = [];
-            foreach (var keyedTag in settings.KeyedTags)
-            {
-                var equalsIndex = keyedTag.IndexOf('=');
-                if (equalsIndex <= 0 || equalsIndex >= keyedTag.Length - 1)
-                {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid keyed tag format '{keyedTag}'. Expected format: key=value");
-                    return 1;
-                }
-                keyedTags.Add((keyedTag[..equalsIndex], keyedTag[(equalsIndex + 1)..]));
-            }
-        }
-
         // Resolve optional issue ID for hierarchy filtering
         HashSet<string>? hierarchyIds = null;
         if (!string.IsNullOrWhiteSpace(settings.IssueId))
@@ -288,8 +271,7 @@ public sealed class ListCommand(
                 settings.AssignedTo,
                 settings.Tags,
                 settings.LinkedPr,
-                settings.All,
-                keyedTags);
+                settings.All);
         }
         else
         {
@@ -301,8 +283,7 @@ public sealed class ListCommand(
                 settings.AssignedTo,
                 settings.Tags,
                 settings.LinkedPr,
-                settings.All,
-                keyedTags);
+                settings.All);
         }
 
         // Apply hierarchy filtering if an issue ID was specified
