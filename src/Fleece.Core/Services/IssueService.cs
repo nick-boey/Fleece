@@ -485,6 +485,7 @@ public sealed partial class IssueService(
     /// <inheritdoc />
     public async Task<IssueGraph> QueryGraphAsync(
         GraphQuery query,
+        GraphSortConfig? sortConfig = null,
         CancellationToken cancellationToken = default)
     {
         // Build full graph first
@@ -557,6 +558,7 @@ public sealed partial class IssueService(
     /// <inheritdoc />
     public async Task<IReadOnlyList<Issue>> GetNextIssuesAsync(
         string? parentId = null,
+        GraphSortConfig? sortConfig = null,
         CancellationToken cancellationToken = default)
     {
         var graph = await BuildGraphAsync(cancellationToken);
@@ -573,24 +575,16 @@ public sealed partial class IssueService(
             actionable = actionable.Where(n => descendants.Contains(n.Issue.Id)).ToList();
         }
 
-        // Sort actionable issues:
-        // 1. Review status before Open status
-        // 2. Issues with descriptions before those without
-        // 3. By priority (lower is higher priority)
-        // 4. By title alphabetically
-        return actionable
-            .Select(n => n.Issue)
-            .OrderBy(i => i.Status == IssueStatus.Review ? 0 : 1)
-            .ThenBy(i => string.IsNullOrWhiteSpace(i.Description) ? 1 : 0)
-            .ThenBy(i => i.Priority ?? 99)
-            .ThenBy(i => i.Title, StringComparer.Ordinal)
-            .ToList();
+        var issues = actionable.Select(n => n.Issue).ToList();
+        ApplyGraphSort(issues, sortConfig ?? GraphSortConfig.Default);
+        return issues;
     }
 
     /// <inheritdoc />
     public async Task<TaskGraph> BuildTaskGraphLayoutAsync(
         bool includeTerminal = false,
         string? assignedTo = null,
+        GraphSortConfig? sortConfig = null,
         CancellationToken cancellationToken = default)
     {
         var allIssues = await GetAllAsync(cancellationToken);
@@ -638,10 +632,8 @@ public sealed partial class IssueService(
             .Where(i => i.ParentIssues.Count == 0 ||
                         i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
             .Where(i => i.Type != IssueType.Idea)
-            .OrderBy(i => i.Priority ?? 99)
-            .ThenByDescending(i => FirstActionableIssueHasDescription(i, childrenOf, actionableIds))
-            .ThenBy(i => i.Title)
             .ToList();
+        ApplyGraphSort(rootIssues, sortConfig ?? GraphSortConfig.Default);
 
         if (rootIssues.Count == 0)
         {
@@ -669,6 +661,7 @@ public sealed partial class IssueService(
     /// <inheritdoc />
     public async Task<TaskGraph> BuildFilteredTaskGraphLayoutAsync(
         IReadOnlySet<string> matchedIds,
+        GraphSortConfig? sortConfig = null,
         CancellationToken cancellationToken = default)
     {
         var allIssues = await GetAllAsync(cancellationToken);
@@ -754,10 +747,8 @@ public sealed partial class IssueService(
             .Where(i => i.ParentIssues.Count == 0 ||
                         i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
             .Where(i => i.Type != IssueType.Idea)
-            .OrderBy(i => i.Priority ?? 99)
-            .ThenByDescending(i => FirstActionableIssueHasDescription(i, childrenOf, actionableIds))
-            .ThenBy(i => i.Title)
             .ToList();
+        ApplyGraphSort(rootIssues, sortConfig ?? GraphSortConfig.Default);
 
         if (rootIssues.Count == 0)
         {
@@ -1444,7 +1435,7 @@ public sealed partial class IssueService(
             }
         }
 
-        // Sort each children list by SortOrder, then by status, description, priority, and title
+        // Sort each children list by SortOrder (lexical order) only
         foreach (var kvp in childrenOf)
         {
             var parentId = kvp.Key;
@@ -1457,41 +1448,52 @@ public sealed partial class IssueService(
                 var sortB = b.ParentIssues
                     .First(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase))
                     .SortOrder;
-                var result = string.Compare(sortA, sortB, StringComparison.Ordinal);
-                if (result != 0)
-                {
-                    return result;
-                }
-
-                // Review status before Open status
-                var statusA = a.Status == IssueStatus.Review ? 0 : 1;
-                var statusB = b.Status == IssueStatus.Review ? 0 : 1;
-                result = statusA.CompareTo(statusB);
-                if (result != 0)
-                {
-                    return result;
-                }
-
-                // Issues with descriptions before those without
-                var hasDescA = string.IsNullOrWhiteSpace(a.Description) ? 1 : 0;
-                var hasDescB = string.IsNullOrWhiteSpace(b.Description) ? 1 : 0;
-                result = hasDescA.CompareTo(hasDescB);
-                if (result != 0)
-                {
-                    return result;
-                }
-
-                result = (a.Priority ?? 99).CompareTo(b.Priority ?? 99);
-                if (result != 0)
-                {
-                    return result;
-                }
-
-                return string.Compare(a.Title, b.Title, StringComparison.Ordinal);
+                return string.Compare(sortA, sortB, StringComparison.Ordinal);
             });
         }
 
         return childrenOf;
+    }
+
+    /// <summary>
+    /// Applies a configurable sort to a list of issues in-place using the provided sort rules.
+    /// </summary>
+    private static void ApplyGraphSort(List<Issue> issues, GraphSortConfig config)
+    {
+        var rules = config.Rules;
+        if (rules.Count == 0)
+        {
+            return;
+        }
+
+        issues.Sort((a, b) =>
+        {
+            foreach (var rule in rules)
+            {
+                var result = rule.Criteria switch
+                {
+                    GraphSortCriteria.CreatedAt => a.CreatedAt.CompareTo(b.CreatedAt),
+                    GraphSortCriteria.Priority => (a.Priority ?? 99).CompareTo(b.Priority ?? 99),
+                    GraphSortCriteria.HasDescription =>
+                        (string.IsNullOrWhiteSpace(a.Description) ? 1 : 0)
+                            .CompareTo(string.IsNullOrWhiteSpace(b.Description) ? 1 : 0),
+                    GraphSortCriteria.Title => string.Compare(a.Title, b.Title, StringComparison.Ordinal),
+                    _ => 0
+                };
+
+                if (rule.Direction == SortDirection.Descending)
+                {
+                    result = -result;
+                }
+
+                if (result != 0)
+                {
+                    return result;
+                }
+            }
+
+            return 0;
+        });
     }
 
     /// <summary>

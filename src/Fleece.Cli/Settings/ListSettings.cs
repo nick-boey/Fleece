@@ -84,4 +84,8 @@ public sealed class ListSettings : FleeceCommandSettings
     [CommandOption("--me")]
     [Description("Filter to issues assigned to current user")]
     public bool Me { get; init; }
+
+    [CommandOption("--sort <ORDER>")]
+    [Description("Sort order for root issues in --next mode. Comma-separated criteria: created, priority, description, title. Append :asc or :desc (default: created:asc)")]
+    public string? Sort { get; init; }
 }

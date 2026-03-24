@@ -436,23 +436,23 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_SortsReviewStatusBeforeOpen()
+    public async Task GetNextIssuesAsync_SortsOldestFirst_ByDefault()
     {
-        var openIssue = new IssueBuilder().WithId("open1").WithTitle("Open Issue")
-            .WithStatus(IssueStatus.Open).Build();
-        var reviewIssue = new IssueBuilder().WithId("review1").WithTitle("Review Issue")
-            .WithStatus(IssueStatus.Review).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([openIssue, reviewIssue]);
+        var olderIssue = new IssueBuilder().WithId("old1").WithTitle("Older Issue")
+            .WithStatus(IssueStatus.Open).WithCreatedAt(DateTimeOffset.UtcNow.AddDays(-2)).Build();
+        var newerIssue = new IssueBuilder().WithId("new1").WithTitle("Newer Issue")
+            .WithStatus(IssueStatus.Open).WithCreatedAt(DateTimeOffset.UtcNow.AddDays(-1)).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([newerIssue, olderIssue]);
 
         var result = await _sut.GetNextIssuesAsync();
 
         result.Should().HaveCount(2);
-        result[0].Id.Should().Be("review1");
-        result[1].Id.Should().Be("open1");
+        result[0].Id.Should().Be("old1");
+        result[1].Id.Should().Be("new1");
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_SortsIssuesWithDescriptionsFirst()
+    public async Task GetNextIssuesAsync_SortsWithCustomConfig()
     {
         var noDesc = new IssueBuilder().WithId("noDesc").WithTitle("AAA No Description")
             .WithStatus(IssueStatus.Open).Build();
@@ -460,11 +460,84 @@ public class IssueServiceGraphTests
             .WithStatus(IssueStatus.Open).WithDescription("Has a description").Build();
         _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([noDesc, withDesc]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var sortConfig = new GraphSortConfig
+        {
+            Rules = [new GraphSortRule(GraphSortCriteria.HasDescription)]
+        };
+        var result = await _sut.GetNextIssuesAsync(sortConfig: sortConfig);
 
         result.Should().HaveCount(2);
         result[0].Id.Should().Be("withDesc");
         result[1].Id.Should().Be("noDesc");
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_SortsByPriorityDescending_WhenConfigured()
+    {
+        var lowPriority = new IssueBuilder().WithId("low").WithTitle("Low Priority")
+            .WithStatus(IssueStatus.Open).WithPriority(5)
+            .WithCreatedAt(DateTimeOffset.UtcNow.AddDays(-2)).Build();
+        var highPriority = new IssueBuilder().WithId("high").WithTitle("High Priority")
+            .WithStatus(IssueStatus.Open).WithPriority(1)
+            .WithCreatedAt(DateTimeOffset.UtcNow.AddDays(-1)).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([lowPriority, highPriority]);
+
+        var sortConfig = new GraphSortConfig
+        {
+            Rules = [new GraphSortRule(GraphSortCriteria.Priority, SortDirection.Descending)]
+        };
+        var result = await _sut.GetNextIssuesAsync(sortConfig: sortConfig);
+
+        result.Should().HaveCount(2);
+        result[0].Id.Should().Be("low"); // Priority 5 first when descending
+        result[1].Id.Should().Be("high");
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_SortsByTitleAscending_WhenConfigured()
+    {
+        var issueB = new IssueBuilder().WithId("b").WithTitle("Banana")
+            .WithStatus(IssueStatus.Open).Build();
+        var issueA = new IssueBuilder().WithId("a").WithTitle("Apple")
+            .WithStatus(IssueStatus.Open).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issueB, issueA]);
+
+        var sortConfig = new GraphSortConfig
+        {
+            Rules = [new GraphSortRule(GraphSortCriteria.Title)]
+        };
+        var result = await _sut.GetNextIssuesAsync(sortConfig: sortConfig);
+
+        result.Should().HaveCount(2);
+        result[0].Id.Should().Be("a");
+        result[1].Id.Should().Be("b");
+    }
+
+    [Test]
+    public async Task GetNextIssuesAsync_SortsByMultipleCriteria()
+    {
+        var issue1 = new IssueBuilder().WithId("a").WithTitle("Alpha")
+            .WithStatus(IssueStatus.Open).WithPriority(1).Build();
+        var issue2 = new IssueBuilder().WithId("b").WithTitle("Bravo")
+            .WithStatus(IssueStatus.Open).WithPriority(1).Build();
+        var issue3 = new IssueBuilder().WithId("c").WithTitle("Charlie")
+            .WithStatus(IssueStatus.Open).WithPriority(2).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue3, issue2, issue1]);
+
+        var sortConfig = new GraphSortConfig
+        {
+            Rules =
+            [
+                new GraphSortRule(GraphSortCriteria.Priority),
+                new GraphSortRule(GraphSortCriteria.Title)
+            ]
+        };
+        var result = await _sut.GetNextIssuesAsync(sortConfig: sortConfig);
+
+        result.Should().HaveCount(3);
+        result[0].Id.Should().Be("a"); // Priority 1, Alpha
+        result[1].Id.Should().Be("b"); // Priority 1, Bravo
+        result[2].Id.Should().Be("c"); // Priority 2
     }
 
     #endregion

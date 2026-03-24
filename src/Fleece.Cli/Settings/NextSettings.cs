@@ -20,4 +20,8 @@ public sealed class NextSettings : FleeceCommandSettings
     [CommandOption("--one-line")]
     [Description("Output each issue on a single line: <id> <status> <group> <type> <title>")]
     public bool OneLine { get; init; }
+
+    [CommandOption("--sort <ORDER>")]
+    [Description("Sort order for actionable issues. Comma-separated criteria: created, priority, description, title. Append :asc or :desc (default: created:asc)")]
+    public string? Sort { get; init; }
 }
