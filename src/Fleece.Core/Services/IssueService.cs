@@ -1329,7 +1329,7 @@ public sealed partial class IssueService(
     /// </summary>
     private async Task<IReadOnlyList<Issue>> LoadAndNormalizeAsync(CancellationToken cancellationToken)
     {
-        var issues = await LoadAndNormalizeAsync(cancellationToken);
+        var issues = await storage.LoadIssuesAsync(cancellationToken);
         return NormalizeSortOrders(issues);
     }
 
