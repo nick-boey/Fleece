@@ -167,6 +167,29 @@ public sealed class ListCommand(
                     StringComparer.OrdinalIgnoreCase);
             }
 
+            // Parse inactive visibility mode
+            var inactiveVisibility = InactiveVisibility.Hide;
+            if (settings.All)
+            {
+                inactiveVisibility = InactiveVisibility.Always;
+            }
+            if (!string.IsNullOrWhiteSpace(settings.ShowInactive))
+            {
+                inactiveVisibility = settings.ShowInactive.ToLowerInvariant() switch
+                {
+                    "hide" => InactiveVisibility.Hide,
+                    "if-active-children" => InactiveVisibility.IfHasActiveDescendants,
+                    "always" => InactiveVisibility.Always,
+                    _ => InactiveVisibility.Hide // validated below
+                };
+
+                if (settings.ShowInactive.ToLowerInvariant() is not ("hide" or "if-active-children" or "always"))
+                {
+                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid --show-inactive value '{settings.ShowInactive}'. Use: hide, if-active-children, always");
+                    return 1;
+                }
+            }
+
             TaskGraph graph;
             if (!string.IsNullOrWhiteSpace(settings.Search))
             {
@@ -209,7 +232,7 @@ public sealed class ListCommand(
             else
             {
                 graph = await issueService.BuildTaskGraphLayoutAsync(
-                    includeTerminal: settings.All,
+                    inactiveVisibility: inactiveVisibility,
                     assignedTo: assignedTo,
                     sortConfig: sortConfig);
             }

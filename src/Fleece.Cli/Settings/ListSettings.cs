@@ -88,4 +88,8 @@ public sealed class ListSettings : FleeceCommandSettings
     [CommandOption("--sort <ORDER>")]
     [Description("Sort order for root issues in --next mode. Comma-separated criteria: created, priority, description, title. Append :asc or :desc (default: created:asc)")]
     public string? Sort { get; init; }
+
+    [CommandOption("--show-inactive <MODE>")]
+    [Description("Control visibility of terminal-status issues in --next mode: hide (default), if-active-children, always")]
+    public string? ShowInactive { get; init; }
 }

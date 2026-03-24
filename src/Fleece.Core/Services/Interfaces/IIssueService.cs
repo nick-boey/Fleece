@@ -55,13 +55,13 @@ public interface IIssueService
     /// The graph is organized bottom-up, with actionable tasks at the left (lane 0)
     /// and root/parent tasks at the right (higher lanes).
     /// </summary>
-    /// <param name="includeTerminal">When true, includes terminal statuses (Complete, Archived, Closed, Deleted) in the graph.</param>
+    /// <param name="inactiveVisibility">Controls which terminal-status issues are included in the graph.</param>
     /// <param name="assignedTo">When provided, filters to only issues assigned to this user.</param>
     /// <param name="sortConfig">Optional sort configuration for ordering lane 0 (root) issues. Defaults to CreatedAt ascending.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A positioned task graph ready for rendering.</returns>
     Task<TaskGraph> BuildTaskGraphLayoutAsync(
-        bool includeTerminal = false,
+        InactiveVisibility inactiveVisibility = InactiveVisibility.Hide,
         string? assignedTo = null,
         GraphSortConfig? sortConfig = null,
         CancellationToken cancellationToken = default);
