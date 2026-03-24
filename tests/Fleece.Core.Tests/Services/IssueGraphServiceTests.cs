@@ -1225,7 +1225,7 @@ public class IssueServiceGraphTests
         var closed = new IssueBuilder().WithId("closed1").WithStatus(IssueStatus.Closed).Build();
         _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, draft, complete, closed]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(includeTerminal: true);
+        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.Always);
 
         result.Nodes.Should().HaveCount(4);
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["open1", "draft1", "complete1", "closed1"]);
@@ -1264,7 +1264,7 @@ public class IssueServiceGraphTests
         var janeComplete = new IssueBuilder().WithId("jane-complete").WithStatus(IssueStatus.Complete).WithAssignedTo("jane").Build();
         _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([johnOpen, johnComplete, janeOpen, janeComplete]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(includeTerminal: true, assignedTo: "john");
+        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.Always, assignedTo: "john");
 
         result.Nodes.Should().HaveCount(2);
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["john-open", "john-complete"]);
@@ -1319,6 +1319,114 @@ public class IssueServiceGraphTests
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
         result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("review1");
+    }
+
+    #endregion
+
+    #region BuildTaskGraphLayoutAsync InactiveVisibility Tests
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_HideMode_ExcludesTerminalIssues()
+    {
+        var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
+        var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, complete]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.Hide);
+
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("open1");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_AlwaysMode_IncludesAllTerminalIssues()
+    {
+        var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
+        var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
+        var closed = new IssueBuilder().WithId("closed1").WithStatus(IssueStatus.Closed).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, complete, closed]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.Always);
+
+        result.Nodes.Should().HaveCount(3);
+        result.Nodes.Select(n => n.Issue.Id).Should().Contain(["open1", "complete1", "closed1"]);
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_IfHasActiveDescendants_IncludesTerminalParentWithActiveChild()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Complete).Build();
+        var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.IfHasActiveDescendants);
+
+        result.Nodes.Should().HaveCount(2);
+        result.Nodes.Select(n => n.Issue.Id).Should().Contain(["parent", "child"]);
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_IfHasActiveDescendants_ExcludesTerminalWithNoActiveDescendants()
+    {
+        var terminalParent = new IssueBuilder().WithId("terminal-parent").WithStatus(IssueStatus.Complete).Build();
+        var terminalChild = new IssueBuilder().WithId("terminal-child").WithStatus(IssueStatus.Closed)
+            .WithParentIssueIdAndOrder("terminal-parent", "aaa").Build();
+        var openAlone = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([terminalParent, terminalChild, openAlone]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.IfHasActiveDescendants);
+
+        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("open1");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_IfHasActiveDescendants_DeepHierarchy_GrandparentTerminalParentTerminalChildActive()
+    {
+        var grandparent = new IssueBuilder().WithId("grandparent").WithStatus(IssueStatus.Complete).Build();
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Archived)
+            .WithParentIssueIdAndOrder("grandparent", "aaa").Build();
+        var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([grandparent, parent, child]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.IfHasActiveDescendants);
+
+        result.Nodes.Should().HaveCount(3);
+        result.Nodes.Select(n => n.Issue.Id).Should().Contain(["grandparent", "parent", "child"]);
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_IfHasActiveDescendants_MixedActiveAndInactive()
+    {
+        // Terminal parent with one active child and one terminal child
+        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Complete).Build();
+        var activeChild = new IssueBuilder().WithId("active-child").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var terminalChild = new IssueBuilder().WithId("terminal-child").WithStatus(IssueStatus.Closed)
+            .WithParentIssueIdAndOrder("parent", "bbb").Build();
+        // Another terminal parent with no active descendants
+        var lonelyParent = new IssueBuilder().WithId("lonely").WithStatus(IssueStatus.Complete).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, activeChild, terminalChild, lonelyParent]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.IfHasActiveDescendants);
+
+        // parent should be included (has active child), lonely should not
+        result.Nodes.Select(n => n.Issue.Id).Should().Contain(["parent", "active-child"]);
+        result.Nodes.Select(n => n.Issue.Id).Should().NotContain("lonely");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_HideMode_MatchesDefaultBehavior()
+    {
+        var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
+        var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, complete]);
+
+        var hideResult = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.Hide);
+        var defaultResult = await _sut.BuildTaskGraphLayoutAsync();
+
+        hideResult.Nodes.Should().HaveCount(defaultResult.Nodes.Count);
+        hideResult.Nodes.Select(n => n.Issue.Id).Should().BeEquivalentTo(defaultResult.Nodes.Select(n => n.Issue.Id));
     }
 
     #endregion

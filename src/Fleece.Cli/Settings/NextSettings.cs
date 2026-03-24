@@ -24,4 +24,8 @@ public sealed class NextSettings : FleeceCommandSettings
     [CommandOption("--sort <ORDER>")]
     [Description("Sort order for actionable issues. Comma-separated criteria: created, priority, description, title. Append :asc or :desc (default: created:asc)")]
     public string? Sort { get; init; }
+
+    [CommandOption("--show-inactive <MODE>")]
+    [Description("Control visibility of terminal-status issues in graph: hide (default), if-active-children, always")]
+    public string? ShowInactive { get; init; }
 }

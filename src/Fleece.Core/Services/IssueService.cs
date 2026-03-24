@@ -582,7 +582,7 @@ public sealed partial class IssueService(
 
     /// <inheritdoc />
     public async Task<TaskGraph> BuildTaskGraphLayoutAsync(
-        bool includeTerminal = false,
+        InactiveVisibility inactiveVisibility = InactiveVisibility.Hide,
         string? assignedTo = null,
         GraphSortConfig? sortConfig = null,
         CancellationToken cancellationToken = default)
@@ -599,16 +599,25 @@ public sealed partial class IssueService(
         var fullLookup = issueList.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
         // Filter issues based on parameters:
-        // - By default (includeTerminal=false), exclude terminal statuses
+        // - Hide: exclude terminal statuses (default)
+        // - IfHasActiveDescendants: exclude terminal statuses initially, then add back those with active descendants
+        // - Always: include all statuses
         // - When assignedTo is provided, filter to only matching assignees
         var activeIssues = issueList.Where(i =>
-            (includeTerminal || !i.Status.IsTerminal()) &&
+            (inactiveVisibility == InactiveVisibility.Always || !i.Status.IsTerminal()) &&
             (assignedTo == null || string.Equals(i.AssignedTo, assignedTo, StringComparison.OrdinalIgnoreCase))
         ).ToList();
 
         if (activeIssues.Count == 0)
         {
             return new TaskGraph { Nodes = [], TotalLanes = 0 };
+        }
+
+        // For IfHasActiveDescendants mode, find terminal issues that have active descendants
+        if (inactiveVisibility == InactiveVisibility.IfHasActiveDescendants)
+        {
+            var terminalWithActiveDescendants = CollectTerminalIssuesWithActiveDescendants(activeIssues, fullLookup);
+            activeIssues.AddRange(terminalWithActiveDescendants);
         }
 
         // Collect ancestors of active issues (even terminal ones) to provide hierarchy context
@@ -1598,6 +1607,87 @@ public sealed partial class IssueService(
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Finds terminal issues that have at least one active (non-terminal) descendant at any depth.
+    /// Builds a children lookup from all issues, then for each terminal issue checks if any
+    /// descendant is in the active set.
+    /// </summary>
+    private static List<Issue> CollectTerminalIssuesWithActiveDescendants(
+        List<Issue> activeIssues,
+        Dictionary<string, Issue> fullLookup)
+    {
+        var activeIds = new HashSet<string>(activeIssues.Select(i => i.Id), StringComparer.OrdinalIgnoreCase);
+
+        // Build children lookup: parentId -> list of child issue IDs
+        var childrenOf = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var issue in fullLookup.Values)
+        {
+            foreach (var parentRef in issue.ParentIssues)
+            {
+                if (!childrenOf.TryGetValue(parentRef.ParentIssue, out var children))
+                {
+                    children = [];
+                    childrenOf[parentRef.ParentIssue] = children;
+                }
+                children.Add(issue.Id);
+            }
+        }
+
+        // For each terminal issue, check if it has any active descendant
+        var result = new List<Issue>();
+        var checkedIds = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var issue in fullLookup.Values)
+        {
+            if (!issue.Status.IsTerminal() || activeIds.Contains(issue.Id))
+            {
+                continue;
+            }
+
+            if (HasActiveDescendant(issue.Id, childrenOf, activeIds, checkedIds))
+            {
+                result.Add(issue);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Recursively checks whether an issue has any active descendant.
+    /// Results are memoized in the checkedIds dictionary.
+    /// </summary>
+    private static bool HasActiveDescendant(
+        string issueId,
+        Dictionary<string, List<string>> childrenOf,
+        HashSet<string> activeIds,
+        Dictionary<string, bool> checkedIds)
+    {
+        if (checkedIds.TryGetValue(issueId, out var cached))
+        {
+            return cached;
+        }
+
+        // Mark as false first to handle cycles
+        checkedIds[issueId] = false;
+
+        if (!childrenOf.TryGetValue(issueId, out var children))
+        {
+            return false;
+        }
+
+        foreach (var childId in children)
+        {
+            if (activeIds.Contains(childId) || HasActiveDescendant(childId, childrenOf, activeIds, checkedIds))
+            {
+                checkedIds[issueId] = true;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     #endregion
