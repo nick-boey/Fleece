@@ -18,6 +18,9 @@ public class IssueBuilder
     private string? _createdBy;
     private IReadOnlyList<string> _tags = [];
     private ExecutionMode _executionMode = ExecutionMode.Series;
+    private DateTimeOffset? _executionModeLastUpdate;
+    private string? _executionModeModifiedBy;
+    private bool _executionModeLastUpdateSet;
     private DateTimeOffset _lastUpdate = DateTimeOffset.UtcNow;
     private DateTimeOffset _createdAt = DateTimeOffset.UtcNow;
 
@@ -110,9 +113,22 @@ public class IssueBuilder
         return this;
     }
 
-    public IssueBuilder WithExecutionMode(ExecutionMode executionMode)
+    public IssueBuilder WithExecutionMode(ExecutionMode executionMode, DateTimeOffset? lastUpdate = null, string? modifiedBy = null)
     {
         _executionMode = executionMode;
+        if (lastUpdate is not null)
+        {
+            _executionModeLastUpdate = lastUpdate;
+            _executionModeLastUpdateSet = true;
+        }
+        _executionModeModifiedBy = modifiedBy;
+        return this;
+    }
+
+    public IssueBuilder WithExecutionModeLastUpdate(DateTimeOffset? lastUpdate)
+    {
+        _executionModeLastUpdate = lastUpdate;
+        _executionModeLastUpdateSet = true;
         return this;
     }
 
@@ -152,7 +168,8 @@ public class IssueBuilder
         Tags = _tags,
         TagsLastUpdate = _lastUpdate,
         ExecutionMode = _executionMode,
-        ExecutionModeLastUpdate = _lastUpdate,
+        ExecutionModeLastUpdate = _executionModeLastUpdateSet ? _executionModeLastUpdate : _lastUpdate,
+        ExecutionModeModifiedBy = _executionModeModifiedBy,
         CreatedBy = _createdBy,
         CreatedByLastUpdate = _createdBy is not null ? _lastUpdate : null,
         LastUpdate = _lastUpdate,
