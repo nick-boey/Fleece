@@ -23,10 +23,12 @@ public interface IIssueService
     /// execution order in the full hierarchy.
     /// </summary>
     /// <param name="query">Query parameters for filtering.</param>
+    /// <param name="sortConfig">Optional sort configuration for ordering root issues. Defaults to CreatedAt ascending.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A filtered subgraph.</returns>
     Task<IssueGraph> QueryGraphAsync(
         GraphQuery query,
+        GraphSortConfig? sortConfig = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -37,13 +39,15 @@ public interface IIssueService
     /// - It has no incomplete children
     /// - Its parent's ExecutionMode allows it (for Series, it must be the first incomplete child)
     ///
-    /// Results are sorted by: Review status > description presence > priority > title.
+    /// Results are sorted by the provided sort configuration, defaulting to CreatedAt ascending (oldest first).
     /// </summary>
     /// <param name="parentId">Optional parent ID to filter results to descendants of that parent.</param>
+    /// <param name="sortConfig">Optional sort configuration for ordering results. Defaults to CreatedAt ascending.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of actionable issues.</returns>
     Task<IReadOnlyList<Issue>> GetNextIssuesAsync(
         string? parentId = null,
+        GraphSortConfig? sortConfig = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -53,11 +57,13 @@ public interface IIssueService
     /// </summary>
     /// <param name="includeTerminal">When true, includes terminal statuses (Complete, Archived, Closed, Deleted) in the graph.</param>
     /// <param name="assignedTo">When provided, filters to only issues assigned to this user.</param>
+    /// <param name="sortConfig">Optional sort configuration for ordering lane 0 (root) issues. Defaults to CreatedAt ascending.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A positioned task graph ready for rendering.</returns>
     Task<TaskGraph> BuildTaskGraphLayoutAsync(
         bool includeTerminal = false,
         string? assignedTo = null,
+        GraphSortConfig? sortConfig = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -66,10 +72,12 @@ public interface IIssueService
     /// The resulting graph includes a set of matched IDs for highlighting.
     /// </summary>
     /// <param name="matchedIds">IDs of the issues that matched the search.</param>
+    /// <param name="sortConfig">Optional sort configuration for ordering lane 0 (root) issues. Defaults to CreatedAt ascending.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A positioned task graph with matched IDs for highlighting.</returns>
     Task<TaskGraph> BuildFilteredTaskGraphLayoutAsync(
         IReadOnlySet<string> matchedIds,
+        GraphSortConfig? sortConfig = null,
         CancellationToken cancellationToken = default);
 
     // --- CRUD Methods ---

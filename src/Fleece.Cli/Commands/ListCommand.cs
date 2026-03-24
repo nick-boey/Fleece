@@ -117,6 +117,21 @@ public sealed class ListCommand(
                 assignedTo = effectiveSettings.Identity;
             }
 
+            // Parse sort configuration
+            GraphSortConfig? sortConfig = null;
+            if (!string.IsNullOrWhiteSpace(settings.Sort))
+            {
+                try
+                {
+                    sortConfig = GraphSortConfig.Parse(settings.Sort);
+                }
+                catch (ArgumentException ex)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+                    return 1;
+                }
+            }
+
             // Resolve issue ID for hierarchy filtering in --next mode
             HashSet<string>? nextHierarchyIds = null;
             if (!string.IsNullOrWhiteSpace(settings.IssueId))
@@ -184,18 +199,19 @@ public sealed class ListCommand(
                     return 0;
                 }
 
-                graph = await issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds);
+                graph = await issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds, sortConfig: sortConfig);
             }
             else if (nextHierarchyIds is not null)
             {
                 // Use hierarchy filter for --next mode
-                graph = await issueService.BuildFilteredTaskGraphLayoutAsync(nextHierarchyIds);
+                graph = await issueService.BuildFilteredTaskGraphLayoutAsync(nextHierarchyIds, sortConfig: sortConfig);
             }
             else
             {
                 graph = await issueService.BuildTaskGraphLayoutAsync(
                     includeTerminal: settings.All,
-                    assignedTo: assignedTo);
+                    assignedTo: assignedTo,
+                    sortConfig: sortConfig);
             }
 
             TaskGraphRenderer.Render(graph);

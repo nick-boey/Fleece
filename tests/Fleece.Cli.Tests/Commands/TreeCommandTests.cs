@@ -230,7 +230,7 @@ public class TreeCommandTests
             .WithType(IssueType.Task)
             .Build();
 
-        _issueService.BuildTaskGraphLayoutAsync(Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        _issueService.BuildTaskGraphLayoutAsync(Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>())
             .Returns(new TaskGraph
             {
                 Nodes = [new TaskGraphNode { Issue = issue, Row = 0, Lane = 0, IsActionable = true }],
@@ -298,7 +298,7 @@ public class TreeCommandTests
             MatchedIds = matchedIds
         };
 
-        _issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<CancellationToken>())
+        _issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>())
             .Returns(taskGraph);
 
         var settings = new ListSettings { Next = true, Search = "login" };
@@ -316,7 +316,7 @@ public class TreeCommandTests
             Arg.Any<bool>(), Arg.Any<CancellationToken>());
 
         // Verify filtered graph was built
-        await _issueService.Received(1).BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<CancellationToken>());
+        await _issueService.Received(1).BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -390,7 +390,7 @@ public class TreeCommandTests
             MatchedIds = matchedIds
         };
 
-        _issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<CancellationToken>())
+        _issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>())
             .Returns(taskGraph);
 
         var settings = new ListSettings { Next = true, Search = "type:bug", Status = "open" };
@@ -431,7 +431,7 @@ public class TreeCommandTests
             TotalLanes = 1
         };
 
-        _issueService.BuildTaskGraphLayoutAsync(Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        _issueService.BuildTaskGraphLayoutAsync(Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>())
             .Returns(taskGraph);
 
         var settings = new ListSettings { Next = true };
@@ -441,7 +441,7 @@ public class TreeCommandTests
         result.Should().Be(0);
 
         // Verify BuildTaskGraphLayoutAsync was called (not BuildFilteredTaskGraphLayoutAsync)
-        await _issueService.Received(1).BuildTaskGraphLayoutAsync(Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await _issueService.Received(1).BuildTaskGraphLayoutAsync(Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>());
 
         // Verify search service was NOT called
         _searchService.DidNotReceive().ParseQuery(Arg.Any<string?>());
@@ -484,7 +484,7 @@ public class TreeCommandTests
             MatchedIds = matchedIds
         };
 
-        _issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<CancellationToken>())
+        _issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>())
             .Returns(taskGraph);
 
         var settings = new ListSettings { Next = true, Search = "login" };

@@ -1,5 +1,6 @@
 using Fleece.Cli.Output;
 using Fleece.Cli.Settings;
+using Fleece.Core.Models;
 using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -51,7 +52,22 @@ public sealed class NextCommand(IIssueServiceFactory issueServiceFactory, IStora
             return 1;
         }
 
-        var issues = await issueService.GetNextIssuesAsync(resolvedParentId);
+        // Parse sort configuration
+        GraphSortConfig? sortConfig = null;
+        if (!string.IsNullOrWhiteSpace(settings.Sort))
+        {
+            try
+            {
+                sortConfig = GraphSortConfig.Parse(settings.Sort);
+            }
+            catch (ArgumentException ex)
+            {
+                AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+                return 1;
+            }
+        }
+
+        var issues = await issueService.GetNextIssuesAsync(resolvedParentId, sortConfig: sortConfig);
 
         if (settings.Json || settings.JsonVerbose)
         {
