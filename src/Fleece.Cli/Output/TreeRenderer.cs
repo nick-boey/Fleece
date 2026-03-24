@@ -52,6 +52,24 @@ public static class TreeRenderer
         return result;
     }
 
+    /// <summary>
+    /// Pre-computes how many times each issue will appear in the tree
+    /// (once per parent in the display set, minimum 1 for roots).
+    /// </summary>
+    private static Dictionary<string, int> ComputeTotalAppearances(
+        List<Issue> issues,
+        Dictionary<string, Issue> issueLookup)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var issue in issues)
+        {
+            var parentsInSet = (issue.ParentIssues ?? [])
+                .Count(p => issueLookup.ContainsKey(p.ParentIssue));
+            counts[issue.Id] = Math.Max(1, parentsInSet);
+        }
+        return counts;
+    }
+
     public static void RenderTree(List<Issue> issues)
     {
         if (issues.Count == 0)
@@ -63,8 +81,11 @@ public static class TreeRenderer
         // Build a lookup for quick access
         var issueLookup = issues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
-        // Track which issues have been rendered
-        var rendered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Track how many times each issue has been rendered (for AppearanceIndex)
+        var renderCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        // Pre-compute total appearances per issue
+        var totalAppearances = ComputeTotalAppearances(issues, issueLookup);
 
         // Find root issues (those with no parents, or whose parents are not in the filtered list)
         var rootIssues = issues
@@ -85,18 +106,18 @@ public static class TreeRenderer
         // Render each root issue and its children using depth-first traversal
         foreach (var root in rootIssues)
         {
-            RenderIssueNode(root, "", true, true, issueLookup, rendered, issues);
+            RenderIssueNode(root, "", true, true, issueLookup, renderCount, totalAppearances, issues);
         }
 
         // Render any orphaned issues that weren't reached (shouldn't happen normally)
-        var orphans = issues.Where(i => !rendered.Contains(i.Id)).ToList();
+        var orphans = issues.Where(i => !renderCount.ContainsKey(i.Id)).ToList();
         if (orphans.Count > 0)
         {
             AnsiConsole.WriteLine();
             AnsiConsole.MarkupLine("[dim]Unlinked issues:[/]");
             foreach (var orphan in orphans)
             {
-                RenderIssueNode(orphan, "", true, true, issueLookup, rendered, issues);
+                RenderIssueNode(orphan, "", true, true, issueLookup, renderCount, totalAppearances, issues);
             }
         }
     }
@@ -107,26 +128,27 @@ public static class TreeRenderer
         bool isLast,
         bool isRoot,
         Dictionary<string, Issue> issueLookup,
-        HashSet<string> rendered,
+        Dictionary<string, int> renderCount,
+        Dictionary<string, int> totalAppearances,
         List<Issue> allIssues)
     {
-        // Check if this issue has already been rendered
-        var alreadyRendered = rendered.Contains(issue.Id);
+        // Track appearance index
+        renderCount.TryGetValue(issue.Id, out var currentCount);
+        currentCount++;
+        renderCount[issue.Id] = currentCount;
 
-        if (alreadyRendered)
-        {
-            // Show a virtual parent indicator pointing to where it was already rendered
-            var connector = isLast ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ";
-            AnsiConsole.MarkupLine($"{prefix}{connector}[dim](see {issue.Id} above)[/]");
-            return;
-        }
-
-        // Mark as rendered
-        rendered.Add(issue.Id);
+        var total = totalAppearances.GetValueOrDefault(issue.Id, 1);
+        var appearanceSuffix = total > 1 ? $" [dim]({currentCount}/{total})[/]" : "";
 
         // Render the current issue
-        var connector2 = isRoot ? "" : (isLast ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ");
-        AnsiConsole.MarkupLine($"{prefix}{connector2}{IssueLineFormatter.FormatMarkup(issue)}");
+        var connector = isRoot ? "" : (isLast ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ");
+        AnsiConsole.MarkupLine($"{prefix}{connector}{IssueLineFormatter.FormatMarkup(issue)}{appearanceSuffix}");
+
+        // Only show children on the first encounter
+        if (currentCount > 1)
+        {
+            return;
+        }
 
         // Find children (issues that have this issue as a parent), sorted by SortOrder
         var children = allIssues
@@ -148,24 +170,7 @@ public static class TreeRenderer
         {
             var child = children[i];
             var isLastChild = i == children.Count - 1;
-
-            // Check if this child has multiple parents within the filtered set
-            var parentsInSet = (child.ParentIssues ?? [])
-                .Where(p => issueLookup.ContainsKey(p.ParentIssue))
-                .ToList();
-
-            if (parentsInSet.Count > 1 && !rendered.Contains(child.Id))
-            {
-                // Show virtual parent indicator for other parents
-                var otherParents = parentsInSet.Where(p => !p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase)).ToList();
-                if (otherParents.Count > 0)
-                {
-                    var virtualConnector = isLastChild ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ";
-                    AnsiConsole.MarkupLine($"{childPrefix}{virtualConnector}[dim](also child of: {string.Join(", ", otherParents.Select(p => p.ParentIssue))})[/]");
-                }
-            }
-
-            RenderIssueNode(child, childPrefix, isLastChild, false, issueLookup, rendered, allIssues);
+            RenderIssueNode(child, childPrefix, isLastChild, false, issueLookup, renderCount, totalAppearances, allIssues);
         }
     }
 
@@ -173,7 +178,8 @@ public static class TreeRenderer
     {
         // Build a lookup for quick access
         var issueLookup = issues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
-        var rendered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var renderCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var totalAppearances = ComputeTotalAppearances(issues, issueLookup);
 
         // Find root issues
         var rootIssues = issues
@@ -183,7 +189,7 @@ public static class TreeRenderer
             .ThenBy(i => i.Title)
             .ToList();
 
-        var tree = rootIssues.Select(r => BuildJsonNode(r, issueLookup, rendered, issues)).ToList();
+        var tree = rootIssues.Select(r => BuildJsonNode(r, issueLookup, renderCount, totalAppearances, issues)).ToList();
 
         var options = new JsonSerializerOptions { WriteIndented = true };
         Console.WriteLine(JsonSerializer.Serialize(tree, options));
@@ -192,15 +198,36 @@ public static class TreeRenderer
     private static object BuildJsonNode(
         Issue issue,
         Dictionary<string, Issue> issueLookup,
-        HashSet<string> rendered,
+        Dictionary<string, int> renderCount,
+        Dictionary<string, int> totalAppearances,
         List<Issue> allIssues)
     {
-        if (rendered.Contains(issue.Id))
-        {
-            return new { id = issue.Id, reference = true };
-        }
+        // Track appearance index
+        renderCount.TryGetValue(issue.Id, out var currentCount);
+        currentCount++;
+        renderCount[issue.Id] = currentCount;
 
-        rendered.Add(issue.Id);
+        var total = totalAppearances.GetValueOrDefault(issue.Id, 1);
+
+        // On 2nd+ encounter, render as a leaf (no children)
+        if (currentCount > 1)
+        {
+            return new
+            {
+                id = issue.Id,
+                title = issue.Title,
+                type = issue.Type.ToString().ToLowerInvariant(),
+                status = issue.Status.ToString().ToLowerInvariant(),
+                priority = issue.Priority,
+                executionMode = issue.ExecutionMode.ToString().ToLowerInvariant(),
+                assignedTo = issue.AssignedTo,
+                linkedPRs = issue.LinkedPRs,
+                tags = issue.Tags,
+                appearanceIndex = currentCount,
+                totalAppearances = total,
+                children = new List<object>()
+            };
+        }
 
         var children = allIssues
             .Where(i => i.ParentIssues?.Any(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase)) ?? false)
@@ -226,7 +253,9 @@ public static class TreeRenderer
             assignedTo = issue.AssignedTo,
             linkedPRs = issue.LinkedPRs,
             tags = issue.Tags,
-            children = children.Select(c => BuildJsonNode(c, issueLookup, rendered, allIssues)).ToList()
+            appearanceIndex = currentCount,
+            totalAppearances = total,
+            children = children.Select(c => BuildJsonNode(c, issueLookup, renderCount, totalAppearances, allIssues)).ToList()
         };
     }
 }

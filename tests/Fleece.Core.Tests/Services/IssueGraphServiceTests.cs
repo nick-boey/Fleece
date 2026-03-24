@@ -705,7 +705,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_MultiParentIssue_AppearsOnlyOnce()
+    public async Task BuildTaskGraphLayoutAsync_MultiParentIssue_AppearsUnderEachParent()
     {
         var parentA = new IssueBuilder().WithId("parentA").WithTitle("Parent A")
             .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
@@ -722,8 +722,125 @@ public class IssueServiceGraphTests
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
-        result.Nodes.Count(n => n.Issue.Id == "shared").Should().Be(1);
-        result.Nodes.Should().HaveCount(3);
+        // Shared child should appear twice (once under each parent)
+        var sharedNodes = result.Nodes.Where(n => n.Issue.Id == "shared").ToList();
+        sharedNodes.Should().HaveCount(2);
+        result.Nodes.Should().HaveCount(4); // parentA, shared(1), parentB, shared(2)
+
+        // Verify AppearanceIndex and TotalAppearances
+        sharedNodes[0].AppearanceIndex.Should().Be(1);
+        sharedNodes[0].TotalAppearances.Should().Be(2);
+        sharedNodes[1].AppearanceIndex.Should().Be(2);
+        sharedNodes[1].TotalAppearances.Should().Be(2);
+
+        // Both should reference the same Issue object
+        sharedNodes[0].Issue.Should().BeSameAs(sharedNodes[1].Issue);
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_MultiParentWithChildren_ChildrenOnlyUnderFirstParent()
+    {
+        var parentA = new IssueBuilder().WithId("parentA").WithTitle("Parent A")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var parentB = new IssueBuilder().WithId("parentB").WithTitle("Parent B")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var sharedChild = new IssueBuilder().WithId("shared").WithTitle("Shared Child")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series)
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parentA", SortOrder = "aaa" },
+                new ParentIssueRef { ParentIssue = "parentB", SortOrder = "aaa" })
+            .Build();
+        var grandchild = new IssueBuilder().WithId("grand").WithTitle("Grandchild")
+            .WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("shared", "aaa").Build();
+
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parentA, parentB, sharedChild, grandchild]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        // Shared appears twice, grandchild appears once (under first encounter of shared)
+        result.Nodes.Count(n => n.Issue.Id == "shared").Should().Be(2);
+        result.Nodes.Count(n => n.Issue.Id == "grand").Should().Be(1);
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_ThreeParents_AppearsThreeTimes()
+    {
+        var parentA = new IssueBuilder().WithId("parentA").WithTitle("Parent A")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var parentB = new IssueBuilder().WithId("parentB").WithTitle("Parent B")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var parentC = new IssueBuilder().WithId("parentC").WithTitle("Parent C")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var sharedChild = new IssueBuilder().WithId("shared").WithTitle("Shared Child")
+            .WithStatus(IssueStatus.Open)
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parentA", SortOrder = "aaa" },
+                new ParentIssueRef { ParentIssue = "parentB", SortOrder = "aaa" },
+                new ParentIssueRef { ParentIssue = "parentC", SortOrder = "aaa" })
+            .Build();
+
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parentA, parentB, parentC, sharedChild]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        var sharedNodes = result.Nodes.Where(n => n.Issue.Id == "shared").ToList();
+        sharedNodes.Should().HaveCount(3);
+        sharedNodes[0].AppearanceIndex.Should().Be(1);
+        sharedNodes[0].TotalAppearances.Should().Be(3);
+        sharedNodes[1].AppearanceIndex.Should().Be(2);
+        sharedNodes[1].TotalAppearances.Should().Be(3);
+        sharedNodes[2].AppearanceIndex.Should().Be(3);
+        sharedNodes[2].TotalAppearances.Should().Be(3);
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_DiamondDependency_SharedIssueAppearsTwice()
+    {
+        // A → B, A → C, B → D, C → D (diamond)
+        var a = new IssueBuilder().WithId("A").WithTitle("A")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
+        var b = new IssueBuilder().WithId("B").WithTitle("B")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series)
+            .WithParentIssueIdAndOrder("A", "aaa").Build();
+        var c = new IssueBuilder().WithId("C").WithTitle("C")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series)
+            .WithParentIssueIdAndOrder("A", "bbb").Build();
+        var d = new IssueBuilder().WithId("D").WithTitle("D")
+            .WithStatus(IssueStatus.Open)
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "B", SortOrder = "aaa" },
+                new ParentIssueRef { ParentIssue = "C", SortOrder = "aaa" })
+            .Build();
+
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([a, b, c, d]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        var dNodes = result.Nodes.Where(n => n.Issue.Id == "D").ToList();
+        dNodes.Should().HaveCount(2);
+        dNodes[0].TotalAppearances.Should().Be(2);
+        dNodes[1].TotalAppearances.Should().Be(2);
+    }
+
+    [Test]
+    public async Task BuildTaskGraphLayoutAsync_SingleParent_DefaultAppearanceCounts()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithTitle("Parent")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var child = new IssueBuilder().WithId("child").WithTitle("Child")
+            .WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("parent", "aaa").Build();
+
+        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
+
+        var result = await _sut.BuildTaskGraphLayoutAsync();
+
+        foreach (var node in result.Nodes)
+        {
+            node.AppearanceIndex.Should().Be(1);
+            node.TotalAppearances.Should().Be(1);
+        }
     }
 
     [Test]
