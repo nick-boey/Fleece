@@ -636,11 +636,9 @@ public sealed partial class IssueService(
         var childrenOf = BuildChildrenLookup(issuesToDisplay, issueLookup);
 
         // Find root issues (no parent in the display set)
-        // Exclude Idea type issues from being roots - they can still appear as children
         var rootIssues = issuesToDisplay
             .Where(i => i.ParentIssues.Count == 0 ||
                         i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
-            .Where(i => i.Type != IssueType.Idea)
             .ToList();
         ApplyGraphSort(rootIssues, sortConfig ?? GraphSortConfig.Default);
 
@@ -751,11 +749,9 @@ public sealed partial class IssueService(
         var childrenOf = BuildChildrenLookup(issuesToDisplay, issueLookup);
 
         // Find root issues (no parent in the display set)
-        // Exclude Idea type issues from being roots - they can still appear as children
         var rootIssues = issuesToDisplay
             .Where(i => i.ParentIssues.Count == 0 ||
                         i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
-            .Where(i => i.Type != IssueType.Idea)
             .ToList();
         ApplyGraphSort(rootIssues, sortConfig ?? GraphSortConfig.Default);
 

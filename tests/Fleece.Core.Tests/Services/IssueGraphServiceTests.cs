@@ -1110,10 +1110,10 @@ public class IssueServiceGraphTests
 
     #endregion
 
-    #region Idea Type Task Graph Root Exclusion Tests
+    #region Idea Type Task Graph Root Inclusion Tests
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_IdeaTypeRootIssue_ExcludedFromRoots()
+    public async Task BuildTaskGraphLayoutAsync_IdeaTypeRootIssue_IncludedInRoots()
     {
         var idea = new IssueBuilder().WithId("idea1").WithTitle("Idea Issue")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
@@ -1124,7 +1124,8 @@ public class IssueServiceGraphTests
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
-        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("task1");
+        result.Nodes.Should().HaveCount(2);
+        result.Nodes.Select(n => n.Issue.Id).Should().Contain(["idea1", "task1"]);
     }
 
     [Test]
@@ -1152,7 +1153,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_MultipleIdeaRoots_AllExcluded()
+    public async Task BuildTaskGraphLayoutAsync_MultipleIdeaRoots_AllIncluded()
     {
         var idea1 = new IssueBuilder().WithId("idea1").WithTitle("Idea 1")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
@@ -1165,11 +1166,12 @@ public class IssueServiceGraphTests
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
-        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("task1");
+        result.Nodes.Should().HaveCount(3);
+        result.Nodes.Select(n => n.Issue.Id).Should().Contain(["idea1", "idea2", "task1"]);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_IdeaWithOrphanedParent_TreatedAsRootAndExcluded()
+    public async Task BuildTaskGraphLayoutAsync_IdeaWithOrphanedParent_TreatedAsRootAndIncluded()
     {
         var idea = new IssueBuilder().WithId("idea1").WithTitle("Orphan Idea")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).WithParentIssueIdAndOrder("nonexistent", "aaa").Build();
@@ -1180,11 +1182,12 @@ public class IssueServiceGraphTests
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
-        result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("task1");
+        result.Nodes.Should().HaveCount(2);
+        result.Nodes.Select(n => n.Issue.Id).Should().Contain(["idea1", "task1"]);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_OnlyIdeasInGraph_ReturnsEmptyGraph()
+    public async Task BuildTaskGraphLayoutAsync_OnlyIdeasInGraph_ReturnsIdeasAsRoots()
     {
         var idea1 = new IssueBuilder().WithId("idea1").WithTitle("Idea 1")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
@@ -1195,8 +1198,8 @@ public class IssueServiceGraphTests
 
         var result = await _sut.BuildTaskGraphLayoutAsync();
 
-        result.Nodes.Should().BeEmpty();
-        result.TotalLanes.Should().Be(0);
+        result.Nodes.Should().HaveCount(2);
+        result.Nodes.Select(n => n.Issue.Id).Should().Contain(["idea1", "idea2"]);
     }
 
     #endregion
