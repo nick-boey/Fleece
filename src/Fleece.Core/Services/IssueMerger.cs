@@ -110,6 +110,24 @@ public sealed class IssueMerger
             changes.Add(tagsChange);
         }
 
+        // Merge ExecutionMode
+        var (executionMode, executionModeTimestamp, executionModeModifiedBy, executionModeChange) = MergeNullableProperty(
+            "ExecutionMode", (ExecutionMode?)issueA.ExecutionMode, issueA.ExecutionModeLastUpdate, issueA.ExecutionModeModifiedBy,
+            (ExecutionMode?)issueB.ExecutionMode, issueB.ExecutionModeLastUpdate, issueB.ExecutionModeModifiedBy, mergedBy, now);
+        if (executionModeChange is not null)
+        {
+            changes.Add(executionModeChange);
+        }
+
+        // Merge WorkingBranchId
+        var (workingBranchId, workingBranchIdTimestamp, workingBranchIdModifiedBy, workingBranchIdChange) = MergeNullableProperty(
+            "WorkingBranchId", issueA.WorkingBranchId, issueA.WorkingBranchIdLastUpdate, issueA.WorkingBranchIdModifiedBy,
+            issueB.WorkingBranchId, issueB.WorkingBranchIdLastUpdate, issueB.WorkingBranchIdModifiedBy, mergedBy, now);
+        if (workingBranchIdChange is not null)
+        {
+            changes.Add(workingBranchIdChange);
+        }
+
         // Merge CreatedBy - keep oldest non-null value (creator never changes)
         var (createdBy, createdByTimestamp) = MergeCreatedBy(
             issueA.CreatedBy, issueA.CreatedByLastUpdate, issueB.CreatedBy, issueB.CreatedByLastUpdate);
@@ -162,6 +180,12 @@ public sealed class IssueMerger
             Tags = tags,
             TagsLastUpdate = tagsTimestamp,
             TagsModifiedBy = tagsModifiedBy,
+            ExecutionMode = executionMode ?? ExecutionMode.Series,
+            ExecutionModeLastUpdate = executionModeTimestamp,
+            ExecutionModeModifiedBy = executionModeModifiedBy,
+            WorkingBranchId = workingBranchId,
+            WorkingBranchIdLastUpdate = workingBranchIdTimestamp,
+            WorkingBranchIdModifiedBy = workingBranchIdModifiedBy,
             CreatedBy = createdBy,
             CreatedByLastUpdate = createdByTimestamp,
             LastUpdate = lastUpdate,
