@@ -38,8 +38,12 @@ public static class TaskGraphRenderer
             return;
         }
 
-        // Build lookup structures
-        var nodeLookup = graph.Nodes.ToDictionary(n => n.Issue.Id, StringComparer.OrdinalIgnoreCase);
+        // Build lookup structures (first occurrence wins for parent connection resolution)
+        var nodeLookup = new Dictionary<string, TaskGraphNode>(StringComparer.OrdinalIgnoreCase);
+        foreach (var n in graph.Nodes)
+        {
+            nodeLookup.TryAdd(n.Issue.Id, n);
+        }
 
         // Determine grid dimensions
         int totalNodeRows = graph.Nodes.Count;
@@ -139,6 +143,9 @@ public static class TaskGraphRenderer
                 var node = graph.Nodes[nodeIndex];
                 var id = Markup.Escape(node.Issue.Id);
                 var title = Markup.Escape(node.Issue.Title);
+                var appearanceSuffix = node.TotalAppearances > 1
+                    ? $" ({node.AppearanceIndex}/{node.TotalAppearances})"
+                    : "";
 
                 // Determine color: matched issues get status color, context issues are dimmed
                 bool isContextOnly = graph.MatchedIds is not null &&
@@ -147,12 +154,13 @@ public static class TaskGraphRenderer
 
                 if (isContextOnly)
                 {
-                    AnsiConsole.MarkupLine($"{graphPart}  [dim]{id} {title}[/]");
+                    AnsiConsole.MarkupLine($"{graphPart}  [dim]{id} {title}{appearanceSuffix}[/]");
                 }
                 else
                 {
                     var statusColor = GetStatusColor(node.Issue.Status);
-                    AnsiConsole.MarkupLine($"{graphPart}  [{statusColor}]{id} {title}[/]");
+                    var suffix = appearanceSuffix.Length > 0 ? $" [dim]{appearanceSuffix}[/]" : "";
+                    AnsiConsole.MarkupLine($"{graphPart}  [{statusColor}]{id} {title}[/]{suffix}");
                 }
             }
             else

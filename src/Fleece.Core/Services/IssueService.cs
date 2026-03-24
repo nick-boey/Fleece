@@ -658,9 +658,11 @@ public sealed partial class IssueService(
             maxLane = Math.Max(maxLane, rootMax);
         }
 
+        var finalNodes = AssignAppearanceCounts(nodeList);
+
         return new TaskGraph
         {
-            Nodes = nodeList,
+            Nodes = finalNodes,
             TotalLanes = maxLane + 1
         };
     }
@@ -771,9 +773,11 @@ public sealed partial class IssueService(
             maxLane = Math.Max(maxLane, rootMax);
         }
 
+        var finalNodes = AssignAppearanceCounts(nodeList);
+
         return new TaskGraph
         {
-            Nodes = nodeList,
+            Nodes = finalNodes,
             TotalLanes = maxLane + 1,
             MatchedIds = matchedIds
         };
@@ -1105,9 +1109,18 @@ public sealed partial class IssueService(
         ExecutionMode? parentExecutionMode,
         string? renderingParentIdForFirstLeaf = null)
     {
-        // Skip issues already placed by a previous parent traversal (DAG support)
+        // If already visited, add a duplicate leaf node (no children traversal)
         if (!visited.Add(issue.Id))
         {
+            nodeList.Add(new TaskGraphNode
+            {
+                Issue = issue,
+                Row = nodeList.Count,
+                Lane = startLane,
+                IsActionable = actionableIds.Contains(issue.Id),
+                ParentExecutionMode = parentExecutionMode,
+                RenderingParentId = renderingParentIdForFirstLeaf
+            });
             return startLane;
         }
 
@@ -1176,21 +1189,15 @@ public sealed partial class IssueService(
 
         foreach (var child in children)
         {
-            // Skip children already visited via another parent (DAG support)
-            if (visited.Contains(child.Id))
-            {
-                continue;
-            }
-
             var childIncomplete = GetIncompleteChildrenForLayout(child, childrenOf);
 
             // Determine rendering parent override for this child
             // Only the first child gets the override; parallel siblings connect normally
             string? childRenderingParent = isFirstChild ? renderingParentIdForFirstLeaf : null;
 
-            if (childIncomplete.Count == 0)
+            if (childIncomplete.Count == 0 || visited.Contains(child.Id))
             {
-                // Leaf child — mark visited and add node
+                // Leaf child (or duplicate) — add node, let visited.Add decide if first encounter
                 visited.Add(child.Id);
                 nodeList.Add(new TaskGraphNode
                 {
@@ -1243,12 +1250,6 @@ public sealed partial class IssueService(
         {
             var child = children[i];
 
-            // Skip children already visited via another parent (DAG support)
-            if (visited.Contains(child.Id))
-            {
-                continue;
-            }
-
             var childIncomplete = GetIncompleteChildrenForLayout(child, childrenOf);
 
             // Determine rendering parent override for this child's first leaf
@@ -1256,9 +1257,9 @@ public sealed partial class IssueService(
             // Subsequent children use the previous sibling's ID to create cascading flow
             string? childRenderingParent = isFirstChild ? renderingParentIdForFirstLeaf : previousSiblingId;
 
-            if (childIncomplete.Count == 0)
+            if (childIncomplete.Count == 0 || visited.Contains(child.Id))
             {
-                // Leaf child: place at currentLane, mark visited
+                // Leaf child (or duplicate): place at currentLane
                 visited.Add(child.Id);
                 nodeList.Add(new TaskGraphNode
                 {
@@ -1285,6 +1286,36 @@ public sealed partial class IssueService(
         }
 
         return currentLane;
+    }
+
+    /// <summary>
+    /// Post-processes node list to assign AppearanceIndex and TotalAppearances
+    /// for issues that appear multiple times (multi-parent).
+    /// </summary>
+    private static List<TaskGraphNode> AssignAppearanceCounts(List<TaskGraphNode> nodeList)
+    {
+        // Count appearances per issue ID
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var node in nodeList)
+        {
+            counts.TryGetValue(node.Issue.Id, out var count);
+            counts[node.Issue.Id] = count + 1;
+        }
+
+        // Assign AppearanceIndex and TotalAppearances using record with expressions
+        var indices = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<TaskGraphNode>(nodeList.Count);
+        foreach (var node in nodeList)
+        {
+            var total = counts[node.Issue.Id];
+            indices.TryGetValue(node.Issue.Id, out var idx);
+            idx++;
+            indices[node.Issue.Id] = idx;
+
+            result.Add(node with { AppearanceIndex = idx, TotalAppearances = total });
+        }
+
+        return result;
     }
 
     /// <summary>

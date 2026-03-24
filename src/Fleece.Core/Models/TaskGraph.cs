@@ -40,6 +40,19 @@ public sealed record TaskGraphNode
     /// previous sibling's parent node instead of its actual parent.
     /// </summary>
     public string? RenderingParentId { get; init; }
+
+    /// <summary>
+    /// Which occurrence of this issue in the graph (1-based).
+    /// For single-parent issues this is always 1.
+    /// For multi-parent issues, each parent gets its own node with a unique index.
+    /// </summary>
+    public int AppearanceIndex { get; init; } = 1;
+
+    /// <summary>
+    /// Total number of times this issue appears in the graph.
+    /// For single-parent issues this is always 1.
+    /// </summary>
+    public int TotalAppearances { get; init; } = 1;
 }
 
 /// <summary>
