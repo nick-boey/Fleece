@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Fleece.Core.Models;
 using Fleece.Core.Services.Interfaces;
+using Fleece.Core.Utilities;
 
 namespace Fleece.Core.Services;
 
@@ -150,12 +151,12 @@ public sealed partial class IssueService(
 
     public async Task<IReadOnlyList<Issue>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return await storage.LoadIssuesAsync(cancellationToken);
+        return await LoadAndNormalizeAsync(cancellationToken);
     }
 
     public async Task<Issue?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
-        var issues = await storage.LoadIssuesAsync(cancellationToken);
+        var issues = await LoadAndNormalizeAsync(cancellationToken);
         return issues.FirstOrDefault(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -219,7 +220,7 @@ public sealed partial class IssueService(
             return [];
         }
 
-        var issues = await storage.LoadIssuesAsync(cancellationToken);
+        var issues = await LoadAndNormalizeAsync(cancellationToken);
 
         // If partial ID is less than 3 characters, require exact match only
         if (partialId.Length < 3)
@@ -265,7 +266,7 @@ public sealed partial class IssueService(
             }
         }
 
-        var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
+        var issues = (await LoadAndNormalizeAsync(cancellationToken)).ToList();
         var existingIndex = issues.FindIndex(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
         if (existingIndex < 0)
@@ -337,7 +338,7 @@ public sealed partial class IssueService(
 
     public async Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
-        var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
+        var issues = (await LoadAndNormalizeAsync(cancellationToken)).ToList();
         var existingIndex = issues.FindIndex(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
         if (existingIndex < 0)
@@ -369,7 +370,7 @@ public sealed partial class IssueService(
             return [];
         }
 
-        var issues = await storage.LoadIssuesAsync(cancellationToken);
+        var issues = await LoadAndNormalizeAsync(cancellationToken);
 
         // Check for key:value pattern (keyed tag search)
         // Pattern must have colon, no spaces, and content on both sides
@@ -406,7 +407,7 @@ public sealed partial class IssueService(
         bool includeTerminal = false,
         CancellationToken cancellationToken = default)
     {
-        var issues = await storage.LoadIssuesAsync(cancellationToken);
+        var issues = await LoadAndNormalizeAsync(cancellationToken);
 
         return issues
             .Where(i => status is null || i.Status == status)
@@ -446,7 +447,7 @@ public sealed partial class IssueService(
         IReadOnlyList<Question> questions,
         CancellationToken cancellationToken = default)
     {
-        var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
+        var issues = (await LoadAndNormalizeAsync(cancellationToken)).ToList();
         var existingIndex = issues.FindIndex(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
         if (existingIndex < 0)
@@ -1324,6 +1325,98 @@ public sealed partial class IssueService(
     }
 
     /// <summary>
+    /// Loads issues from storage and normalizes SortOrder on all ParentIssueRefs.
+    /// </summary>
+    private async Task<IReadOnlyList<Issue>> LoadAndNormalizeAsync(CancellationToken cancellationToken)
+    {
+        var issues = await storage.LoadIssuesAsync(cancellationToken);
+        return NormalizeSortOrders(issues);
+    }
+
+    /// <summary>
+    /// Ensures every ParentIssueRef has a non-null SortOrder.
+    /// Groups siblings by parent, sorts alphabetically by title, and assigns LexoRank values
+    /// to any refs with missing SortOrder.
+    /// </summary>
+    public static IReadOnlyList<Issue> NormalizeSortOrders(IReadOnlyList<Issue> issues)
+    {
+        // Find all issues that have at least one ParentIssueRef with null/empty SortOrder
+        var needsNormalization = issues.Any(i =>
+            i.ParentIssues.Any(p => string.IsNullOrEmpty(p.SortOrder)));
+
+        if (!needsNormalization)
+        {
+            return issues;
+        }
+
+        // Build a lookup: parentId -> list of (issue, parentRef index) for refs missing SortOrder
+        var missingByParent = new Dictionary<string, List<(Issue Issue, int RefIndex)>>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < issues.Count; i++)
+        {
+            var issue = issues[i];
+            for (var j = 0; j < issue.ParentIssues.Count; j++)
+            {
+                var parentRef = issue.ParentIssues[j];
+                if (string.IsNullOrEmpty(parentRef.SortOrder))
+                {
+                    if (!missingByParent.TryGetValue(parentRef.ParentIssue, out var list))
+                    {
+                        list = [];
+                        missingByParent[parentRef.ParentIssue] = list;
+                    }
+
+                    list.Add((issue, j));
+                }
+            }
+        }
+
+        if (missingByParent.Count == 0)
+        {
+            return issues;
+        }
+
+        // Track which issues need updating: issueId -> new ParentIssues list
+        var updatedParentIssues = new Dictionary<string, List<ParentIssueRef>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (parentId, siblings) in missingByParent)
+        {
+            // Sort siblings alphabetically by title for deterministic ordering
+            var sorted = siblings.OrderBy(s => s.Issue.Title, StringComparer.Ordinal).ToList();
+            var ranks = LexoRank.GenerateInitialRanks(sorted.Count);
+
+            for (var i = 0; i < sorted.Count; i++)
+            {
+                var (issue, refIndex) = sorted[i];
+
+                if (!updatedParentIssues.TryGetValue(issue.Id, out var parentList))
+                {
+                    parentList = new List<ParentIssueRef>(issue.ParentIssues);
+                    updatedParentIssues[issue.Id] = parentList;
+                }
+
+                parentList[refIndex] = parentList[refIndex] with { SortOrder = ranks[i] };
+            }
+        }
+
+        // Rebuild the issues list with updated ParentIssues
+        var result = new List<Issue>(issues.Count);
+        foreach (var issue in issues)
+        {
+            if (updatedParentIssues.TryGetValue(issue.Id, out var newParents))
+            {
+                result.Add(issue with { ParentIssues = newParents });
+            }
+            else
+            {
+                result.Add(issue);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Builds a lookup from parent ID to sorted list of children.
     /// </summary>
     private static Dictionary<string, List<Issue>> BuildChildrenLookup(
@@ -1359,11 +1452,11 @@ public sealed partial class IssueService(
             kvp.Value.Sort((a, b) =>
             {
                 var sortA = a.ParentIssues
-                    .FirstOrDefault(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase))
-                    ?.SortOrder ?? "zzz";
+                    .First(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase))
+                    .SortOrder;
                 var sortB = b.ParentIssues
-                    .FirstOrDefault(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase))
-                    ?.SortOrder ?? "zzz";
+                    .First(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase))
+                    .SortOrder;
                 var result = string.Compare(sortA, sortB, StringComparison.Ordinal);
                 if (result != 0)
                 {
