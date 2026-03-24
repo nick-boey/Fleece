@@ -39,4 +39,32 @@ public interface IDependencyService
         string parentId,
         string childId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Moves an issue up (before its previous sibling) within a parent's children.
+    /// Only updates the moved issue's sort order. If there is insufficient rank space,
+    /// all sibling ranks are normalized first.
+    /// </summary>
+    /// <param name="parentId">The parent issue ID (may be partial, 3+ chars).</param>
+    /// <param name="childId">The child issue ID to move (may be partial, 3+ chars).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result indicating whether the move succeeded or was invalid.</returns>
+    Task<MoveResult> MoveUpAsync(
+        string parentId,
+        string childId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Moves an issue down (after its next sibling) within a parent's children.
+    /// Only updates the moved issue's sort order. If there is insufficient rank space,
+    /// all sibling ranks are normalized first.
+    /// </summary>
+    /// <param name="parentId">The parent issue ID (may be partial, 3+ chars).</param>
+    /// <param name="childId">The child issue ID to move (may be partial, 3+ chars).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result indicating whether the move succeeded or was invalid.</returns>
+    Task<MoveResult> MoveDownAsync(
+        string parentId,
+        string childId,
+        CancellationToken ct = default);
 }

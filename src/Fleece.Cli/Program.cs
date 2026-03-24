@@ -122,6 +122,12 @@ app.Configure(config =>
         .WithExample("dependency", "--parent", "abc123", "--child", "def456", "--first")
         .WithExample("dependency", "--parent", "abc123", "--child", "def456", "--after", "ghi789");
 
+    config.AddCommand<MoveCommand>("move")
+        .WithDescription("Move an issue up or down among its siblings")
+        .WithExample("move", "abc123", "--up")
+        .WithExample("move", "abc123", "--down")
+        .WithExample("move", "abc123", "--up", "--parent", "def456");
+
     config.AddCommand<NextCommand>("next")
         .WithDescription("Find issues that can be worked on next based on dependencies and execution mode")
         .WithExample("next")
