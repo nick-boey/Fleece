@@ -728,4 +728,333 @@ public class DependencyServiceTests
     }
 
     #endregion
+
+    #region MoveUpAsync
+
+    [Test]
+    public async Task MoveUpAsync_SuccessfulMoveUp_ReturnsMovedUp()
+    {
+        // Arrange - 3 siblings, move the middle one up
+        // Use ranks with enough space so normalization is not triggered
+        var parent = new IssueBuilder().WithId("parent1").Build();
+        var child1 = new IssueBuilder().WithId("child1")
+            .WithParentIssueIdAndOrder("parent1", "ddd").Build();
+        var child2 = new IssueBuilder().WithId("child2")
+            .WithParentIssueIdAndOrder("parent1", "nnn").Build();
+        var child3 = new IssueBuilder().WithId("child3")
+            .WithParentIssueIdAndOrder("parent1", "zzz").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent });
+        _issueService.ResolveByPartialIdAsync("child2", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child2 });
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent, child1, child2, child3 });
+
+        var updatedChild2 = new IssueBuilder().WithId("child2")
+            .WithParentIssueIdAndOrder("parent1", "iii").Build();
+        _issueService.UpdateAsync(
+                id: "child2",
+                parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(updatedChild2);
+
+        // Act
+        var result = await _sut.MoveUpAsync("parent1", "child2");
+
+        // Assert
+        result.Outcome.Should().Be(MoveOutcome.MovedUp);
+        result.UpdatedIssue.Should().NotBeNull();
+        await _issueService.Received(1).UpdateAsync(
+            id: "child2",
+            parentIssues: Arg.Is<IReadOnlyList<ParentIssueRef>>(p =>
+                p.Count == 1 &&
+                p[0].ParentIssue == "parent1" &&
+                string.Compare(p[0].SortOrder, "ddd", StringComparison.Ordinal) < 0),
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task MoveUpAsync_AlreadyAtTop_ReturnsInvalid()
+    {
+        // Arrange
+        var parent = new IssueBuilder().WithId("parent1").Build();
+        var child1 = new IssueBuilder().WithId("child1")
+            .WithParentIssueIdAndOrder("parent1", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2")
+            .WithParentIssueIdAndOrder("parent1", "bbb").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent });
+        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child1 });
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent, child1, child2 });
+
+        // Act
+        var result = await _sut.MoveUpAsync("parent1", "child1");
+
+        // Assert
+        result.Outcome.Should().Be(MoveOutcome.Invalid);
+        result.Reason.Should().Be(MoveInvalidReason.AlreadyAtTop);
+        result.UpdatedIssue.Should().BeNull();
+    }
+
+    [Test]
+    public async Task MoveUpAsync_NotAChildOfParent_ReturnsInvalid()
+    {
+        // Arrange
+        var parent = new IssueBuilder().WithId("parent1").Build();
+        var child1 = new IssueBuilder().WithId("child1").Build(); // no parent issues
+
+        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent });
+        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child1 });
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent, child1 });
+
+        // Act
+        var result = await _sut.MoveUpAsync("parent1", "child1");
+
+        // Assert
+        result.Outcome.Should().Be(MoveOutcome.Invalid);
+        result.Reason.Should().Be(MoveInvalidReason.NotAChildOfParent);
+    }
+
+    [Test]
+    public async Task MoveUpAsync_IssueNotFound_ThrowsKeyNotFoundException()
+    {
+        // Arrange
+        var parent = new IssueBuilder().WithId("parent1").Build();
+        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent });
+        _issueService.ResolveByPartialIdAsync("nonexist", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue>());
+
+        // Act
+        var act = () => _sut.MoveUpAsync("parent1", "nonexist");
+
+        // Assert
+        await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("*child*nonexist*");
+    }
+
+    [Test]
+    public async Task MoveUpAsync_TwoSiblings_MovesSecondBeforeFirst()
+    {
+        // Arrange
+        var parent = new IssueBuilder().WithId("parent1").Build();
+        var child1 = new IssueBuilder().WithId("child1")
+            .WithParentIssueIdAndOrder("parent1", "nnn").Build();
+        var child2 = new IssueBuilder().WithId("child2")
+            .WithParentIssueIdAndOrder("parent1", "zzz").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent });
+        _issueService.ResolveByPartialIdAsync("child2", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child2 });
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent, child1, child2 });
+
+        var updatedChild2 = new IssueBuilder().WithId("child2")
+            .WithParentIssueIdAndOrder("parent1", "ggg").Build();
+        _issueService.UpdateAsync(
+                id: "child2",
+                parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(updatedChild2);
+
+        // Act
+        var result = await _sut.MoveUpAsync("parent1", "child2");
+
+        // Assert
+        result.Outcome.Should().Be(MoveOutcome.MovedUp);
+        await _issueService.Received(1).UpdateAsync(
+            id: "child2",
+            parentIssues: Arg.Is<IReadOnlyList<ParentIssueRef>>(p =>
+                p.Count == 1 &&
+                p[0].ParentIssue == "parent1" &&
+                string.Compare(p[0].SortOrder, "nnn", StringComparison.Ordinal) < 0),
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task MoveUpAsync_NormalizationTriggered_WhenRankSpaceExhausted()
+    {
+        // Arrange - 3 siblings with adjacent ranks, moving child3 up between child1 and child2
+        // "a" and "b" are adjacent (no room between), so normalization is triggered
+        var parent = new IssueBuilder().WithId("parent1").Build();
+        var child1 = new IssueBuilder().WithId("child1")
+            .WithParentIssueIdAndOrder("parent1", "a").Build();
+        var child2 = new IssueBuilder().WithId("child2")
+            .WithParentIssueIdAndOrder("parent1", "b").Build();
+        var child3 = new IssueBuilder().WithId("child3")
+            .WithParentIssueIdAndOrder("parent1", "c").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent });
+        _issueService.ResolveByPartialIdAsync("child3", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child3 });
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent, child1, child2, child3 });
+
+        // UpdateAsync will be called for normalization (3 siblings) and then for the move
+        _issueService.UpdateAsync(
+                id: Arg.Any<string>(),
+                parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var id = callInfo.ArgAt<string>(0);
+                return new IssueBuilder().WithId(id).WithParentIssueIds("parent1").Build();
+            });
+
+        // Act
+        var result = await _sut.MoveUpAsync("parent1", "child3");
+
+        // Assert - normalization triggered (3 normalization updates + 1 move update)
+        result.Outcome.Should().Be(MoveOutcome.MovedUp);
+        await _issueService.Received(4).UpdateAsync(
+            id: Arg.Any<string>(),
+            parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    #endregion
+
+    #region MoveDownAsync
+
+    [Test]
+    public async Task MoveDownAsync_SuccessfulMoveDown_ReturnsMovedDown()
+    {
+        // Arrange - 3 siblings, move the middle one down
+        var parent = new IssueBuilder().WithId("parent1").Build();
+        var child1 = new IssueBuilder().WithId("child1")
+            .WithParentIssueIdAndOrder("parent1", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2")
+            .WithParentIssueIdAndOrder("parent1", "bbb").Build();
+        var child3 = new IssueBuilder().WithId("child3")
+            .WithParentIssueIdAndOrder("parent1", "ccc").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent });
+        _issueService.ResolveByPartialIdAsync("child2", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child2 });
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent, child1, child2, child3 });
+
+        var updatedChild2 = new IssueBuilder().WithId("child2")
+            .WithParentIssueIdAndOrder("parent1", "ccc").Build();
+        _issueService.UpdateAsync(
+                id: "child2",
+                parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(updatedChild2);
+
+        // Act
+        var result = await _sut.MoveDownAsync("parent1", "child2");
+
+        // Assert
+        result.Outcome.Should().Be(MoveOutcome.MovedDown);
+        result.UpdatedIssue.Should().NotBeNull();
+        await _issueService.Received(1).UpdateAsync(
+            id: "child2",
+            parentIssues: Arg.Is<IReadOnlyList<ParentIssueRef>>(p =>
+                p.Count == 1 &&
+                p[0].ParentIssue == "parent1" &&
+                string.Compare(p[0].SortOrder, "ccc", StringComparison.Ordinal) > 0),
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task MoveDownAsync_AlreadyAtBottom_ReturnsInvalid()
+    {
+        // Arrange
+        var parent = new IssueBuilder().WithId("parent1").Build();
+        var child1 = new IssueBuilder().WithId("child1")
+            .WithParentIssueIdAndOrder("parent1", "aaa").Build();
+        var child2 = new IssueBuilder().WithId("child2")
+            .WithParentIssueIdAndOrder("parent1", "bbb").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent });
+        _issueService.ResolveByPartialIdAsync("child2", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child2 });
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent, child1, child2 });
+
+        // Act
+        var result = await _sut.MoveDownAsync("parent1", "child2");
+
+        // Assert
+        result.Outcome.Should().Be(MoveOutcome.Invalid);
+        result.Reason.Should().Be(MoveInvalidReason.AlreadyAtBottom);
+        result.UpdatedIssue.Should().BeNull();
+    }
+
+    [Test]
+    public async Task MoveDownAsync_NotAChildOfParent_ReturnsInvalid()
+    {
+        // Arrange
+        var parent = new IssueBuilder().WithId("parent1").Build();
+        var child1 = new IssueBuilder().WithId("child1").Build(); // no parent issues
+
+        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent });
+        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child1 });
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent, child1 });
+
+        // Act
+        var result = await _sut.MoveDownAsync("parent1", "child1");
+
+        // Assert
+        result.Outcome.Should().Be(MoveOutcome.Invalid);
+        result.Reason.Should().Be(MoveInvalidReason.NotAChildOfParent);
+    }
+
+    [Test]
+    public async Task MoveDownAsync_NormalizationTriggered_WhenRankSpaceExhausted()
+    {
+        // Arrange - 3 siblings with adjacent ranks, moving child1 down between child2 and child3
+        // "y" and "z" are adjacent (no room between), so normalization is triggered
+        var parent = new IssueBuilder().WithId("parent1").Build();
+        var child1 = new IssueBuilder().WithId("child1")
+            .WithParentIssueIdAndOrder("parent1", "x").Build();
+        var child2 = new IssueBuilder().WithId("child2")
+            .WithParentIssueIdAndOrder("parent1", "y").Build();
+        var child3 = new IssueBuilder().WithId("child3")
+            .WithParentIssueIdAndOrder("parent1", "z").Build();
+
+        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent });
+        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { child1 });
+        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Issue> { parent, child1, child2, child3 });
+
+        _issueService.UpdateAsync(
+                id: Arg.Any<string>(),
+                parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var id = callInfo.ArgAt<string>(0);
+                return new IssueBuilder().WithId(id).WithParentIssueIds("parent1").Build();
+            });
+
+        // Act
+        var result = await _sut.MoveDownAsync("parent1", "child1");
+
+        // Assert - normalization triggered (3 normalization updates + 1 move update)
+        result.Outcome.Should().Be(MoveOutcome.MovedDown);
+        await _issueService.Received(4).UpdateAsync(
+            id: Arg.Any<string>(),
+            parentIssues: Arg.Any<IReadOnlyList<ParentIssueRef>>(),
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    #endregion
 }

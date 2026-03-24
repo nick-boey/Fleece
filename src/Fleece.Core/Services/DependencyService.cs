@@ -212,5 +212,193 @@ public class DependencyService : IDependencyService
         return LexoRank.GetMiddleRank(afterRank, beforeRank);
     }
 
+    /// <inheritdoc />
+    public async Task<MoveResult> MoveUpAsync(
+        string parentId,
+        string childId,
+        CancellationToken ct = default)
+    {
+        return await MoveAsync(parentId, childId, MoveDirection.Up, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<MoveResult> MoveDownAsync(
+        string parentId,
+        string childId,
+        CancellationToken ct = default)
+    {
+        return await MoveAsync(parentId, childId, MoveDirection.Down, ct);
+    }
+
+    private async Task<MoveResult> MoveAsync(
+        string parentId,
+        string childId,
+        MoveDirection direction,
+        CancellationToken ct)
+    {
+        var resolvedParent = await ResolveIssueAsync(parentId, "parent", ct);
+        var resolvedChild = await ResolveIssueAsync(childId, "child", ct);
+
+        var siblings = await GetSortedSiblingsAsync(resolvedParent.Id, ct);
+
+        var childIndex = siblings.FindIndex(s =>
+            string.Equals(s.Issue.Id, resolvedChild.Id, StringComparison.OrdinalIgnoreCase));
+
+        if (childIndex < 0)
+        {
+            return new MoveResult
+            {
+                Outcome = MoveOutcome.Invalid,
+                Reason = MoveInvalidReason.NotAChildOfParent,
+                Message = $"Issue '{resolvedChild.Id}' is not a child of '{resolvedParent.Id}'"
+            };
+        }
+
+        if (direction == MoveDirection.Up && childIndex == 0)
+        {
+            return new MoveResult
+            {
+                Outcome = MoveOutcome.Invalid,
+                Reason = MoveInvalidReason.AlreadyAtTop,
+                Message = $"Issue '{resolvedChild.Id}' is already at the top"
+            };
+        }
+
+        if (direction == MoveDirection.Down && childIndex == siblings.Count - 1)
+        {
+            return new MoveResult
+            {
+                Outcome = MoveOutcome.Invalid,
+                Reason = MoveInvalidReason.AlreadyAtBottom,
+                Message = $"Issue '{resolvedChild.Id}' is already at the bottom"
+            };
+        }
+
+        // Determine the boundary ranks for the new position
+        string? beforeRank;
+        string? afterRank;
+
+        if (direction == MoveDirection.Up)
+        {
+            // Moving up: place between sibling[index-2] and sibling[index-1]
+            afterRank = siblings[childIndex - 1].SortOrder;
+            beforeRank = childIndex - 2 >= 0 ? siblings[childIndex - 2].SortOrder : null;
+        }
+        else
+        {
+            // Moving down: place between sibling[index+1] and sibling[index+2]
+            beforeRank = siblings[childIndex + 1].SortOrder;
+            afterRank = childIndex + 2 < siblings.Count ? siblings[childIndex + 2].SortOrder : null;
+        }
+
+        // Check if normalization is needed before computing the rank
+        if (NeedsNormalization(beforeRank, afterRank))
+        {
+            siblings = await NormalizeSiblingRanksAsync(resolvedParent.Id, siblings, ct);
+
+            // Recompute the child index (same position, new ranks)
+            childIndex = siblings.FindIndex(s =>
+                string.Equals(s.Issue.Id, resolvedChild.Id, StringComparison.OrdinalIgnoreCase));
+
+            // Recompute boundary ranks with normalized values
+            if (direction == MoveDirection.Up)
+            {
+                afterRank = siblings[childIndex - 1].SortOrder;
+                beforeRank = childIndex - 2 >= 0 ? siblings[childIndex - 2].SortOrder : null;
+            }
+            else
+            {
+                beforeRank = siblings[childIndex + 1].SortOrder;
+                afterRank = childIndex + 2 < siblings.Count ? siblings[childIndex + 2].SortOrder : null;
+            }
+        }
+
+        var newSortOrder = LexoRank.GetMiddleRank(beforeRank, afterRank);
+
+        // Update the moved issue's ParentIssueRef for this parent
+        var newParentIssues = UpdateSortOrderForParent(
+            resolvedChild.ParentIssues, resolvedParent.Id, newSortOrder);
+
+        var updatedIssue = await _issueService.UpdateAsync(
+            id: resolvedChild.Id,
+            parentIssues: newParentIssues,
+            cancellationToken: ct);
+
+        return new MoveResult
+        {
+            Outcome = direction == MoveDirection.Up ? MoveOutcome.MovedUp : MoveOutcome.MovedDown,
+            UpdatedIssue = updatedIssue
+        };
+    }
+
+    private async Task<List<SiblingInfo>> GetSortedSiblingsAsync(
+        string parentId, CancellationToken ct)
+    {
+        var allIssues = await _issueService.GetAllAsync(ct);
+        return allIssues
+            .Where(i => i.ParentIssues.Any(p =>
+                string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase)))
+            .Select(i => new SiblingInfo(
+                i,
+                i.ParentIssues
+                    .First(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase))
+                    .SortOrder))
+            .OrderBy(x => x.SortOrder, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static bool NeedsNormalization(string? beforeRank, string? afterRank)
+    {
+        // Normalization is only needed when inserting between two ranks that are adjacent
+        // (would require precision extension). At boundaries (null before or after),
+        // LexoRank can always produce a valid rank by extending precision, which is acceptable.
+        if (beforeRank is null || afterRank is null)
+        {
+            return false;
+        }
+
+        // Check if the result would require precision extension
+        var middle = LexoRank.GetMiddleRank(beforeRank, afterRank);
+        return middle.Length > Math.Max(beforeRank.Length, afterRank.Length);
+    }
+
+    private async Task<List<SiblingInfo>> NormalizeSiblingRanksAsync(
+        string parentId,
+        List<SiblingInfo> siblings,
+        CancellationToken ct)
+    {
+        var ranks = LexoRank.GenerateInitialRanks(siblings.Count);
+        var normalized = new List<SiblingInfo>(siblings.Count);
+
+        for (var i = 0; i < siblings.Count; i++)
+        {
+            var sibling = siblings[i];
+            var newParentIssues = UpdateSortOrderForParent(
+                sibling.Issue.ParentIssues, parentId, ranks[i]);
+
+            await _issueService.UpdateAsync(
+                id: sibling.Issue.Id,
+                parentIssues: newParentIssues,
+                cancellationToken: ct);
+
+            normalized.Add(new SiblingInfo(sibling.Issue, ranks[i]));
+        }
+
+        return normalized;
+    }
+
+    private static IReadOnlyList<ParentIssueRef> UpdateSortOrderForParent(
+        IReadOnlyList<ParentIssueRef> parentIssues,
+        string parentId,
+        string newSortOrder)
+    {
+        return parentIssues.Select(p =>
+            string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase)
+                ? p with { SortOrder = newSortOrder }
+                : p).ToList();
+    }
+
+    private enum MoveDirection { Up, Down }
+
     private sealed record SiblingInfo(Issue Issue, string SortOrder);
 }
