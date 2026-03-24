@@ -1351,4 +1351,162 @@ public class IssueServiceTests
     }
 
     #endregion
+
+    #region NormalizeSortOrders
+
+    [Test]
+    public void NormalizeSortOrders_AssignsSortOrder_WhenMissing()
+    {
+        var parentId = "parent1";
+        var issues = new List<Issue>
+        {
+            CreateIssue("child-c", "Charlie", parentIssues:
+            [
+                new ParentIssueRef { ParentIssue = parentId, SortOrder = "" }
+            ]),
+            CreateIssue("child-a", "Alpha", parentIssues:
+            [
+                new ParentIssueRef { ParentIssue = parentId, SortOrder = "" }
+            ]),
+            CreateIssue("child-b", "Bravo", parentIssues:
+            [
+                new ParentIssueRef { ParentIssue = parentId, SortOrder = "" }
+            ])
+        };
+
+        var result = IssueService.NormalizeSortOrders(issues);
+
+        // All should have non-empty SortOrder
+        foreach (var issue in result)
+        {
+            issue.ParentIssues.Should().AllSatisfy(p =>
+                p.SortOrder.Should().NotBeNullOrEmpty());
+        }
+
+        // Alphabetical title order: Alpha < Bravo < Charlie
+        var alpha = result.First(i => i.Id == "child-a").ParentIssues[0].SortOrder;
+        var bravo = result.First(i => i.Id == "child-b").ParentIssues[0].SortOrder;
+        var charlie = result.First(i => i.Id == "child-c").ParentIssues[0].SortOrder;
+
+        string.Compare(alpha, bravo, StringComparison.Ordinal).Should().BeLessThan(0);
+        string.Compare(bravo, charlie, StringComparison.Ordinal).Should().BeLessThan(0);
+    }
+
+    [Test]
+    public void NormalizeSortOrders_PreservesExistingSortOrder()
+    {
+        var parentId = "parent1";
+        var issues = new List<Issue>
+        {
+            CreateIssue("child-a", "Alpha", parentIssues:
+            [
+                new ParentIssueRef { ParentIssue = parentId, SortOrder = "zzz" }
+            ]),
+            CreateIssue("child-b", "Bravo", parentIssues:
+            [
+                new ParentIssueRef { ParentIssue = parentId, SortOrder = "mmm" }
+            ])
+        };
+
+        var result = IssueService.NormalizeSortOrders(issues);
+
+        result.First(i => i.Id == "child-a").ParentIssues[0].SortOrder.Should().Be("zzz");
+        result.First(i => i.Id == "child-b").ParentIssues[0].SortOrder.Should().Be("mmm");
+    }
+
+    [Test]
+    public void NormalizeSortOrders_ReturnsOriginalList_WhenNoNormalizationNeeded()
+    {
+        var issues = new List<Issue>
+        {
+            CreateIssue("child-a", "Alpha", parentIssues:
+            [
+                new ParentIssueRef { ParentIssue = "parent1", SortOrder = "aaa" }
+            ])
+        };
+
+        var result = IssueService.NormalizeSortOrders(issues);
+
+        result.Should().BeSameAs(issues);
+    }
+
+    [Test]
+    public void NormalizeSortOrders_HandlesMultipleParents()
+    {
+        var issues = new List<Issue>
+        {
+            CreateIssue("child-a", "Alpha", parentIssues:
+            [
+                new ParentIssueRef { ParentIssue = "parent1", SortOrder = "" },
+                new ParentIssueRef { ParentIssue = "parent2", SortOrder = "zzz" }
+            ])
+        };
+
+        var result = IssueService.NormalizeSortOrders(issues);
+
+        var parentRefs = result.First().ParentIssues;
+        parentRefs[0].SortOrder.Should().NotBeNullOrEmpty(); // auto-assigned
+        parentRefs[1].SortOrder.Should().Be("zzz"); // preserved
+    }
+
+    [Test]
+    public void NormalizeSortOrders_StableAcrossMultipleCalls()
+    {
+        var parentId = "parent1";
+        var issues = new List<Issue>
+        {
+            CreateIssue("child-b", "Bravo", parentIssues:
+            [
+                new ParentIssueRef { ParentIssue = parentId, SortOrder = "" }
+            ]),
+            CreateIssue("child-a", "Alpha", parentIssues:
+            [
+                new ParentIssueRef { ParentIssue = parentId, SortOrder = "" }
+            ])
+        };
+
+        var result1 = IssueService.NormalizeSortOrders(issues);
+        var result2 = IssueService.NormalizeSortOrders(issues);
+
+        var alpha1 = result1.First(i => i.Id == "child-a").ParentIssues[0].SortOrder;
+        var alpha2 = result2.First(i => i.Id == "child-a").ParentIssues[0].SortOrder;
+        alpha1.Should().Be(alpha2);
+
+        // Once assigned, a second normalization should be a no-op (returns same list)
+        var result3 = IssueService.NormalizeSortOrders(result1);
+        result3.Should().BeSameAs(result1);
+    }
+
+    [Test]
+    public void NormalizeSortOrders_HandlesIssuesWithNoParents()
+    {
+        var issues = new List<Issue>
+        {
+            CreateIssue("orphan", "Orphan Issue")
+        };
+
+        var result = IssueService.NormalizeSortOrders(issues);
+
+        result.Should().BeSameAs(issues);
+    }
+
+    private static Issue CreateIssue(
+        string id,
+        string title,
+        IReadOnlyList<ParentIssueRef>? parentIssues = null,
+        IssueStatus status = IssueStatus.Open,
+        IssueType type = IssueType.Task)
+    {
+        return new Issue
+        {
+            Id = id,
+            Title = title,
+            Status = status,
+            Type = type,
+            ParentIssues = parentIssues ?? [],
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+    }
+
+    #endregion
 }
