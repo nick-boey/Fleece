@@ -1,25 +1,30 @@
 using Fleece.Cli.Output;
 using Fleece.Cli.Settings;
+using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class DeleteCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider) : AsyncCommand<DeleteSettings>
+public sealed class DeleteCommand(IFleeceService fleeceService, ISettingsService settingsService, IGitConfigService gitConfigService) : AsyncCommand<DeleteSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, DeleteSettings settings)
     {
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        var issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        IFleeceService fleece = fleeceService;
+        if (!string.IsNullOrWhiteSpace(settings.IssuesFile))
+        {
+            fleece = FleeceService.ForFile(settings.IssuesFile, settingsService, gitConfigService);
+        }
+
+        var (hasMultiple, message) = await fleece.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
-        var matches = await issueService.ResolveByPartialIdAsync(settings.Id);
+        var matches = await fleece.ResolveByPartialIdAsync(settings.Id);
 
         if (matches.Count == 0)
         {
@@ -35,7 +40,7 @@ public sealed class DeleteCommand(IIssueServiceFactory issueServiceFactory, ISto
         }
 
         var resolvedId = matches[0].Id;
-        var deleted = await issueService.DeleteAsync(resolvedId);
+        var deleted = await fleece.DeleteAsync(resolvedId);
 
         if (deleted)
         {

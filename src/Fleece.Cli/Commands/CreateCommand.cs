@@ -2,22 +2,25 @@ using Fleece.Cli.Output;
 using Fleece.Cli.Services;
 using Fleece.Cli.Settings;
 using Fleece.Core.Models;
+using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class CreateCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider, IGitService gitService) : AsyncCommand<CreateSettings>
+public sealed class CreateCommand(IFleeceService fleeceService, ISettingsService settingsService, IGitConfigService gitConfigService, IGitService gitService) : AsyncCommand<CreateSettings>
 {
-    private IStorageService? _storageService;
-    private IIssueService? _issueService;
+    private IFleeceService _fleece = fleeceService;
 
     public override async Task<int> ExecuteAsync(CommandContext context, CreateSettings settings)
     {
-        _storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        _issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
-        var (hasMultiple, message) = await _storageService.HasMultipleUnmergedFilesAsync();
+        if (!string.IsNullOrWhiteSpace(settings.IssuesFile))
+        {
+            _fleece = FleeceService.ForFile(settings.IssuesFile, settingsService, gitConfigService);
+        }
+
+        var (hasMultiple, message) = await _fleece.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
@@ -112,9 +115,7 @@ public sealed class CreateCommand(IIssueServiceFactory issueServiceFactory, ISto
                 tags = template.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             }
 
-            await _storageService!.EnsureDirectoryExistsAsync();
-
-            var issue = await _issueService!.CreateAsync(
+            var issue = await _fleece.CreateAsync(
                 title: template.Title,
                 type: issueType,
                 description: template.Description,
@@ -194,11 +195,9 @@ public sealed class CreateCommand(IIssueServiceFactory issueServiceFactory, ISto
             executionMode = parsedMode;
         }
 
-        await _storageService!.EnsureDirectoryExistsAsync();
-
         try
         {
-            var issue = await _issueService!.CreateAsync(
+            var issue = await _fleece.CreateAsync(
                 title: settings.Title,
                 type: issueType,
                 description: settings.Description,
