@@ -7,16 +7,12 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class MoveCommand(
-    IDependencyService dependencyService,
-    IIssueService issueService,
-    IStorageServiceProvider storageServiceProvider)
+public sealed class MoveCommand(IFleeceService fleeceService)
     : AsyncCommand<MoveSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, MoveSettings settings)
     {
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
@@ -35,11 +31,11 @@ public sealed class MoveCommand(
             MoveResult result;
             if (settings.Up)
             {
-                result = await dependencyService.MoveUpAsync(parentId, settings.IssueId);
+                result = await fleeceService.MoveUpAsync(parentId, settings.IssueId);
             }
             else
             {
-                result = await dependencyService.MoveDownAsync(parentId, settings.IssueId);
+                result = await fleeceService.MoveDownAsync(parentId, settings.IssueId);
             }
 
             if (result.Outcome == MoveOutcome.Invalid)
@@ -89,7 +85,7 @@ public sealed class MoveCommand(
 
     private async Task<string> InferSingleParentAsync(string issueId)
     {
-        var matches = await issueService.ResolveByPartialIdAsync(issueId);
+        var matches = await fleeceService.ResolveByPartialIdAsync(issueId);
 
         if (matches.Count == 0)
         {
