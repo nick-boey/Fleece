@@ -1,3 +1,4 @@
+using Fleece.Core.FunctionalCore;
 using Fleece.Core.Models;
 using Fleece.Core.Services.Interfaces;
 
@@ -18,28 +19,20 @@ public sealed class CleanService(
         var issues = (await storage.LoadIssuesAsync(cancellationToken)).ToList();
         var existingTombstones = await storage.LoadTombstonesAsync(cancellationToken);
 
-        // Build target status set
-        var targetStatuses = new HashSet<IssueStatus> { IssueStatus.Deleted };
-        if (includeComplete)
-        {
-            targetStatuses.Add(IssueStatus.Complete);
-        }
+        var now = DateTimeOffset.UtcNow;
+        var cleanedBy = gitConfigService.GetUserName() ?? "unknown";
 
-        if (includeClosed)
-        {
-            targetStatuses.Add(IssueStatus.Closed);
-        }
+        var plan = Cleaning.Plan(
+            issues,
+            existingTombstones.ToList(),
+            includeComplete,
+            includeClosed,
+            includeArchived,
+            stripReferences,
+            now,
+            cleanedBy);
 
-        if (includeArchived)
-        {
-            targetStatuses.Add(IssueStatus.Archived);
-        }
-
-        // Partition issues
-        var toClean = issues.Where(i => targetStatuses.Contains(i.Status)).ToList();
-        var toKeep = issues.Where(i => !targetStatuses.Contains(i.Status)).ToList();
-
-        if (toClean.Count == 0)
+        if (plan.IssuesToRemove.Count == 0)
         {
             return new CleanResult
             {
@@ -48,101 +41,14 @@ public sealed class CleanService(
             };
         }
 
-        var now = DateTimeOffset.UtcNow;
-        var cleanedBy = gitConfigService.GetUserName() ?? "unknown";
-        var cleanedIds = toClean.Select(i => i.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        // Create tombstones
-        var newTombstones = toClean.Select(i => new Tombstone
-        {
-            IssueId = i.Id,
-            OriginalTitle = i.Title,
-            CleanedAt = now,
-            CleanedBy = cleanedBy
-        }).ToList();
-
-        // Strip dangling references
-        var strippedReferences = new List<StrippedReference>();
-        if (stripReferences)
-        {
-            for (var i = 0; i < toKeep.Count; i++)
-            {
-                var issue = toKeep[i];
-                var updated = issue;
-                var modified = false;
-
-                // Strip LinkedIssues
-                var danglingLinked = issue.LinkedIssues
-                    .Where(li => cleanedIds.Contains(li))
-                    .ToList();
-
-                if (danglingLinked.Count > 0)
-                {
-                    foreach (var linkedId in danglingLinked)
-                    {
-                        strippedReferences.Add(new StrippedReference
-                        {
-                            IssueId = linkedId,
-                            ReferencingIssueId = issue.Id,
-                            ReferenceType = "LinkedIssues"
-                        });
-                    }
-
-                    updated = updated with
-                    {
-                        LinkedIssues = issue.LinkedIssues
-                            .Where(li => !cleanedIds.Contains(li))
-                            .ToList(),
-                        LinkedIssuesLastUpdate = now,
-                        LinkedIssuesModifiedBy = cleanedBy
-                    };
-                    modified = true;
-                }
-
-                // Strip ParentIssues
-                var danglingParents = issue.ParentIssues
-                    .Where(pi => cleanedIds.Contains(pi.ParentIssue))
-                    .ToList();
-
-                if (danglingParents.Count > 0)
-                {
-                    foreach (var parent in danglingParents)
-                    {
-                        strippedReferences.Add(new StrippedReference
-                        {
-                            IssueId = parent.ParentIssue,
-                            ReferencingIssueId = issue.Id,
-                            ReferenceType = "ParentIssues"
-                        });
-                    }
-
-                    updated = updated with
-                    {
-                        ParentIssues = issue.ParentIssues
-                            .Where(pi => !cleanedIds.Contains(pi.ParentIssue))
-                            .ToList(),
-                        ParentIssuesLastUpdate = now,
-                        ParentIssuesModifiedBy = cleanedBy
-                    };
-                    modified = true;
-                }
-
-                if (modified)
-                {
-                    updated = updated with { LastUpdate = now };
-                    toKeep[i] = updated;
-                }
-            }
-        }
-
         if (!dryRun)
         {
             // Save remaining issues
-            await storage.SaveIssuesAsync(toKeep, cancellationToken);
+            await storage.SaveIssuesAsync(plan.UpdatedIssues.ToList(), cancellationToken);
 
             // Merge new tombstones with existing
             var allTombstones = existingTombstones.ToList();
-            allTombstones.AddRange(newTombstones);
+            allTombstones.AddRange(plan.TombstonesToCreate);
 
             // Deduplicate by IssueId, keeping newest
             var deduplicatedTombstones = allTombstones
@@ -155,8 +61,8 @@ public sealed class CleanService(
 
         return new CleanResult
         {
-            CleanedTombstones = newTombstones,
-            StrippedReferences = strippedReferences
+            CleanedTombstones = plan.TombstonesToCreate.ToList(),
+            StrippedReferences = plan.StrippedReferences.ToList()
         };
     }
 }
