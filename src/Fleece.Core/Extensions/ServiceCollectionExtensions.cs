@@ -42,6 +42,12 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<IJsonlSerializer>(),
                 sp.GetRequiredService<IGitService>()));
         services.AddSingleton<ISearchService, SearchService>();
+        services.AddSingleton<IFleeceService>(sp =>
+            new FleeceService(
+                sp.GetRequiredService<IStorageService>(),
+                sp.GetRequiredService<IIdGenerator>(),
+                sp.GetRequiredService<IGitConfigService>(),
+                sp.GetRequiredService<ISettingsService>()));
 
         return services;
     }
