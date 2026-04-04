@@ -20,21 +20,18 @@ public sealed class MigrationService(IStorageService storage) : IMigrationServic
             };
         }
 
-        var migratedIssues = new List<Issue>();
+        var migratedIssues = FunctionalCore.Migration.Migrate(issues);
+
         var migratedCount = 0;
         var alreadyMigratedCount = 0;
-
-        foreach (var issue in issues)
+        for (var i = 0; i < issues.Count; i++)
         {
-            if (NeedsMigration(issue))
+            if (!ReferenceEquals(issues[i], migratedIssues[i]))
             {
-                var migrated = MigrateIssue(issue);
-                migratedIssues.Add(migrated);
                 migratedCount++;
             }
             else
             {
-                migratedIssues.Add(issue);
                 alreadyMigratedCount++;
             }
         }
@@ -65,60 +62,9 @@ public sealed class MigrationService(IStorageService storage) : IMigrationServic
 
         // Migration is needed if any issue lacks timestamps OR any file has unknown properties
         var hasUnknownProperties = loadResult.Diagnostics.Any(d => d.UnknownProperties.Count > 0);
-        var needsTimestampMigration = loadResult.Issues.Any(NeedsMigration);
+        var needsTimestampMigration = FunctionalCore.Migration.IsMigrationNeeded(loadResult.Issues);
 
         return needsTimestampMigration || hasUnknownProperties;
-    }
-
-    private static bool NeedsMigration(Issue issue)
-    {
-        // An issue needs migration if:
-        // 1. It has no property timestamps set (all property timestamps are default/zero)
-        // 2. It has the deprecated LinkedPR field set (needs to be migrated to tags)
-        var needsTimestampMigration = issue.TitleLastUpdate == default &&
-                                      issue.StatusLastUpdate == default &&
-                                      issue.TypeLastUpdate == default &&
-                                      issue.CreatedAt == default;
-
-        var needsLinkedPrMigration = issue.LinkedPR.HasValue;
-
-        return needsTimestampMigration || needsLinkedPrMigration;
-    }
-
-    private static Issue MigrateIssue(Issue issue)
-    {
-        var result = issue;
-
-        // Migrate timestamps if needed
-        if (issue.TitleLastUpdate == default &&
-            issue.StatusLastUpdate == default &&
-            issue.TypeLastUpdate == default &&
-            issue.CreatedAt == default)
-        {
-            // Use LastUpdate as the timestamp for all properties
-            var timestamp = issue.LastUpdate;
-
-            result = result with
-            {
-                TitleLastUpdate = timestamp,
-                DescriptionLastUpdate = issue.Description is not null ? timestamp : null,
-                StatusLastUpdate = timestamp,
-                TypeLastUpdate = timestamp,
-                PriorityLastUpdate = issue.Priority is not null ? timestamp : null,
-                LinkedPRLastUpdate = issue.LinkedPR is not null ? timestamp : null,
-                LinkedIssuesLastUpdate = timestamp,
-                ParentIssuesLastUpdate = timestamp,
-                CreatedAt = timestamp // Best guess - use LastUpdate as CreatedAt
-            };
-        }
-
-        // Migrate LinkedPR to tags if needed
-        if (result.LinkedPR.HasValue)
-        {
-            result = MigrateLinkedPrToTags(result);
-        }
-
-        return result;
     }
 
     /// <summary>
@@ -126,31 +72,6 @@ public sealed class MigrationService(IStorageService storage) : IMigrationServic
     /// </summary>
     public static Issue MigrateLinkedPrToTags(Issue issue)
     {
-        if (!issue.LinkedPR.HasValue)
-        {
-            return issue;
-        }
-
-        var newTags = KeyedTag.AddValue(issue.Tags, KeyedTag.LinkedPrKey, issue.LinkedPR.Value.ToString());
-
-        // Determine the tags timestamp - use LinkedPR timestamp if available, otherwise use existing tags timestamp
-        var tagsTimestamp = issue.LinkedPRLastUpdate ?? issue.TagsLastUpdate;
-        if (tagsTimestamp == default)
-        {
-            tagsTimestamp = issue.LastUpdate;
-        }
-
-        // Determine the tags modified by - prefer LinkedPR modifier if available
-        var tagsModifiedBy = issue.LinkedPRModifiedBy ?? issue.TagsModifiedBy;
-
-        return issue with
-        {
-            Tags = newTags,
-            TagsLastUpdate = tagsTimestamp,
-            TagsModifiedBy = tagsModifiedBy,
-            LinkedPR = null,
-            LinkedPRLastUpdate = null,
-            LinkedPRModifiedBy = null
-        };
+        return FunctionalCore.Migration.MigrateLinkedPrToTags(issue);
     }
 }
