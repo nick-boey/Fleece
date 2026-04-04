@@ -5,7 +5,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class MergeCommand(IMergeService mergeService) : AsyncCommand<MergeSettings>
+public sealed class MergeCommand(IFleeceService fleeceService) : AsyncCommand<MergeSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, MergeSettings settings)
     {
@@ -14,7 +14,7 @@ public sealed class MergeCommand(IMergeService mergeService) : AsyncCommand<Merg
             AnsiConsole.MarkupLine("[yellow]Dry run mode - no changes will be made[/]");
         }
 
-        var mergedCount = await mergeService.FindAndResolveDuplicatesAsync(settings.DryRun);
+        var mergedCount = await fleeceService.MergeAsync(settings.DryRun);
 
         if (mergedCount == 0)
         {

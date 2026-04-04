@@ -6,12 +6,11 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class DiffCommand(IDiffService diffService, IStorageServiceProvider storageServiceProvider) : AsyncCommand<DiffSettings>
+public sealed class DiffCommand(IDiffService diffService, IFleeceService fleeceService) : AsyncCommand<DiffSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, DiffSettings settings)
     {
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {Markup.Escape(message)}");

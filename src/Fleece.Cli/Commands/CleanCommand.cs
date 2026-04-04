@@ -7,12 +7,11 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class CleanCommand(ICleanService cleanService, IStorageServiceProvider storageServiceProvider) : AsyncCommand<CleanSettings>
+public sealed class CleanCommand(IFleeceService fleeceService) : AsyncCommand<CleanSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, CleanSettings settings)
     {
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
@@ -24,7 +23,7 @@ public sealed class CleanCommand(ICleanService cleanService, IStorageServiceProv
             AnsiConsole.MarkupLine("[yellow]Dry run mode - no changes will be made[/]");
         }
 
-        var result = await cleanService.CleanAsync(
+        var result = await fleeceService.CleanAsync(
             includeComplete: settings.IncludeComplete,
             includeClosed: settings.IncludeClosed,
             includeArchived: settings.IncludeArchived,
