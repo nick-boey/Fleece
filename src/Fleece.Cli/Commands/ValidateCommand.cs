@@ -6,13 +6,12 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class ValidateCommand(IValidationService validationService, IStorageServiceProvider storageServiceProvider)
+public sealed class ValidateCommand(IFleeceService fleeceService)
     : AsyncCommand<ValidateSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ValidateSettings settings)
     {
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
@@ -25,7 +24,7 @@ public sealed class ValidateCommand(IValidationService validationService, IStora
             AnsiConsole.WriteLine();
         }
 
-        var result = await validationService.ValidateDependencyCyclesAsync();
+        var result = await fleeceService.ValidateDependenciesAsync();
 
         if (settings.Json)
         {
