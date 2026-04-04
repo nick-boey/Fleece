@@ -16,12 +16,8 @@ namespace Fleece.Cli.Tests.Commands;
 [TestFixture]
 public class ListCommandTests
 {
-    private IIssueService _issueService = null!;
-    private IStorageService _storageService = null!;
-    private IStorageServiceProvider _storageServiceProvider = null!;
-    private IIssueServiceFactory _issueServiceFactory = null!;
+    private IFleeceService _fleeceService = null!;
     private ISyncStatusService _syncStatusService = null!;
-    private ISearchService _searchService = null!;
     private ISettingsService _settingsService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
@@ -32,26 +28,15 @@ public class ListCommandTests
     [SetUp]
     public void SetUp()
     {
-        _issueService = Substitute.For<IIssueService>();
-        _storageService = Substitute.For<IStorageService>();
-        _storageService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
+        _fleeceService = Substitute.For<IFleeceService>();
+        _fleeceService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
             .Returns((false, string.Empty));
-        _storageService.LoadIssuesWithDiagnosticsAsync(Arg.Any<CancellationToken>())
+        _fleeceService.LoadIssuesWithDiagnosticsAsync(Arg.Any<CancellationToken>())
             .Returns(new LoadIssuesResult());
-
-        _storageServiceProvider = Substitute.For<IStorageServiceProvider>();
-        _storageServiceProvider.GetStorageService(Arg.Any<string?>())
-            .Returns(_storageService);
-
-        _issueServiceFactory = Substitute.For<IIssueServiceFactory>();
-        _issueServiceFactory.GetIssueService(Arg.Any<string?>())
-            .Returns(_issueService);
 
         _syncStatusService = Substitute.For<ISyncStatusService>();
         _syncStatusService.GetSyncStatusesAsync(Arg.Any<CancellationToken>())
             .Returns(new Dictionary<string, SyncStatus>());
-
-        _searchService = Substitute.For<ISearchService>();
 
         _settingsService = Substitute.For<ISettingsService>();
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
@@ -68,7 +53,7 @@ public class ListCommandTests
                 }
             });
 
-        _command = new ListCommand(_issueServiceFactory, _storageServiceProvider, _syncStatusService, _searchService, _settingsService);
+        _command = new ListCommand(_fleeceService, _syncStatusService, _settingsService);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;
@@ -106,7 +91,7 @@ public class ListCommandTests
             .WithType(IssueType.Bug)
             .Build();
 
-        _issueService.FilterAsync(
+        _fleeceService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
                 Arg.Any<bool>(),
@@ -144,7 +129,7 @@ public class ListCommandTests
             .WithType(IssueType.Feature)
             .Build();
 
-        _issueService.FilterAsync(
+        _fleeceService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
                 Arg.Any<bool>(),
@@ -172,7 +157,7 @@ public class ListCommandTests
             .WithType(IssueType.Chore)
             .Build();
 
-        _issueService.FilterAsync(
+        _fleeceService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
                 Arg.Any<bool>(),
@@ -194,7 +179,7 @@ public class ListCommandTests
     [Test]
     public async Task ExecuteAsync_OneLine_EmptyList_ShowsNoIssuesMessage()
     {
-        _issueService.FilterAsync(
+        _fleeceService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
                 Arg.Any<bool>(),
@@ -225,8 +210,8 @@ public class ListCommandTests
             .Build();
 
         var query = new SearchQuery { Tokens = [] };
-        _searchService.ParseQuery("login").Returns(query);
-        _searchService.SearchWithFiltersAsync(
+        _fleeceService.ParseSearchQuery("login").Returns(query);
+        _fleeceService.SearchWithFiltersAsync(
                 query,
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
@@ -239,16 +224,16 @@ public class ListCommandTests
 
         result.Should().Be(0);
 
-        // Verify search service was called
-        _searchService.Received(1).ParseQuery("login");
-        await _searchService.Received(1).SearchWithFiltersAsync(
+        // Verify search was called on fleece service
+        _fleeceService.Received(1).ParseSearchQuery("login");
+        await _fleeceService.Received(1).SearchWithFiltersAsync(
             query,
             Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
             Arg.Any<bool>(), Arg.Any<CancellationToken>());
 
-        // Verify issue service FilterAsync was NOT called
-        await _issueService.DidNotReceive().FilterAsync(
+        // Verify FilterAsync was NOT called
+        await _fleeceService.DidNotReceive().FilterAsync(
             Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
             Arg.Any<bool>(), Arg.Any<CancellationToken>());
@@ -265,8 +250,8 @@ public class ListCommandTests
             .Build();
 
         var query = new SearchQuery { Tokens = [] };
-        _searchService.ParseQuery("type:bug").Returns(query);
-        _searchService.SearchWithFiltersAsync(
+        _fleeceService.ParseSearchQuery("type:bug").Returns(query);
+        _fleeceService.SearchWithFiltersAsync(
                 query,
                 IssueStatus.Open,  // CLI status filter
                 Arg.Any<IssueType?>(),
@@ -285,7 +270,7 @@ public class ListCommandTests
         result.Should().Be(0);
 
         // Verify search service received CLI status filter
-        await _searchService.Received(1).SearchWithFiltersAsync(
+        await _fleeceService.Received(1).SearchWithFiltersAsync(
             query,
             IssueStatus.Open,  // CLI status passed through
             Arg.Any<IssueType?>(),
@@ -315,8 +300,8 @@ public class ListCommandTests
             .Build();
 
         var query = new SearchQuery { Tokens = [] };
-        _searchService.ParseQuery("login").Returns(query);
-        _searchService.SearchWithFiltersAsync(
+        _fleeceService.ParseSearchQuery("login").Returns(query);
+        _fleeceService.SearchWithFiltersAsync(
                 query,
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
@@ -338,8 +323,8 @@ public class ListCommandTests
     public async Task ExecuteAsync_SearchNoResults_ShowsNoIssuesMessage()
     {
         var query = new SearchQuery { Tokens = [] };
-        _searchService.ParseQuery("nonexistent").Returns(query);
-        _searchService.SearchWithFiltersAsync(
+        _fleeceService.ParseSearchQuery("nonexistent").Returns(query);
+        _fleeceService.SearchWithFiltersAsync(
                 query,
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
@@ -366,7 +351,7 @@ public class ListCommandTests
             .WithType(IssueType.Task)
             .Build();
 
-        _issueService.FilterAsync(
+        _fleeceService.FilterAsync(
                 Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
                 Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
                 Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -378,14 +363,14 @@ public class ListCommandTests
 
         result.Should().Be(0);
 
-        // Verify filter service was called (not search)
-        await _issueService.Received(1).FilterAsync(
+        // Verify filter was called (not search)
+        await _fleeceService.Received(1).FilterAsync(
             Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
             Arg.Any<bool>(), Arg.Any<CancellationToken>());
 
-        // Verify search service was NOT called
-        _searchService.DidNotReceive().ParseQuery(Arg.Any<string?>());
+        // Verify search was NOT called
+        _fleeceService.DidNotReceive().ParseSearchQuery(Arg.Any<string?>());
     }
 
     #endregion

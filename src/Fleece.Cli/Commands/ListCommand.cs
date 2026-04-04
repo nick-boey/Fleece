@@ -9,17 +9,13 @@ using Spectre.Console.Cli;
 namespace Fleece.Cli.Commands;
 
 public sealed class ListCommand(
-    IIssueServiceFactory issueServiceFactory,
-    IStorageServiceProvider storageServiceProvider,
+    IFleeceService fleeceService,
     ISyncStatusService syncStatusService,
-    ISearchService searchService,
     ISettingsService settingsService) : AsyncCommand<ListSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ListSettings settings)
     {
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        var issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
@@ -136,7 +132,7 @@ public sealed class ListCommand(
             HashSet<string>? nextHierarchyIds = null;
             if (!string.IsNullOrWhiteSpace(settings.IssueId))
             {
-                var matches = await issueService.ResolveByPartialIdAsync(settings.IssueId);
+                var matches = await fleeceService.ResolveByPartialIdAsync(settings.IssueId);
 
                 if (matches.Count == 0)
                 {
@@ -157,7 +153,7 @@ public sealed class ListCommand(
                 var targetIssue = matches[0];
 
                 // Get hierarchy-filtered issues
-                var hierarchyIssues = await issueService.GetIssueHierarchyAsync(
+                var hierarchyIssues = await fleeceService.GetIssueHierarchyAsync(
                     targetIssue.Id,
                     includeParents: !settings.ChildrenOnly,
                     includeChildren: !settings.ParentsOnly);
@@ -194,8 +190,8 @@ public sealed class ListCommand(
             if (!string.IsNullOrWhiteSpace(settings.Search))
             {
                 // Build filtered graph with search
-                var query = searchService.ParseQuery(settings.Search);
-                var searchResult = await searchService.SearchWithContextAsync(
+                var query = fleeceService.ParseSearchQuery(settings.Search);
+                var searchResult = await fleeceService.SearchWithContextAsync(
                     query,
                     status,
                     type,
@@ -222,16 +218,16 @@ public sealed class ListCommand(
                     return 0;
                 }
 
-                graph = await issueService.BuildFilteredTaskGraphLayoutAsync(matchedIds, sortConfig: sortConfig);
+                graph = await fleeceService.BuildFilteredTaskGraphLayoutAsync(matchedIds, sortConfig: sortConfig);
             }
             else if (nextHierarchyIds is not null)
             {
                 // Use hierarchy filter for --next mode
-                graph = await issueService.BuildFilteredTaskGraphLayoutAsync(nextHierarchyIds, sortConfig: sortConfig);
+                graph = await fleeceService.BuildFilteredTaskGraphLayoutAsync(nextHierarchyIds, sortConfig: sortConfig);
             }
             else
             {
-                graph = await issueService.BuildTaskGraphLayoutAsync(
+                graph = await fleeceService.BuildTaskGraphLayoutAsync(
                     inactiveVisibility: inactiveVisibility,
                     assignedTo: assignedTo,
                     sortConfig: sortConfig);
@@ -244,7 +240,7 @@ public sealed class ListCommand(
         // --- Tree mode and default list mode share filtering/diagnostics ---
 
         // Load issues with diagnostics (only for non-next modes)
-        var loadResult = await storageService.LoadIssuesWithDiagnosticsAsync();
+        var loadResult = await fleeceService.LoadIssuesWithDiagnosticsAsync();
         var hasWarnings = DiagnosticFormatter.RenderDiagnostics(loadResult.Diagnostics);
 
         // Fail early in strict mode if there are warnings
@@ -265,7 +261,7 @@ public sealed class ListCommand(
         HashSet<string>? hierarchyIds = null;
         if (!string.IsNullOrWhiteSpace(settings.IssueId))
         {
-            var matches = await issueService.ResolveByPartialIdAsync(settings.IssueId);
+            var matches = await fleeceService.ResolveByPartialIdAsync(settings.IssueId);
 
             if (matches.Count == 0)
             {
@@ -286,7 +282,7 @@ public sealed class ListCommand(
             var targetIssue = matches[0];
 
             // Get hierarchy-filtered issues
-            var hierarchyIssues = await issueService.GetIssueHierarchyAsync(
+            var hierarchyIssues = await fleeceService.GetIssueHierarchyAsync(
                 targetIssue.Id,
                 includeParents: !settings.ChildrenOnly,
                 includeChildren: !settings.ParentsOnly);
@@ -296,13 +292,13 @@ public sealed class ListCommand(
                 StringComparer.OrdinalIgnoreCase);
         }
 
-        // Apply filtering via the issue service or search service
+        // Apply filtering via the fleece service or search
         IReadOnlyList<Issue> issues;
         if (!string.IsNullOrWhiteSpace(settings.Search))
         {
-            // Use search service when --search is specified
-            var query = searchService.ParseQuery(settings.Search);
-            issues = await searchService.SearchWithFiltersAsync(
+            // Use search when --search is specified
+            var query = fleeceService.ParseSearchQuery(settings.Search);
+            issues = await fleeceService.SearchWithFiltersAsync(
                 query,
                 status,
                 type,
@@ -315,7 +311,7 @@ public sealed class ListCommand(
         else
         {
             // Use standard filtering
-            issues = await issueService.FilterAsync(
+            issues = await fleeceService.FilterAsync(
                 status,
                 type,
                 settings.Priority,
@@ -334,7 +330,7 @@ public sealed class ListCommand(
         // --- Tree mode ---
         if (isTree)
         {
-            return await ExecuteTreeMode(issueService, issues.ToList(), settings);
+            return await ExecuteTreeMode(fleeceService, issues.ToList(), settings);
         }
 
         // --- Default list mode ---
@@ -362,7 +358,7 @@ public sealed class ListCommand(
     }
 
     private static async Task<int> ExecuteTreeMode(
-        IIssueService issueService,
+        IFleeceService fleeceService,
         List<Issue> issueList,
         ListSettings settings)
     {
@@ -371,7 +367,7 @@ public sealed class ListCommand(
         Issue? rootIssue = null;
         if (string.IsNullOrWhiteSpace(settings.IssueId) && !string.IsNullOrWhiteSpace(settings.TreeRoot))
         {
-            var matches = await issueService.ResolveByPartialIdAsync(settings.TreeRoot);
+            var matches = await fleeceService.ResolveByPartialIdAsync(settings.TreeRoot);
 
             if (matches.Count == 0)
             {

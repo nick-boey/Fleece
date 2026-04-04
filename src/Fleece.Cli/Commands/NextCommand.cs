@@ -10,13 +10,11 @@ namespace Fleece.Cli.Commands;
 /// <summary>
 /// Command to find issues that can be worked on next based on dependencies and execution mode.
 /// </summary>
-public sealed class NextCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider) : AsyncCommand<NextSettings>
+public sealed class NextCommand(IFleeceService fleeceService) : AsyncCommand<NextSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, NextSettings settings)
     {
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        var issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
@@ -27,7 +25,7 @@ public sealed class NextCommand(IIssueServiceFactory issueServiceFactory, IStora
         string? resolvedParentId = null;
         if (!string.IsNullOrWhiteSpace(settings.Parent))
         {
-            var matches = await issueService.ResolveByPartialIdAsync(settings.Parent);
+            var matches = await fleeceService.ResolveByPartialIdAsync(settings.Parent);
 
             if (matches.Count == 0)
             {
@@ -67,7 +65,7 @@ public sealed class NextCommand(IIssueServiceFactory issueServiceFactory, IStora
             }
         }
 
-        var issues = await issueService.GetNextIssuesAsync(resolvedParentId, sortConfig: sortConfig);
+        var issues = await fleeceService.GetNextIssuesAsync(resolvedParentId, sortConfig: sortConfig);
 
         if (settings.Json || settings.JsonVerbose)
         {

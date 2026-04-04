@@ -6,20 +6,18 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class SearchCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider) : AsyncCommand<SearchSettings>
+public sealed class SearchCommand(IFleeceService fleeceService) : AsyncCommand<SearchSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, SearchSettings settings)
     {
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        var issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
-        var issues = await issueService.SearchAsync(settings.Query);
+        var issues = await fleeceService.SearchAsync(settings.Query);
 
         if (settings.Json || settings.JsonVerbose)
         {
