@@ -11,15 +11,11 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class QuestionCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider) : AsyncCommand<QuestionSettings>
+public sealed class QuestionCommand(IFleeceService fleeceService) : AsyncCommand<QuestionSettings>
 {
-    private IIssueService? _issueService;
-
     public override async Task<int> ExecuteAsync(CommandContext context, QuestionSettings settings)
     {
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        _issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
@@ -27,7 +23,7 @@ public sealed class QuestionCommand(IIssueServiceFactory issueServiceFactory, IS
         }
 
         // Resolve the issue ID (supports partial IDs)
-        var matches = await _issueService!.ResolveByPartialIdAsync(settings.Id);
+        var matches = await fleeceService.ResolveByPartialIdAsync(settings.Id);
 
         if (matches.Count == 0)
         {
@@ -92,7 +88,7 @@ public sealed class QuestionCommand(IIssueServiceFactory issueServiceFactory, IS
 
         foreach (var q in questions)
         {
-            var answeredStatus = q.Answer is not null ? "[green]✓[/]" : "[yellow]?[/]";
+            var answeredStatus = q.Answer is not null ? "[green]\u2713[/]" : "[yellow]?[/]";
             AnsiConsole.MarkupLine($"{answeredStatus} [bold]{q.Id}[/]: {Markup.Escape(q.Text)}");
 
             if (q.AskedBy is not null)
@@ -136,7 +132,7 @@ public sealed class QuestionCommand(IIssueServiceFactory issueServiceFactory, IS
 
         try
         {
-            var updated = await _issueService!.UpdateQuestionsAsync(issue.Id, updatedQuestions);
+            var updated = await fleeceService.UpdateQuestionsAsync(issue.Id, updatedQuestions);
 
             if (json)
             {
@@ -182,7 +178,7 @@ public sealed class QuestionCommand(IIssueServiceFactory issueServiceFactory, IS
 
         try
         {
-            var updated = await _issueService!.UpdateQuestionsAsync(issue.Id, questions);
+            var updated = await fleeceService.UpdateQuestionsAsync(issue.Id, questions);
 
             if (json)
             {

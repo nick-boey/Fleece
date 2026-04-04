@@ -7,13 +7,12 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class DependencyCommand(IDependencyService dependencyService, IStorageServiceProvider storageServiceProvider)
+public sealed class DependencyCommand(IFleeceService fleeceService)
     : AsyncCommand<DependencySettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, DependencySettings settings)
     {
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
@@ -26,7 +25,7 @@ public sealed class DependencyCommand(IDependencyService dependencyService, ISto
 
             if (settings.Remove)
             {
-                result = await dependencyService.RemoveDependencyAsync(
+                result = await fleeceService.RemoveDependencyAsync(
                     settings.ParentId!, settings.ChildId!);
 
                 if (settings.Json)
@@ -44,7 +43,7 @@ public sealed class DependencyCommand(IDependencyService dependencyService, ISto
             {
                 var position = MapPosition(settings);
 
-                result = await dependencyService.AddDependencyAsync(
+                result = await fleeceService.AddDependencyAsync(
                     settings.ParentId!,
                     settings.ChildId!,
                     position,

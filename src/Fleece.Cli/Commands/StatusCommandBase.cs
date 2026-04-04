@@ -7,7 +7,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public abstract class StatusCommandBase(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider)
+public abstract class StatusCommandBase(IFleeceService fleeceService)
     : AsyncCommand<StatusSettings>
 {
     protected abstract IssueStatus TargetStatus { get; }
@@ -21,11 +21,8 @@ public abstract class StatusCommandBase(IIssueServiceFactory issueServiceFactory
             return 1;
         }
 
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        var issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
-
         // Check for unmerged files
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
@@ -38,7 +35,7 @@ public abstract class StatusCommandBase(IIssueServiceFactory issueServiceFactory
 
         foreach (var id in settings.Ids)
         {
-            var matches = await issueService.ResolveByPartialIdAsync(id);
+            var matches = await fleeceService.ResolveByPartialIdAsync(id);
 
             if (matches.Count == 0)
             {
@@ -71,7 +68,7 @@ public abstract class StatusCommandBase(IIssueServiceFactory issueServiceFactory
         {
             try
             {
-                var issue = await issueService.UpdateAsync(
+                var issue = await fleeceService.UpdateAsync(
                     id: resolvedId,
                     status: TargetStatus);
                 updatedIssues.Add(issue);
