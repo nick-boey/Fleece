@@ -14,10 +14,9 @@ namespace Fleece.Cli.Tests.Commands;
 [TestFixture]
 public class ShowCommandTests
 {
-    private IIssueService _issueService = null!;
-    private IStorageService _storageService = null!;
-    private IStorageServiceProvider _storageServiceProvider = null!;
-    private IIssueServiceFactory _issueServiceFactory = null!;
+    private IFleeceService _fleeceService = null!;
+    private ISettingsService _settingsService = null!;
+    private IGitConfigService _gitConfigService = null!;
     private ShowCommand _command = null!;
     private CommandContext _context = null!;
     private StringWriter _consoleOutput = null!;
@@ -27,20 +26,14 @@ public class ShowCommandTests
     [SetUp]
     public void SetUp()
     {
-        _issueService = Substitute.For<IIssueService>();
-        _storageService = Substitute.For<IStorageService>();
-        _storageService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
+        _fleeceService = Substitute.For<IFleeceService>();
+        _fleeceService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
             .Returns((false, string.Empty));
 
-        _storageServiceProvider = Substitute.For<IStorageServiceProvider>();
-        _storageServiceProvider.GetStorageService(Arg.Any<string?>())
-            .Returns(_storageService);
+        _settingsService = Substitute.For<ISettingsService>();
+        _gitConfigService = Substitute.For<IGitConfigService>();
 
-        _issueServiceFactory = Substitute.For<IIssueServiceFactory>();
-        _issueServiceFactory.GetIssueService(Arg.Any<string?>())
-            .Returns(_issueService);
-
-        _command = new ShowCommand(_issueServiceFactory, _storageServiceProvider);
+        _command = new ShowCommand(_fleeceService, _settingsService, _gitConfigService);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "show", null);
 
         _originalConsole = Console.Out;
@@ -97,9 +90,9 @@ public class ShowCommandTests
 
         var allIssues = new List<Issue> { parent, child1, child2, child3 };
 
-        _issueService.ResolveByPartialIdAsync("child2", Arg.Any<CancellationToken>())
+        _fleeceService.ResolveByPartialIdAsync("child2", Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { child2 });
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>())
             .Returns(allIssues);
 
         var settings = new ShowSettings { Id = "child2" };
@@ -142,9 +135,9 @@ public class ShowCommandTests
 
         var allIssues = new List<Issue> { parent, child };
 
-        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+        _fleeceService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { child });
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>())
             .Returns(allIssues);
 
         var settings = new ShowSettings { Id = "child1", Json = true };
@@ -190,9 +183,9 @@ public class ShowCommandTests
 
         var allIssues = new List<Issue> { parent, child1, child2 };
 
-        _issueService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
+        _fleeceService.ResolveByPartialIdAsync("parent1", Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { parent });
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>())
             .Returns(allIssues);
 
         var settings = new ShowSettings { Id = "parent1", Json = true };
@@ -231,7 +224,7 @@ public class ShowCommandTests
             .Build();
 
         // Note: with --json-verbose, GetAllAsync should NOT be called
-        _issueService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
+        _fleeceService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { child });
 
         var settings = new ShowSettings { Id = "child1", JsonVerbose = true };
@@ -265,6 +258,6 @@ public class ShowCommandTests
         parentIssues.GetArrayLength().Should().Be(1);
 
         // GetAllAsync should not be called in verbose mode
-        await _issueService.DidNotReceive().GetAllAsync(Arg.Any<CancellationToken>());
+        await _fleeceService.DidNotReceive().GetAllAsync(Arg.Any<CancellationToken>());
     }
 }

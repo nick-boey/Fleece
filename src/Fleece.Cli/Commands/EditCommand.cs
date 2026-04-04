@@ -2,21 +2,25 @@ using Fleece.Cli.Output;
 using Fleece.Cli.Services;
 using Fleece.Cli.Settings;
 using Fleece.Core.Models;
+using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class EditCommand(IIssueServiceFactory issueServiceFactory, IStorageServiceProvider storageServiceProvider) : AsyncCommand<EditSettings>
+public sealed class EditCommand(IFleeceService fleeceService, ISettingsService settingsService, IGitConfigService gitConfigService) : AsyncCommand<EditSettings>
 {
-    private IIssueService? _issueService;
+    private IFleeceService _fleece = fleeceService;
 
     public override async Task<int> ExecuteAsync(CommandContext context, EditSettings settings)
     {
-        var storageService = storageServiceProvider.GetStorageService(settings.IssuesFile);
-        _issueService = issueServiceFactory.GetIssueService(settings.IssuesFile);
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        if (!string.IsNullOrWhiteSpace(settings.IssuesFile))
+        {
+            _fleece = FleeceService.ForFile(settings.IssuesFile, settingsService, gitConfigService);
+        }
+
+        var (hasMultiple, message) = await _fleece.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
@@ -24,7 +28,7 @@ public sealed class EditCommand(IIssueServiceFactory issueServiceFactory, IStora
         }
 
         // Resolve partial ID first
-        var matches = await _issueService!.ResolveByPartialIdAsync(settings.Id);
+        var matches = await _fleece.ResolveByPartialIdAsync(settings.Id);
 
         if (matches.Count == 0)
         {
@@ -94,7 +98,7 @@ public sealed class EditCommand(IIssueServiceFactory issueServiceFactory, IStora
 
         try
         {
-            var issue = await _issueService!.UpdateAsync(
+            var issue = await _fleece.UpdateAsync(
                 id: resolvedId,
                 title: settings.Title,
                 description: settings.Description,
@@ -148,7 +152,7 @@ public sealed class EditCommand(IIssueServiceFactory issueServiceFactory, IStora
     private async Task<int> EditWithEditorAsync(EditSettings settings, string resolvedId)
     {
         // Get the existing issue using the already-resolved ID
-        var existingIssue = await _issueService!.GetByIdAsync(resolvedId);
+        var existingIssue = await _fleece.GetByIdAsync(resolvedId);
         if (existingIssue is null)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{resolvedId}' not found");
@@ -222,7 +226,7 @@ public sealed class EditCommand(IIssueServiceFactory issueServiceFactory, IStora
                 tags = [];
             }
 
-            var issue = await _issueService!.UpdateAsync(
+            var issue = await _fleece.UpdateAsync(
                 id: resolvedId,
                 title: template.Title,
                 description: template.Description,
