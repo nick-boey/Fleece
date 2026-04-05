@@ -1,53 +1,532 @@
+using Fleece.Core.FunctionalCore;
 using Fleece.Core.Models;
-using Fleece.Core.Services;
-using Fleece.Core.Services.Interfaces;
 using Fleece.Core.Tests.TestHelpers;
 using FluentAssertions;
-using NSubstitute;
 using NUnit.Framework;
 
-namespace Fleece.Core.Tests.Services;
+namespace Fleece.Core.Tests.FunctionalCore;
 
-/// <summary>
-/// Tests for graph methods (BuildGraphAsync, QueryGraphAsync, GetNextIssuesAsync, BuildTaskGraphLayoutAsync)
-/// which are now part of IssueService.
-/// </summary>
 [TestFixture]
-public class IssueServiceGraphTests
+public class IssuesTests
 {
-    private IStorageService _storageService = null!;
-    private IssueService _sut = null!;
-
-    [SetUp]
-    public void SetUp()
-    {
-        _storageService = Substitute.For<IStorageService>();
-        var idGenerator = Substitute.For<IIdGenerator>();
-        var gitConfigService = Substitute.For<IGitConfigService>();
-        var tagService = new TagService();
-        _sut = new IssueService(_storageService, idGenerator, gitConfigService, tagService);
-    }
-
-    #region BuildGraphAsync Basic Tests
+    #region Search Tests
 
     [Test]
-    public async Task BuildGraphAsync_WithNoIssues_ReturnsEmptyGraph()
+    public void Search_FindsMatchesInTitle()
     {
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([]);
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Fix login bug", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Add feature", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+        };
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.Search(issues, "login");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Search_FindsMatchesInDescription()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Bug", Description = "Users cannot login", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Feature", Description = "Add new button", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Search(issues, "login");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Search_FindsMatchesInTags()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Fix bug", Tags = ["backend", "api"], Status = IssueStatus.Progress, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Add feature", Tags = ["frontend"], Status = IssueStatus.Progress, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Search(issues, "backend");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Search_FindsIssuesByKeyedTagSyntax()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Frontend Task", Tags = ["project=frontend", "api"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Backend Task", Tags = ["project=backend"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "Other Task", Tags = ["misc"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Search(issues, "project:frontend");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Search_KeyedTagSearch_IsCaseInsensitive()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Frontend Task", Tags = ["PROJECT=FRONTEND"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Search(issues, "project:frontend");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Search_FallsBackToSubstringSearch_WhenNoColonPattern()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Fix login bug", Tags = ["project=frontend"], Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Add feature", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Search(issues, "login");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Search_UsesSubstringSearch_WhenQueryHasSpaces()
+    {
+        // If query has spaces, it can't be a keyed tag search
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Fix project:frontend issue", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Search(issues, "Fix project:frontend");
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Search_UsesSubstringSearch_WhenColonAtStart()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Issue with :value", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        // ":value" should not trigger keyed tag search
+        var result = Issues.Search(issues, ":value");
+
+        result.Should().HaveCount(1);
+    }
+
+    [Test]
+    public void Search_UsesSubstringSearch_WhenColonAtEnd()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "Issue with key:", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        // "key:" should not trigger keyed tag search
+        var result = Issues.Search(issues, "key:");
+
+        result.Should().HaveCount(1);
+    }
+
+    #endregion
+
+    #region Filter Tests
+
+    [Test]
+    public void Filter_FiltersByStatus()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, status: IssueStatus.Open);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Filter_FiltersByType()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, type: IssueType.Bug);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Filter_CombinesFilters()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Bug, Priority = 2, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Complete, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, status: IssueStatus.Open, type: IssueType.Bug, priority: 1);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Filter_FiltersBySingleTag()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["backend", "api"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = [], LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, tags: ["backend"]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Filter_FiltersByMultipleTags_OrLogic()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["backend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["docs"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, tags: ["backend", "frontend"]);
+
+        result.Should().HaveCount(2);
+        result.Select(i => i.Id).Should().Contain(["a", "b"]);
+    }
+
+    [Test]
+    public void Filter_FiltersByLinkedPr_FromTags()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["hsp-linked-pr=123"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["hsp-linked-pr=456"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = [], LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, linkedPr: 123);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Filter_FiltersByLinkedPr_FallsBackToLegacyField()
+    {
+        // Test backward compatibility with deprecated LinkedPR field
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, LinkedPR = 123, Tags = [], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["hsp-linked-pr=456"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, linkedPr: 123);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Filter_TagFilterIsCaseInsensitive()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["Backend", "API"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["frontend"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, tags: ["backend"]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Filter_ExcludesTerminalStatuses_ByDefault()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Draft, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "d", Title = "D", Status = IssueStatus.Progress, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "e", Title = "E", Status = IssueStatus.Review, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "f", Title = "F", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "g", Title = "G", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "h", Title = "H", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "i", Title = "I", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues);
+
+        // Draft is non-terminal, so it should be included
+        result.Should().HaveCount(5);
+        result.Select(i => i.Id).Should().Contain(["a", "b", "c", "d", "e"]);
+        result.Select(i => i.Id).Should().NotContain(["f", "g", "h", "i"]);
+    }
+
+    [Test]
+    public void Filter_IncludesTerminalStatuses_WhenIncludeTerminalIsTrue()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "d", Title = "D", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "e", Title = "E", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, includeTerminal: true);
+
+        result.Should().HaveCount(5);
+        result.Select(i => i.Id).Should().Contain(["a", "b", "c", "d", "e"]);
+    }
+
+    [Test]
+    public void Filter_IncludesTerminalStatus_WhenExplicitlyFiltered()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        // When a specific terminal status is requested, it should be returned even without includeTerminal
+        var result = Issues.Filter(issues, status: IssueStatus.Complete);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("b");
+    }
+
+    [Test]
+    public void Filter_ExcludesAllTerminalStatuses_Complete()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues);
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    public void Filter_ExcludesAllTerminalStatuses_Archived()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues);
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    public void Filter_ExcludesAllTerminalStatuses_Closed()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues);
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    public void Filter_ExcludesAllTerminalStatuses_Deleted()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues);
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    public void Filter_CombinesTerminalFilterWithOtherFilters()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Complete, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, type: IssueType.Bug, priority: 1);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Filter_FiltersByTag_WhenIssueTagsIsNull()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = null!, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["backend"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, tags: ["backend"]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("b");
+    }
+
+    [Test]
+    public void Filter_IncludesDraftStatus_ByDefault()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Draft, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues);
+
+        result.Should().HaveCount(2);
+        result.Select(i => i.Id).Should().Contain(["a", "b"]);
+    }
+
+    [Test]
+    public void Filter_FiltersByKeyedTagWithKeyValue()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=backend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, tags: ["project=frontend"]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Filter_FiltersByTagKeyOnly_MatchesAllValues()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=backend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, tags: ["project"]);
+
+        result.Should().HaveCount(2);
+        result.Select(i => i.Id).Should().BeEquivalentTo(["a", "b"]);
+    }
+
+    [Test]
+    public void Filter_FiltersByMultipleKeyedTags_OrLogic()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend", "priority=high"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend", "priority=low"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["priority=high"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, tags: ["project=frontend", "priority=high"]);
+
+        result.Should().HaveCount(3);
+    }
+
+    [Test]
+    public void Filter_CombinesKeyedTagWithOtherFilters()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Bug, Tags = ["project=backend"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, type: IssueType.Bug, tags: ["project=frontend"]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    [Test]
+    public void Filter_TagKeyOnly_MatchesSimpleTagsToo()
+    {
+        var issues = new List<Issue>
+        {
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["urgent"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
+        };
+
+        var result = Issues.Filter(issues, tags: ["urgent"]);
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be("a");
+    }
+
+    #endregion
+
+    #region BuildGraph Basic Tests
+
+    [Test]
+    public void BuildGraph_WithNoIssues_ReturnsEmptyGraph()
+    {
+        var result = Issues.BuildGraph([]);
 
         result.Nodes.Should().BeEmpty();
         result.RootIssueIds.Should().BeEmpty();
     }
 
     [Test]
-    public async Task BuildGraphAsync_WithSingleIssue_ReturnsOneNode()
+    public void BuildGraph_WithSingleIssue_ReturnsOneNode()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Open).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([issue]);
 
         result.Nodes.Should().ContainSingle();
         result.Nodes["issue1"].Issue.Id.Should().Be("issue1");
@@ -55,14 +534,13 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildGraphAsync_ParentChildRelationship_CorrectChildAndParentIds()
+    public void BuildGraph_ParentChildRelationship_CorrectChildAndParentIds()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([parent, child]);
 
         result.Nodes.Should().HaveCount(2);
 
@@ -85,7 +563,7 @@ public class IssueServiceGraphTests
     #region Next/Previous Computation - Series Mode
 
     [Test]
-    public async Task BuildGraphAsync_SeriesParent_FirstChildHasNoPrevious()
+    public void BuildGraph_SeriesParent_FirstChildHasNoPrevious()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Series).Build();
@@ -93,9 +571,8 @@ public class IssueServiceGraphTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([parent, child1, child2]);
 
         var child1Node = result.Nodes["child1"];
         child1Node.PreviousIssueIds.Should().BeEmpty();
@@ -103,7 +580,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildGraphAsync_SeriesParent_MiddleChildHasBothPreviousAndNext()
+    public void BuildGraph_SeriesParent_MiddleChildHasBothPreviousAndNext()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Series).Build();
@@ -113,9 +590,8 @@ public class IssueServiceGraphTests
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
         var child3 = new IssueBuilder().WithId("child3").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "ccc").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2, child3]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([parent, child1, child2, child3]);
 
         var child2Node = result.Nodes["child2"];
         child2Node.PreviousIssueIds.Should().ContainSingle().Which.Should().Be("child1");
@@ -123,7 +599,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildGraphAsync_SeriesParent_LastChildHasNoNext()
+    public void BuildGraph_SeriesParent_LastChildHasNoNext()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Series).Build();
@@ -131,9 +607,8 @@ public class IssueServiceGraphTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([parent, child1, child2]);
 
         var child2Node = result.Nodes["child2"];
         child2Node.PreviousIssueIds.Should().ContainSingle().Which.Should().Be("child1");
@@ -145,7 +620,7 @@ public class IssueServiceGraphTests
     #region Next/Previous Computation - Parallel Mode
 
     [Test]
-    public async Task BuildGraphAsync_ParallelParent_AllChildrenHaveEmptyPreviousAndNext()
+    public void BuildGraph_ParallelParent_AllChildrenHaveEmptyPreviousAndNext()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Parallel).Build();
@@ -153,9 +628,8 @@ public class IssueServiceGraphTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([parent, child1, child2]);
 
         result.Nodes["child1"].PreviousIssueIds.Should().BeEmpty();
         result.Nodes["child1"].NextIssueIds.Should().BeEmpty();
@@ -168,13 +642,12 @@ public class IssueServiceGraphTests
     #region Next/Previous Computation - Root Issues
 
     [Test]
-    public async Task BuildGraphAsync_RootIssues_HaveEmptyPreviousAndNext()
+    public void BuildGraph_RootIssues_HaveEmptyPreviousAndNext()
     {
         var issue1 = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Open).Build();
         var issue2 = new IssueBuilder().WithId("issue2").WithStatus(IssueStatus.Open).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue1, issue2]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([issue1, issue2]);
 
         result.Nodes["issue1"].PreviousIssueIds.Should().BeEmpty();
         result.Nodes["issue1"].NextIssueIds.Should().BeEmpty();
@@ -187,7 +660,7 @@ public class IssueServiceGraphTests
     #region Next/Previous Computation - Multi-Parent (DAG)
 
     [Test]
-    public async Task BuildGraphAsync_MultipleSeriesParents_AccumulatesPreviousFromAll()
+    public void BuildGraph_MultipleSeriesParents_AccumulatesPreviousFromAll()
     {
         var parent1 = new IssueBuilder().WithId("parent1").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Series).Build();
@@ -202,9 +675,8 @@ public class IssueServiceGraphTests
                 new ParentIssueRef { ParentIssue = "parent1", SortOrder = "bbb" },
                 new ParentIssueRef { ParentIssue = "parent2", SortOrder = "aaa" })
             .Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent1, parent2, sibling1, multiParent]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([parent1, parent2, sibling1, multiParent]);
 
         // multiParent should have sibling1 as previous (from parent1's series)
         var multiParentNode = result.Nodes["multiParent"];
@@ -216,34 +688,32 @@ public class IssueServiceGraphTests
     #region HasIncompleteChildren / AllPreviousDone
 
     [Test]
-    public async Task BuildGraphAsync_ParentWithOpenChildren_HasIncompleteChildrenIsTrue()
+    public void BuildGraph_ParentWithOpenChildren_HasIncompleteChildrenIsTrue()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([parent, child]);
 
         result.Nodes["parent"].HasIncompleteChildren.Should().BeTrue();
         result.Nodes["child"].HasIncompleteChildren.Should().BeFalse();
     }
 
     [Test]
-    public async Task BuildGraphAsync_ParentWithAllChildrenDone_HasIncompleteChildrenIsFalse()
+    public void BuildGraph_ParentWithAllChildrenDone_HasIncompleteChildrenIsFalse()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Complete)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([parent, child]);
 
         result.Nodes["parent"].HasIncompleteChildren.Should().BeFalse();
     }
 
     [Test]
-    public async Task BuildGraphAsync_SeriesChild_AllPreviousDoneWhenPrevComplete()
+    public void BuildGraph_SeriesChild_AllPreviousDoneWhenPrevComplete()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Series).Build();
@@ -251,15 +721,14 @@ public class IssueServiceGraphTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([parent, child1, child2]);
 
         result.Nodes["child2"].AllPreviousDone.Should().BeTrue();
     }
 
     [Test]
-    public async Task BuildGraphAsync_SeriesChild_AllPreviousDoneFalseWhenPrevOpen()
+    public void BuildGraph_SeriesChild_AllPreviousDoneFalseWhenPrevOpen()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Series).Build();
@@ -267,85 +736,77 @@ public class IssueServiceGraphTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([parent, child1, child2]);
 
         result.Nodes["child2"].AllPreviousDone.Should().BeFalse();
     }
 
     #endregion
 
-    #region GetNextIssuesAsync Tests (ported from NextServiceTests)
+    #region GetNextIssues Tests
 
     [Test]
-    public async Task GetNextIssuesAsync_WithNoIssues_ReturnsEmptyList()
+    public void GetNextIssues_WithNoIssues_ReturnsEmptyList()
     {
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([]);
-
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([]);
 
         result.Should().BeEmpty();
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_WithSingleOpenIssue_ReturnsIssue()
+    public void GetNextIssues_WithSingleOpenIssue_ReturnsIssue()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Open).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([issue]);
 
         result.Should().ContainSingle().Which.Id.Should().Be("issue1");
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_WithClosedIssue_ReturnsEmptyList()
+    public void GetNextIssues_WithClosedIssue_ReturnsEmptyList()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Closed).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([issue]);
 
         result.Should().BeEmpty();
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_WithProgressIssue_ReturnsEmptyList()
+    public void GetNextIssues_WithProgressIssue_ReturnsEmptyList()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Progress).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([issue]);
 
         result.Should().BeEmpty();
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_WithReviewIssue_ReturnsIssue()
+    public void GetNextIssues_WithReviewIssue_ReturnsIssue()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Review).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([issue]);
 
         result.Should().ContainSingle().Which.Id.Should().Be("issue1");
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_WithDraftIssue_ReturnsEmptyList()
+    public void GetNextIssues_WithDraftIssue_ReturnsEmptyList()
     {
         // Draft issues are not actionable - they need to be fully specified first
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Draft).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([issue]);
 
         result.Should().BeEmpty();
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_SeriesParent_OnlyFirstChildIsActionable()
+    public void GetNextIssues_SeriesParent_OnlyFirstChildIsActionable()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Series).Build();
@@ -353,15 +814,14 @@ public class IssueServiceGraphTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([parent, child1, child2]);
 
         result.Select(i => i.Id).Should().BeEquivalentTo(["child1"]);
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_SeriesParent_SecondChildActionableWhenFirstComplete()
+    public void GetNextIssues_SeriesParent_SecondChildActionableWhenFirstComplete()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Series).Build();
@@ -369,15 +829,14 @@ public class IssueServiceGraphTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([parent, child1, child2]);
 
         result.Select(i => i.Id).Should().BeEquivalentTo(["child2"]);
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_ParallelParent_AllChildrenActionable()
+    public void GetNextIssues_ParallelParent_AllChildrenActionable()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Parallel).Build();
@@ -385,66 +844,61 @@ public class IssueServiceGraphTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([parent, child1, child2]);
 
         result.Select(i => i.Id).Should().BeEquivalentTo(["child1", "child2"]);
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_ParentWithIncompleteChildren_IsNotActionable()
+    public void GetNextIssues_ParentWithIncompleteChildren_IsNotActionable()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Parallel).Build();
         var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([parent, child1]);
 
         result.Select(i => i.Id).Should().BeEquivalentTo(["child1"]);
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_ParentWithAllChildrenDone_IsActionable()
+    public void GetNextIssues_ParentWithAllChildrenDone_IsActionable()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Series).Build();
         var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Complete)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([parent, child1]);
 
         result.Select(i => i.Id).Should().BeEquivalentTo(["parent"]);
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_WithParentFilter_ReturnsOnlyDescendants()
+    public void GetNextIssues_WithParentFilter_ReturnsOnlyDescendants()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Parallel).Build();
         var child1 = new IssueBuilder().WithId("child1").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var other = new IssueBuilder().WithId("other").WithStatus(IssueStatus.Open).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, other]);
 
-        var result = await _sut.GetNextIssuesAsync(parentId: "parent");
+        var result = Issues.GetNextIssues([parent, child1, other], parentId: "parent");
 
         result.Select(i => i.Id).Should().BeEquivalentTo(["child1"]);
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_SortsOldestFirst_ByDefault()
+    public void GetNextIssues_SortsOldestFirst_ByDefault()
     {
         var olderIssue = new IssueBuilder().WithId("old1").WithTitle("Older Issue")
             .WithStatus(IssueStatus.Open).WithCreatedAt(DateTimeOffset.UtcNow.AddDays(-2)).Build();
         var newerIssue = new IssueBuilder().WithId("new1").WithTitle("Newer Issue")
             .WithStatus(IssueStatus.Open).WithCreatedAt(DateTimeOffset.UtcNow.AddDays(-1)).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([newerIssue, olderIssue]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([newerIssue, olderIssue]);
 
         result.Should().HaveCount(2);
         result[0].Id.Should().Be("old1");
@@ -452,19 +906,18 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_SortsWithCustomConfig()
+    public void GetNextIssues_SortsWithCustomConfig()
     {
         var noDesc = new IssueBuilder().WithId("noDesc").WithTitle("AAA No Description")
             .WithStatus(IssueStatus.Open).Build();
         var withDesc = new IssueBuilder().WithId("withDesc").WithTitle("ZZZ With Description")
             .WithStatus(IssueStatus.Open).WithDescription("Has a description").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([noDesc, withDesc]);
 
         var sortConfig = new GraphSortConfig
         {
             Rules = [new GraphSortRule(GraphSortCriteria.HasDescription)]
         };
-        var result = await _sut.GetNextIssuesAsync(sortConfig: sortConfig);
+        var result = Issues.GetNextIssues([noDesc, withDesc], sort: sortConfig);
 
         result.Should().HaveCount(2);
         result[0].Id.Should().Be("withDesc");
@@ -472,7 +925,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_SortsByPriorityDescending_WhenConfigured()
+    public void GetNextIssues_SortsByPriorityDescending_WhenConfigured()
     {
         var lowPriority = new IssueBuilder().WithId("low").WithTitle("Low Priority")
             .WithStatus(IssueStatus.Open).WithPriority(5)
@@ -480,13 +933,12 @@ public class IssueServiceGraphTests
         var highPriority = new IssueBuilder().WithId("high").WithTitle("High Priority")
             .WithStatus(IssueStatus.Open).WithPriority(1)
             .WithCreatedAt(DateTimeOffset.UtcNow.AddDays(-1)).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([lowPriority, highPriority]);
 
         var sortConfig = new GraphSortConfig
         {
             Rules = [new GraphSortRule(GraphSortCriteria.Priority, SortDirection.Descending)]
         };
-        var result = await _sut.GetNextIssuesAsync(sortConfig: sortConfig);
+        var result = Issues.GetNextIssues([lowPriority, highPriority], sort: sortConfig);
 
         result.Should().HaveCount(2);
         result[0].Id.Should().Be("low"); // Priority 5 first when descending
@@ -494,19 +946,18 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_SortsByTitleAscending_WhenConfigured()
+    public void GetNextIssues_SortsByTitleAscending_WhenConfigured()
     {
         var issueB = new IssueBuilder().WithId("b").WithTitle("Banana")
             .WithStatus(IssueStatus.Open).Build();
         var issueA = new IssueBuilder().WithId("a").WithTitle("Apple")
             .WithStatus(IssueStatus.Open).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issueB, issueA]);
 
         var sortConfig = new GraphSortConfig
         {
             Rules = [new GraphSortRule(GraphSortCriteria.Title)]
         };
-        var result = await _sut.GetNextIssuesAsync(sortConfig: sortConfig);
+        var result = Issues.GetNextIssues([issueB, issueA], sort: sortConfig);
 
         result.Should().HaveCount(2);
         result[0].Id.Should().Be("a");
@@ -514,7 +965,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_SortsByMultipleCriteria()
+    public void GetNextIssues_SortsByMultipleCriteria()
     {
         var issue1 = new IssueBuilder().WithId("a").WithTitle("Alpha")
             .WithStatus(IssueStatus.Open).WithPriority(1).Build();
@@ -522,7 +973,6 @@ public class IssueServiceGraphTests
             .WithStatus(IssueStatus.Open).WithPriority(1).Build();
         var issue3 = new IssueBuilder().WithId("c").WithTitle("Charlie")
             .WithStatus(IssueStatus.Open).WithPriority(2).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue3, issue2, issue1]);
 
         var sortConfig = new GraphSortConfig
         {
@@ -532,7 +982,7 @@ public class IssueServiceGraphTests
                 new GraphSortRule(GraphSortCriteria.Title)
             ]
         };
-        var result = await _sut.GetNextIssuesAsync(sortConfig: sortConfig);
+        var result = Issues.GetNextIssues([issue3, issue2, issue1], sort: sortConfig);
 
         result.Should().HaveCount(3);
         result[0].Id.Should().Be("a"); // Priority 1, Alpha
@@ -542,27 +992,24 @@ public class IssueServiceGraphTests
 
     #endregion
 
-    #region BuildTaskGraphLayoutAsync Tests (ported from TaskGraphServiceTests)
+    #region BuildTaskGraphLayout Tests
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_WithNoIssues_ReturnsEmptyGraph()
+    public void BuildTaskGraphLayout_WithNoIssues_ReturnsEmptyGraph()
     {
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([]);
 
         result.Nodes.Should().BeEmpty();
         result.TotalLanes.Should().Be(0);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_WithSingleLeafIssue_ReturnsOneNodeAtLaneZero()
+    public void BuildTaskGraphLayout_WithSingleLeafIssue_ReturnsOneNodeAtLaneZero()
     {
         var issue = new IssueBuilder().WithId("issue1").WithTitle("Do something")
             .WithStatus(IssueStatus.Open).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([issue]);
 
         result.Nodes.Should().ContainSingle();
         result.Nodes[0].Issue.Id.Should().Be("issue1");
@@ -573,20 +1020,19 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_ExcludesTerminalIssues()
+    public void BuildTaskGraphLayout_ExcludesTerminalIssues()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
         var closed = new IssueBuilder().WithId("closed1").WithStatus(IssueStatus.Closed).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, complete, closed]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([open, complete, closed]);
 
         result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("open1");
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_SeriesParentWithTwoLeafChildren_CorrectLanes()
+    public void BuildTaskGraphLayout_SeriesParentWithTwoLeafChildren_CorrectLanes()
     {
         var parent = new IssueBuilder().WithId("parent").WithTitle("Parent")
             .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
@@ -595,9 +1041,7 @@ public class IssueServiceGraphTests
         var child2 = new IssueBuilder().WithId("child2").WithTitle("Child 2")
             .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([parent, child1, child2]);
 
         var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
         nodeLookup["child1"].Lane.Should().Be(0);
@@ -612,7 +1056,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_ParallelParentWithTwoLeafChildren_CorrectLanes()
+    public void BuildTaskGraphLayout_ParallelParentWithTwoLeafChildren_CorrectLanes()
     {
         var parent = new IssueBuilder().WithId("parent").WithTitle("Parent")
             .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
@@ -621,9 +1065,7 @@ public class IssueServiceGraphTests
         var child2 = new IssueBuilder().WithId("child2").WithTitle("Child 2")
             .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([parent, child1, child2]);
 
         var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
         nodeLookup["child1"].Lane.Should().Be(0);
@@ -635,7 +1077,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_GoToWorkExample_CorrectLaneAssignments()
+    public void BuildTaskGraphLayout_GoToWorkExample_CorrectLaneAssignments()
     {
         var goToWork = new IssueBuilder().WithId("go-to-work").WithTitle("Go to work")
             .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
@@ -661,9 +1103,7 @@ public class IssueServiceGraphTests
         var allIssues = new List<Issue>
             { goToWork, wakeUp, makeBreakfast, makeCoffee, makeToast, toastBread, spreadButter, getInCar, driveToWork };
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(allIssues);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout(allIssues);
 
         result.Nodes.Should().HaveCount(9);
 
@@ -683,16 +1123,14 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_OpenChildWithCompleteParent_ParentIncludedInGraph()
+    public void BuildTaskGraphLayout_OpenChildWithCompleteParent_ParentIncludedInGraph()
     {
         var parent = new IssueBuilder().WithId("go-to-work").WithTitle("Go to work")
             .WithStatus(IssueStatus.Complete).WithExecutionMode(ExecutionMode.Series).Build();
         var child = new IssueBuilder().WithId("drive-to-work").WithTitle("Drive to work")
             .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("go-to-work", "aaa").Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([parent, child]);
 
         result.Nodes.Should().HaveCount(2);
         var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
@@ -705,7 +1143,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_MultiParentIssue_AppearsUnderEachParent()
+    public void BuildTaskGraphLayout_MultiParentIssue_AppearsUnderEachParent()
     {
         var parentA = new IssueBuilder().WithId("parentA").WithTitle("Parent A")
             .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
@@ -718,9 +1156,7 @@ public class IssueServiceGraphTests
                 new ParentIssueRef { ParentIssue = "parentB", SortOrder = "aaa" })
             .Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parentA, parentB, sharedChild]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([parentA, parentB, sharedChild]);
 
         // Shared child should appear twice (once under each parent)
         var sharedNodes = result.Nodes.Where(n => n.Issue.Id == "shared").ToList();
@@ -738,7 +1174,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_MultiParentWithChildren_ChildrenOnlyUnderFirstParent()
+    public void BuildTaskGraphLayout_MultiParentWithChildren_ChildrenOnlyUnderFirstParent()
     {
         var parentA = new IssueBuilder().WithId("parentA").WithTitle("Parent A")
             .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
@@ -754,9 +1190,7 @@ public class IssueServiceGraphTests
             .WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("shared", "aaa").Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parentA, parentB, sharedChild, grandchild]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([parentA, parentB, sharedChild, grandchild]);
 
         // Shared appears twice, grandchild appears once (under first encounter of shared)
         result.Nodes.Count(n => n.Issue.Id == "shared").Should().Be(2);
@@ -764,7 +1198,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_ThreeParents_AppearsThreeTimes()
+    public void BuildTaskGraphLayout_ThreeParents_AppearsThreeTimes()
     {
         var parentA = new IssueBuilder().WithId("parentA").WithTitle("Parent A")
             .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
@@ -780,9 +1214,7 @@ public class IssueServiceGraphTests
                 new ParentIssueRef { ParentIssue = "parentC", SortOrder = "aaa" })
             .Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parentA, parentB, parentC, sharedChild]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([parentA, parentB, parentC, sharedChild]);
 
         var sharedNodes = result.Nodes.Where(n => n.Issue.Id == "shared").ToList();
         sharedNodes.Should().HaveCount(3);
@@ -795,9 +1227,9 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_DiamondDependency_SharedIssueAppearsTwice()
+    public void BuildTaskGraphLayout_DiamondDependency_SharedIssueAppearsTwice()
     {
-        // A → B, A → C, B → D, C → D (diamond)
+        // A -> B, A -> C, B -> D, C -> D (diamond)
         var a = new IssueBuilder().WithId("A").WithTitle("A")
             .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
         var b = new IssueBuilder().WithId("B").WithTitle("B")
@@ -813,9 +1245,7 @@ public class IssueServiceGraphTests
                 new ParentIssueRef { ParentIssue = "C", SortOrder = "aaa" })
             .Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([a, b, c, d]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([a, b, c, d]);
 
         var dNodes = result.Nodes.Where(n => n.Issue.Id == "D").ToList();
         dNodes.Should().HaveCount(2);
@@ -824,7 +1254,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_SingleParent_DefaultAppearanceCounts()
+    public void BuildTaskGraphLayout_SingleParent_DefaultAppearanceCounts()
     {
         var parent = new IssueBuilder().WithId("parent").WithTitle("Parent")
             .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
@@ -832,9 +1262,7 @@ public class IssueServiceGraphTests
             .WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([parent, child]);
 
         foreach (var node in result.Nodes)
         {
@@ -844,16 +1272,8 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_SeriesNestedSiblings_RenderingParentSetForCascading()
+    public void BuildTaskGraphLayout_SeriesNestedSiblings_RenderingParentSetForCascading()
     {
-        // Create a hierarchy with nested series siblings:
-        // Parent 1 (series)
-        //   ├── Parent 2 (series) → Child 2.1, Child 2.2
-        //   └── Parent 3 (series) → Child 3.1, Child 3.2
-        //
-        // In cascading flow, Child 3.1 should have RenderingParentId = Parent 2
-        // (because Parent 2 is the previous sibling of Parent 3)
-
         var parent1 = new IssueBuilder().WithId("parent1").WithTitle("Parent 1")
             .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
         var parent2 = new IssueBuilder().WithId("parent2").WithTitle("Parent 2")
@@ -871,10 +1291,7 @@ public class IssueServiceGraphTests
         var child32 = new IssueBuilder().WithId("child32").WithTitle("Child 3.2")
             .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent3", "bbb").Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>())
-            .Returns([parent1, parent2, parent3, child21, child22, child31, child32]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([parent1, parent2, parent3, child21, child22, child31, child32]);
 
         var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
 
@@ -892,17 +1309,8 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_SeriesLeafSiblings_RenderingParentSetForCascading()
+    public void BuildTaskGraphLayout_SeriesLeafSiblings_RenderingParentSetForCascading()
     {
-        // Simple case: series parent with leaf children
-        // Parent (series)
-        //   ├── Child 1
-        //   ├── Child 2
-        //   └── Child 3
-        //
-        // Child 2 should have RenderingParentId = Child 1
-        // Child 3 should have RenderingParentId = Child 2
-
         var parent = new IssueBuilder().WithId("parent").WithTitle("Parent")
             .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
         var child1 = new IssueBuilder().WithId("child1").WithTitle("Child 1")
@@ -912,10 +1320,7 @@ public class IssueServiceGraphTests
         var child3 = new IssueBuilder().WithId("child3").WithTitle("Child 3")
             .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "ccc").Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>())
-            .Returns([parent, child1, child2, child3]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([parent, child1, child2, child3]);
 
         var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
 
@@ -928,7 +1333,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_ParallelChildren_NoRenderingParentOverride()
+    public void BuildTaskGraphLayout_ParallelChildren_NoRenderingParentOverride()
     {
         // Parallel mode should not set cascading rendering parent
         var parent = new IssueBuilder().WithId("parent").WithTitle("Parent")
@@ -938,10 +1343,7 @@ public class IssueServiceGraphTests
         var child2 = new IssueBuilder().WithId("child2").WithTitle("Child 2")
             .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>())
-            .Returns([parent, child1, child2]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([parent, child1, child2]);
 
         var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
 
@@ -952,78 +1354,72 @@ public class IssueServiceGraphTests
 
     #endregion
 
-    #region QueryGraphAsync Tests
+    #region QueryGraph Tests
 
     [Test]
-    public async Task QueryGraphAsync_StatusFilter_ReturnsOnlyMatchingStatus()
+    public void QueryGraph_StatusFilter_ReturnsOnlyMatchingStatus()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var review = new IssueBuilder().WithId("review1").WithStatus(IssueStatus.Review).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, review]);
 
-        var result = await _sut.QueryGraphAsync(new GraphQuery { Status = IssueStatus.Open });
+        var result = Issues.QueryGraph([open, review], new GraphQuery { Status = IssueStatus.Open });
 
         result.Nodes.Values.Should().ContainSingle().Which.Issue.Id.Should().Be("open1");
     }
 
     [Test]
-    public async Task QueryGraphAsync_TypeFilter_ReturnsOnlyMatchingType()
+    public void QueryGraph_TypeFilter_ReturnsOnlyMatchingType()
     {
         var task = new IssueBuilder().WithId("task1").WithType(IssueType.Task).Build();
         var bug = new IssueBuilder().WithId("bug1").WithType(IssueType.Bug).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([task, bug]);
 
-        var result = await _sut.QueryGraphAsync(new GraphQuery { Type = IssueType.Bug });
+        var result = Issues.QueryGraph([task, bug], new GraphQuery { Type = IssueType.Bug });
 
         result.Nodes.Values.Should().ContainSingle().Which.Issue.Id.Should().Be("bug1");
     }
 
     [Test]
-    public async Task QueryGraphAsync_TagsFilter_ReturnsMatchingTags()
+    public void QueryGraph_TagsFilter_ReturnsMatchingTags()
     {
         var tagged = new IssueBuilder().WithId("tagged1").WithTags("important", "urgent").Build();
         var untagged = new IssueBuilder().WithId("untagged1").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([tagged, untagged]);
 
-        var result = await _sut.QueryGraphAsync(new GraphQuery { Tags = ["important"] });
+        var result = Issues.QueryGraph([tagged, untagged], new GraphQuery { Tags = ["important"] });
 
         result.Nodes.Values.Should().ContainSingle().Which.Issue.Id.Should().Be("tagged1");
     }
 
     [Test]
-    public async Task QueryGraphAsync_SearchText_MatchesTitle()
+    public void QueryGraph_SearchText_MatchesTitle()
     {
         var matches = new IssueBuilder().WithId("match1").WithTitle("Fix the login bug").Build();
         var noMatch = new IssueBuilder().WithId("nomatch1").WithTitle("Add new feature").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([matches, noMatch]);
 
-        var result = await _sut.QueryGraphAsync(new GraphQuery { SearchText = "login" });
+        var result = Issues.QueryGraph([matches, noMatch], new GraphQuery { SearchText = "login" });
 
         result.Nodes.Values.Should().ContainSingle().Which.Issue.Id.Should().Be("match1");
     }
 
     [Test]
-    public async Task QueryGraphAsync_SearchText_MatchesDescription()
+    public void QueryGraph_SearchText_MatchesDescription()
     {
         var matches = new IssueBuilder().WithId("match1").WithTitle("Issue").WithDescription("The login is broken").Build();
         var noMatch = new IssueBuilder().WithId("nomatch1").WithTitle("Issue2").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([matches, noMatch]);
 
-        var result = await _sut.QueryGraphAsync(new GraphQuery { SearchText = "login" });
+        var result = Issues.QueryGraph([matches, noMatch], new GraphQuery { SearchText = "login" });
 
         result.Nodes.Values.Should().ContainSingle().Which.Issue.Id.Should().Be("match1");
     }
 
     [Test]
-    public async Task QueryGraphAsync_RootIssueId_ReturnsDescendantsAndRoot()
+    public void QueryGraph_RootIssueId_ReturnsDescendantsAndRoot()
     {
         var root = new IssueBuilder().WithId("root").WithStatus(IssueStatus.Open).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("root", "aaa").Build();
         var other = new IssueBuilder().WithId("other").WithStatus(IssueStatus.Open).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([root, child, other]);
 
-        var result = await _sut.QueryGraphAsync(new GraphQuery { RootIssueId = "root" });
+        var result = Issues.QueryGraph([root, child, other], new GraphQuery { RootIssueId = "root" });
 
         result.Nodes.Should().HaveCount(2);
         result.Nodes.Should().ContainKey("root");
@@ -1032,38 +1428,35 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task QueryGraphAsync_IncludeTerminal_IncludesTerminalIssues()
+    public void QueryGraph_IncludeTerminal_IncludesTerminalIssues()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, complete]);
 
-        var result = await _sut.QueryGraphAsync(new GraphQuery { IncludeTerminal = true });
+        var result = Issues.QueryGraph([open, complete], new GraphQuery { IncludeTerminal = true });
 
         result.Nodes.Should().HaveCount(2);
     }
 
     [Test]
-    public async Task QueryGraphAsync_ExcludesTerminalByDefault()
+    public void QueryGraph_ExcludesTerminalByDefault()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, complete]);
 
-        var result = await _sut.QueryGraphAsync(new GraphQuery());
+        var result = Issues.QueryGraph([open, complete], new GraphQuery());
 
         result.Nodes.Values.Should().ContainSingle().Which.Issue.Id.Should().Be("open1");
     }
 
     [Test]
-    public async Task QueryGraphAsync_IncludeInactiveWithActiveDescendants_IncludesTerminalParent()
+    public void QueryGraph_IncludeInactiveWithActiveDescendants_IncludesTerminalParent()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Complete).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
-        var result = await _sut.QueryGraphAsync(new GraphQuery
+        var result = Issues.QueryGraph([parent, child], new GraphQuery
         {
             IncludeInactiveWithActiveDescendants = true
         });
@@ -1074,43 +1467,40 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task QueryGraphAsync_AssignedToFilter_ReturnsMatchingAssignee()
+    public void QueryGraph_AssignedToFilter_ReturnsMatchingAssignee()
     {
         var assigned = new IssueBuilder().WithId("assigned1").WithAssignedTo("john").Build();
         var other = new IssueBuilder().WithId("other1").WithAssignedTo("jane").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([assigned, other]);
 
-        var result = await _sut.QueryGraphAsync(new GraphQuery { AssignedTo = "john" });
+        var result = Issues.QueryGraph([assigned, other], new GraphQuery { AssignedTo = "john" });
 
         result.Nodes.Values.Should().ContainSingle().Which.Issue.Id.Should().Be("assigned1");
     }
 
     [Test]
-    public async Task QueryGraphAsync_PriorityFilter_ReturnsMatchingPriority()
+    public void QueryGraph_PriorityFilter_ReturnsMatchingPriority()
     {
         var highPri = new IssueBuilder().WithId("high1").WithPriority(1).Build();
         var lowPri = new IssueBuilder().WithId("low1").WithPriority(5).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([highPri, lowPri]);
 
-        var result = await _sut.QueryGraphAsync(new GraphQuery { Priority = 1 });
+        var result = Issues.QueryGraph([highPri, lowPri], new GraphQuery { Priority = 1 });
 
         result.Nodes.Values.Should().ContainSingle().Which.Issue.Id.Should().Be("high1");
     }
 
     [Test]
-    public async Task QueryGraphAsync_LinkedPrFilter_ReturnsMatchingPR()
+    public void QueryGraph_LinkedPrFilter_ReturnsMatchingPR()
     {
         var withPr = new IssueBuilder().WithId("pr1").WithLinkedPr(123).Build();
         var noPr = new IssueBuilder().WithId("nopr1").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([withPr, noPr]);
 
-        var result = await _sut.QueryGraphAsync(new GraphQuery { LinkedPr = 123 });
+        var result = Issues.QueryGraph([withPr, noPr], new GraphQuery { LinkedPr = 123 });
 
         result.Nodes.Values.Should().ContainSingle().Which.Issue.Id.Should().Be("pr1");
     }
 
     [Test]
-    public async Task QueryGraphAsync_FilteredSubgraph_PreservesNextPreviousFromFullGraph()
+    public void QueryGraph_FilteredSubgraph_PreservesNextPreviousFromFullGraph()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Series).Build();
@@ -1118,10 +1508,9 @@ public class IssueServiceGraphTests
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
         var child2 = new IssueBuilder().WithId("child2").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child1, child2]);
 
         // Even when filtered, Next/Previous should reflect full graph
-        var result = await _sut.QueryGraphAsync(new GraphQuery());
+        var result = Issues.QueryGraph([parent, child1, child2], new GraphQuery());
 
         result.Nodes["child1"].NextIssueIds.Should().Contain("child2");
         result.Nodes["child2"].PreviousIssueIds.Should().Contain("child1");
@@ -1132,40 +1521,37 @@ public class IssueServiceGraphTests
     #region ParentExecutionMode Tests
 
     [Test]
-    public async Task BuildGraphAsync_RootIssue_HasNullParentExecutionMode()
+    public void BuildGraph_RootIssue_HasNullParentExecutionMode()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Open).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([issue]);
 
         result.Nodes["issue1"].ParentExecutionMode.Should().BeNull();
     }
 
     [Test]
-    public async Task BuildGraphAsync_ChildOfSeriesParent_HasSeriesParentExecutionMode()
+    public void BuildGraph_ChildOfSeriesParent_HasSeriesParentExecutionMode()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Series).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([parent, child]);
 
         result.Nodes["child"].ParentExecutionMode.Should().Be(ExecutionMode.Series);
     }
 
     [Test]
-    public async Task BuildGraphAsync_ChildOfParallelParent_HasParallelParentExecutionMode()
+    public void BuildGraph_ChildOfParallelParent_HasParallelParentExecutionMode()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Parallel).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([parent, child]);
 
         result.Nodes["child"].ParentExecutionMode.Should().Be(ExecutionMode.Parallel);
     }
@@ -1175,52 +1561,48 @@ public class IssueServiceGraphTests
     #region Idea Type Exclusion Tests
 
     [Test]
-    public async Task GetNextIssuesAsync_WithIdeaTypeIssue_ExcludesIdea()
+    public void GetNextIssues_WithIdeaTypeIssue_ExcludesIdea()
     {
         var idea = new IssueBuilder().WithId("idea1").WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([idea]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([idea]);
 
         result.Should().BeEmpty();
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_WithMixedTypeIssues_ExcludesOnlyIdeas()
+    public void GetNextIssues_WithMixedTypeIssues_ExcludesOnlyIdeas()
     {
         var task = new IssueBuilder().WithId("task1").WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
         var bug = new IssueBuilder().WithId("bug1").WithStatus(IssueStatus.Open).WithType(IssueType.Bug).Build();
         var idea = new IssueBuilder().WithId("idea1").WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
         var feature = new IssueBuilder().WithId("feature1").WithStatus(IssueStatus.Open).WithType(IssueType.Feature).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([task, bug, idea, feature]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([task, bug, idea, feature]);
 
         result.Select(i => i.Id).Should().BeEquivalentTo(["task1", "bug1", "feature1"]);
         result.Select(i => i.Id).Should().NotContain("idea1");
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_WithIdeaInReviewStatus_StillExcludesIdea()
+    public void GetNextIssues_WithIdeaInReviewStatus_StillExcludesIdea()
     {
         var idea = new IssueBuilder().WithId("idea1").WithStatus(IssueStatus.Review).WithType(IssueType.Idea).Build();
         var task = new IssueBuilder().WithId("task1").WithStatus(IssueStatus.Review).WithType(IssueType.Task).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([idea, task]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([idea, task]);
 
         result.Should().ContainSingle().Which.Id.Should().Be("task1");
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_ParentWithIdeaChild_IdeaChildNotActionable()
+    public void GetNextIssues_ParentWithIdeaChild_IdeaChildNotActionable()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
         var taskChild = new IssueBuilder().WithId("task-child").WithStatus(IssueStatus.Open).WithType(IssueType.Task).WithParentIssueIdAndOrder("parent", "aaa").Build();
         var ideaChild = new IssueBuilder().WithId("idea-child").WithStatus(IssueStatus.Open).WithType(IssueType.Idea).WithParentIssueIdAndOrder("parent", "bbb").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, taskChild, ideaChild]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([parent, taskChild, ideaChild]);
 
         result.Select(i => i.Id).Should().BeEquivalentTo(["task-child"]);
     }
@@ -1230,23 +1612,21 @@ public class IssueServiceGraphTests
     #region Idea Type Task Graph Root Inclusion Tests
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_IdeaTypeRootIssue_IncludedInRoots()
+    public void BuildTaskGraphLayout_IdeaTypeRootIssue_IncludedInRoots()
     {
         var idea = new IssueBuilder().WithId("idea1").WithTitle("Idea Issue")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
         var task = new IssueBuilder().WithId("task1").WithTitle("Task Issue")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([idea, task]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([idea, task]);
 
         result.Nodes.Should().HaveCount(2);
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["idea1", "task1"]);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_IdeaAsChildOfTask_IdeaIncludedInGraph()
+    public void BuildTaskGraphLayout_IdeaAsChildOfTask_IdeaIncludedInGraph()
     {
         var parent = new IssueBuilder().WithId("parent").WithTitle("Parent Task")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Task).WithExecutionMode(ExecutionMode.Parallel).Build();
@@ -1255,9 +1635,7 @@ public class IssueServiceGraphTests
         var taskChild = new IssueBuilder().WithId("task-child").WithTitle("Task Child")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Task).WithParentIssueIdAndOrder("parent", "bbb").Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, ideaChild, taskChild]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([parent, ideaChild, taskChild]);
 
         result.Nodes.Should().HaveCount(3);
         var nodeLookup = result.Nodes.ToDictionary(n => n.Issue.Id);
@@ -1270,7 +1648,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_MultipleIdeaRoots_AllIncluded()
+    public void BuildTaskGraphLayout_MultipleIdeaRoots_AllIncluded()
     {
         var idea1 = new IssueBuilder().WithId("idea1").WithTitle("Idea 1")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
@@ -1279,41 +1657,35 @@ public class IssueServiceGraphTests
         var task = new IssueBuilder().WithId("task1").WithTitle("Task 1")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([idea1, idea2, task]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([idea1, idea2, task]);
 
         result.Nodes.Should().HaveCount(3);
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["idea1", "idea2", "task1"]);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_IdeaWithOrphanedParent_TreatedAsRootAndIncluded()
+    public void BuildTaskGraphLayout_IdeaWithOrphanedParent_TreatedAsRootAndIncluded()
     {
         var idea = new IssueBuilder().WithId("idea1").WithTitle("Orphan Idea")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).WithParentIssueIdAndOrder("nonexistent", "aaa").Build();
         var task = new IssueBuilder().WithId("task1").WithTitle("Task 1")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([idea, task]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([idea, task]);
 
         result.Nodes.Should().HaveCount(2);
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["idea1", "task1"]);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_OnlyIdeasInGraph_ReturnsIdeasAsRoots()
+    public void BuildTaskGraphLayout_OnlyIdeasInGraph_ReturnsIdeasAsRoots()
     {
         var idea1 = new IssueBuilder().WithId("idea1").WithTitle("Idea 1")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
         var idea2 = new IssueBuilder().WithId("idea2").WithTitle("Idea 2")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
 
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([idea1, idea2]);
-
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([idea1, idea2]);
 
         result.Nodes.Should().HaveCount(2);
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["idea1", "idea2"]);
@@ -1321,202 +1693,188 @@ public class IssueServiceGraphTests
 
     #endregion
 
-    #region BuildTaskGraphLayoutAsync Filter Tests
+    #region BuildTaskGraphLayout Filter Tests
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_IncludesDraftByDefault()
+    public void BuildTaskGraphLayout_IncludesDraftByDefault()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var draft = new IssueBuilder().WithId("draft1").WithStatus(IssueStatus.Draft).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, draft]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([open, draft]);
 
         result.Nodes.Should().HaveCount(2);
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["open1", "draft1"]);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_IncludeTerminal_IncludesTerminalStatuses()
+    public void BuildTaskGraphLayout_IncludeTerminal_IncludesTerminalStatuses()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var draft = new IssueBuilder().WithId("draft1").WithStatus(IssueStatus.Draft).Build();
         var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
         var closed = new IssueBuilder().WithId("closed1").WithStatus(IssueStatus.Closed).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, draft, complete, closed]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.Always);
+        var result = Issues.BuildTaskGraphLayout([open, draft, complete, closed], visibility: InactiveVisibility.Always);
 
         result.Nodes.Should().HaveCount(4);
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["open1", "draft1", "complete1", "closed1"]);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_AssignedToFilter_ReturnsOnlyMatchingAssignee()
+    public void BuildTaskGraphLayout_AssignedToFilter_ReturnsOnlyMatchingAssignee()
     {
         var johnIssue = new IssueBuilder().WithId("john1").WithStatus(IssueStatus.Open).WithAssignedTo("john").Build();
         var janeIssue = new IssueBuilder().WithId("jane1").WithStatus(IssueStatus.Open).WithAssignedTo("jane").Build();
         var unassigned = new IssueBuilder().WithId("unassigned1").WithStatus(IssueStatus.Open).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([johnIssue, janeIssue, unassigned]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(assignedTo: "john");
+        var result = Issues.BuildTaskGraphLayout([johnIssue, janeIssue, unassigned], assignedTo: "john");
 
         result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("john1");
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_AssignedToFilter_IsCaseInsensitive()
+    public void BuildTaskGraphLayout_AssignedToFilter_IsCaseInsensitive()
     {
         var johnIssue = new IssueBuilder().WithId("john1").WithStatus(IssueStatus.Open).WithAssignedTo("John").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([johnIssue]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(assignedTo: "john");
+        var result = Issues.BuildTaskGraphLayout([johnIssue], assignedTo: "john");
 
         result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("john1");
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_CombinedFilters_IncludeTerminalAndAssignedTo()
+    public void BuildTaskGraphLayout_CombinedFilters_IncludeTerminalAndAssignedTo()
     {
         var johnOpen = new IssueBuilder().WithId("john-open").WithStatus(IssueStatus.Open).WithAssignedTo("john").Build();
         var johnComplete = new IssueBuilder().WithId("john-complete").WithStatus(IssueStatus.Complete).WithAssignedTo("john").Build();
         var janeOpen = new IssueBuilder().WithId("jane-open").WithStatus(IssueStatus.Open).WithAssignedTo("jane").Build();
         var janeComplete = new IssueBuilder().WithId("jane-complete").WithStatus(IssueStatus.Complete).WithAssignedTo("jane").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([johnOpen, johnComplete, janeOpen, janeComplete]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.Always, assignedTo: "john");
+        var result = Issues.BuildTaskGraphLayout([johnOpen, johnComplete, janeOpen, janeComplete], visibility: InactiveVisibility.Always, assignedTo: "john");
 
         result.Nodes.Should().HaveCount(2);
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["john-open", "john-complete"]);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_ParentWithFilteredChild_ParentStillIncludedAsAncestor()
+    public void BuildTaskGraphLayout_ParentWithFilteredChild_ParentStillIncludedAsAncestor()
     {
         // When a child passes the filter, its parent should be included for context even if parent doesn't pass
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithAssignedTo("jane").Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open).WithAssignedTo("john")
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(assignedTo: "john");
+        var result = Issues.BuildTaskGraphLayout([parent, child], assignedTo: "john");
 
         // Only john's child should be in the filtered set (parent filtered out)
         result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("child");
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_NoMatchingAssignee_ReturnsEmptyGraph()
+    public void BuildTaskGraphLayout_NoMatchingAssignee_ReturnsEmptyGraph()
     {
         var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Open).WithAssignedTo("john").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(assignedTo: "nonexistent");
+        var result = Issues.BuildTaskGraphLayout([issue], assignedTo: "nonexistent");
 
         result.Nodes.Should().BeEmpty();
         result.TotalLanes.Should().Be(0);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_DefaultFilters_ExcludesProgressIssuesCorrectly()
+    public void BuildTaskGraphLayout_DefaultFilters_ExcludesProgressIssuesCorrectly()
     {
         // Progress issues should still be included (they are not terminal or draft)
         var progress = new IssueBuilder().WithId("progress1").WithStatus(IssueStatus.Progress).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([progress]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([progress]);
 
         result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("progress1");
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_DefaultFilters_ExcludesReviewIssuesCorrectly()
+    public void BuildTaskGraphLayout_DefaultFilters_ExcludesReviewIssuesCorrectly()
     {
         // Review issues should still be included (they are not terminal or draft)
         var review = new IssueBuilder().WithId("review1").WithStatus(IssueStatus.Review).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([review]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync();
+        var result = Issues.BuildTaskGraphLayout([review]);
 
         result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("review1");
     }
 
     #endregion
 
-    #region BuildTaskGraphLayoutAsync InactiveVisibility Tests
+    #region BuildTaskGraphLayout InactiveVisibility Tests
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_HideMode_ExcludesTerminalIssues()
+    public void BuildTaskGraphLayout_HideMode_ExcludesTerminalIssues()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, complete]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.Hide);
+        var result = Issues.BuildTaskGraphLayout([open, complete], visibility: InactiveVisibility.Hide);
 
         result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("open1");
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_AlwaysMode_IncludesAllTerminalIssues()
+    public void BuildTaskGraphLayout_AlwaysMode_IncludesAllTerminalIssues()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
         var closed = new IssueBuilder().WithId("closed1").WithStatus(IssueStatus.Closed).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, complete, closed]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.Always);
+        var result = Issues.BuildTaskGraphLayout([open, complete, closed], visibility: InactiveVisibility.Always);
 
         result.Nodes.Should().HaveCount(3);
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["open1", "complete1", "closed1"]);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_IfHasActiveDescendants_IncludesTerminalParentWithActiveChild()
+    public void BuildTaskGraphLayout_IfHasActiveDescendants_IncludesTerminalParentWithActiveChild()
     {
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Complete).Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, child]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.IfHasActiveDescendants);
+        var result = Issues.BuildTaskGraphLayout([parent, child], visibility: InactiveVisibility.IfHasActiveDescendants);
 
         result.Nodes.Should().HaveCount(2);
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["parent", "child"]);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_IfHasActiveDescendants_ExcludesTerminalWithNoActiveDescendants()
+    public void BuildTaskGraphLayout_IfHasActiveDescendants_ExcludesTerminalWithNoActiveDescendants()
     {
         var terminalParent = new IssueBuilder().WithId("terminal-parent").WithStatus(IssueStatus.Complete).Build();
         var terminalChild = new IssueBuilder().WithId("terminal-child").WithStatus(IssueStatus.Closed)
             .WithParentIssueIdAndOrder("terminal-parent", "aaa").Build();
         var openAlone = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([terminalParent, terminalChild, openAlone]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.IfHasActiveDescendants);
+        var result = Issues.BuildTaskGraphLayout([terminalParent, terminalChild, openAlone], visibility: InactiveVisibility.IfHasActiveDescendants);
 
         result.Nodes.Should().ContainSingle().Which.Issue.Id.Should().Be("open1");
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_IfHasActiveDescendants_DeepHierarchy_GrandparentTerminalParentTerminalChildActive()
+    public void BuildTaskGraphLayout_IfHasActiveDescendants_DeepHierarchy_GrandparentTerminalParentTerminalChildActive()
     {
         var grandparent = new IssueBuilder().WithId("grandparent").WithStatus(IssueStatus.Complete).Build();
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Archived)
             .WithParentIssueIdAndOrder("grandparent", "aaa").Build();
         var child = new IssueBuilder().WithId("child").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent", "aaa").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([grandparent, parent, child]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.IfHasActiveDescendants);
+        var result = Issues.BuildTaskGraphLayout([grandparent, parent, child], visibility: InactiveVisibility.IfHasActiveDescendants);
 
         result.Nodes.Should().HaveCount(3);
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["grandparent", "parent", "child"]);
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_IfHasActiveDescendants_MixedActiveAndInactive()
+    public void BuildTaskGraphLayout_IfHasActiveDescendants_MixedActiveAndInactive()
     {
         // Terminal parent with one active child and one terminal child
         var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Complete).Build();
@@ -1526,9 +1884,8 @@ public class IssueServiceGraphTests
             .WithParentIssueIdAndOrder("parent", "bbb").Build();
         // Another terminal parent with no active descendants
         var lonelyParent = new IssueBuilder().WithId("lonely").WithStatus(IssueStatus.Complete).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([parent, activeChild, terminalChild, lonelyParent]);
 
-        var result = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.IfHasActiveDescendants);
+        var result = Issues.BuildTaskGraphLayout([parent, activeChild, terminalChild, lonelyParent], visibility: InactiveVisibility.IfHasActiveDescendants);
 
         // parent should be included (has active child), lonely should not
         result.Nodes.Select(n => n.Issue.Id).Should().Contain(["parent", "active-child"]);
@@ -1536,14 +1893,14 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphLayoutAsync_HideMode_MatchesDefaultBehavior()
+    public void BuildTaskGraphLayout_HideMode_MatchesDefaultBehavior()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
         var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([open, complete]);
+        IReadOnlyList<Issue> issues = [open, complete];
 
-        var hideResult = await _sut.BuildTaskGraphLayoutAsync(inactiveVisibility: InactiveVisibility.Hide);
-        var defaultResult = await _sut.BuildTaskGraphLayoutAsync();
+        var hideResult = Issues.BuildTaskGraphLayout(issues, visibility: InactiveVisibility.Hide);
+        var defaultResult = Issues.BuildTaskGraphLayout(issues);
 
         hideResult.Nodes.Should().HaveCount(defaultResult.Nodes.Count);
         hideResult.Nodes.Select(n => n.Issue.Id).Should().BeEquivalentTo(defaultResult.Nodes.Select(n => n.Issue.Id));
@@ -1554,13 +1911,12 @@ public class IssueServiceGraphTests
     #region Edge Cases
 
     [Test]
-    public async Task BuildGraphAsync_OrphanIssue_TreatedAsRoot()
+    public void BuildGraph_OrphanIssue_TreatedAsRoot()
     {
         var orphan = new IssueBuilder().WithId("orphan").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("nonexistent", "aaa").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns([orphan]);
 
-        var result = await _sut.BuildGraphAsync();
+        var result = Issues.BuildGraph([orphan]);
 
         result.Nodes.Should().ContainSingle();
         result.RootIssueIds.Should().ContainSingle().Which.Should().Be("orphan");
@@ -1569,7 +1925,7 @@ public class IssueServiceGraphTests
     }
 
     [Test]
-    public async Task GetNextIssuesAsync_NestedHierarchy_RespectsParentExecutionModes()
+    public void GetNextIssues_NestedHierarchy_RespectsParentExecutionModes()
     {
         var grandparent = new IssueBuilder().WithId("grandparent").WithStatus(IssueStatus.Open)
             .WithExecutionMode(ExecutionMode.Parallel).Build();
@@ -1585,10 +1941,8 @@ public class IssueServiceGraphTests
             .WithParentIssueIdAndOrder("parent2", "aaa").Build();
         var child2b = new IssueBuilder().WithId("child2b").WithStatus(IssueStatus.Open)
             .WithParentIssueIdAndOrder("parent2", "bbb").Build();
-        _storageService.LoadIssuesAsync(Arg.Any<CancellationToken>())
-            .Returns([grandparent, parent1, parent2, child1a, child1b, child2a, child2b]);
 
-        var result = await _sut.GetNextIssuesAsync();
+        var result = Issues.GetNextIssues([grandparent, parent1, parent2, child1a, child1b, child2a, child2b]);
 
         // parent1 is series, so only child1a is actionable (not child1b)
         // parent2 is parallel, so both child2a and child2b are actionable
