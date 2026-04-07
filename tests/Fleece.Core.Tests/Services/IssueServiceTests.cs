@@ -24,26 +24,28 @@ public class IssueServiceTests
         _gitConfigService = Substitute.For<IGitConfigService>();
         _tagService = new TagService();
         _gitConfigService.GetUserName().Returns("Test User");
+        _storage.LoadIssuesAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<Issue>>(new List<Issue>()));
         _storage.LoadTombstonesAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IReadOnlyList<Tombstone>>([]));
         _sut = new IssueService(_storage, _idGenerator, _gitConfigService, _tagService);
     }
 
     [Test]
-    public async Task CreateAsync_GeneratesIdFromTitle()
+    public async Task CreateAsync_GeneratesId()
     {
-        _idGenerator.Generate("Test Issue").Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var result = await _sut.CreateAsync("Test Issue", IssueType.Task);
 
         result.Id.Should().Be("abc123");
-        _idGenerator.Received(1).Generate("Test Issue");
+        _idGenerator.Received(1).Generate();
     }
 
     [Test]
     public async Task CreateAsync_AppendsThroughStorage()
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         await _sut.CreateAsync("Test Issue", IssueType.Bug);
 
@@ -55,7 +57,7 @@ public class IssueServiceTests
     [Test]
     public async Task CreateAsync_SetsDefaultStatusToOpen()
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var result = await _sut.CreateAsync("Test Issue", IssueType.Task);
 
@@ -65,7 +67,7 @@ public class IssueServiceTests
     [Test]
     public async Task CreateAsync_WithDraftStatus_SetsDraftStatus()
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var result = await _sut.CreateAsync("Test Issue", IssueType.Task, status: IssueStatus.Draft);
 
@@ -75,7 +77,7 @@ public class IssueServiceTests
     [Test]
     public async Task CreateAsync_SetsAllProvidedFields()
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var result = await _sut.CreateAsync(
             title: "Test Issue",
@@ -98,7 +100,7 @@ public class IssueServiceTests
     [Test]
     public async Task CreateAsync_SetsTags()
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var result = await _sut.CreateAsync(
             title: "Test Issue",
@@ -287,13 +289,11 @@ public class IssueServiceTests
             new() { Id = "abc123", Title = "Original Title", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
         };
         _storage.LoadIssuesAsync(Arg.Any<CancellationToken>()).Returns(issues);
-        _idGenerator.Generate("New Title").Returns("different_id");
-
         var result = await _sut.UpdateAsync("abc123", title: "New Title");
 
         result.Id.Should().Be("abc123");
         result.Title.Should().Be("New Title");
-        _idGenerator.DidNotReceive().Generate(Arg.Any<string>());
+        _idGenerator.DidNotReceive().Generate();
     }
 
     [Test]
@@ -336,7 +336,7 @@ public class IssueServiceTests
     [Test]
     public async Task CreateAsync_SetsWorkingBranchId()
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var result = await _sut.CreateAsync(
             title: "Test Issue",
@@ -363,7 +363,7 @@ public class IssueServiceTests
     [Test]
     public void CreateAsync_ThrowsOnInvalidBranchName_WithSpace()
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var act = async () => await _sut.CreateAsync(
             title: "Test Issue",
@@ -377,7 +377,7 @@ public class IssueServiceTests
     [Test]
     public void CreateAsync_ThrowsOnInvalidBranchName_WithTilde()
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var act = async () => await _sut.CreateAsync(
             title: "Test Issue",
@@ -412,7 +412,7 @@ public class IssueServiceTests
     [TestCase("a")]
     public async Task CreateAsync_AcceptsValidBranchNames(string branchName)
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var result = await _sut.CreateAsync(
             title: "Test Issue",
@@ -436,7 +436,7 @@ public class IssueServiceTests
     [TestCase("trailing-slash/")]
     public void CreateAsync_RejectsInvalidBranchNames(string branchName)
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var act = async () => await _sut.CreateAsync(
             title: "Test Issue",
@@ -450,7 +450,7 @@ public class IssueServiceTests
     [Test]
     public async Task CreateAsync_AllowsNullWorkingBranchId()
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var result = await _sut.CreateAsync(
             title: "Test Issue",
@@ -461,7 +461,7 @@ public class IssueServiceTests
     }
 
     [Test]
-    public async Task CreateAsync_GeneratesSaltedId_OnTombstoneCollision()
+    public async Task CreateAsync_RetriesOnTombstoneCollision()
     {
         var tombstones = new List<Tombstone>
         {
@@ -476,41 +476,33 @@ public class IssueServiceTests
         _storage.LoadTombstonesAsync(Arg.Any<CancellationToken>())
             .Returns(tombstones);
 
-        _idGenerator.Generate("Test Issue").Returns("abc123");
-        _idGenerator.Generate("Test Issue", 1).Returns("def456");
+        _idGenerator.Generate().Returns("abc123", "def456");
 
         var result = await _sut.CreateAsync("Test Issue", IssueType.Task);
 
         result.Id.Should().Be("def456");
-        _idGenerator.Received(1).Generate("Test Issue", 1);
     }
 
     [Test]
-    public async Task CreateAsync_ThrowsAfterMaxSaltRetries()
+    public async Task CreateAsync_ThrowsAfterMaxRetries()
     {
-        // All salted IDs also collide with tombstones
-        var tombstoneIds = new List<string> { "id0000" };
-        for (var i = 1; i <= 10; i++)
+        // All generated IDs collide with tombstones
+        var tombstones = new List<Tombstone>
         {
-            tombstoneIds.Add($"id{i:D4}");
-        }
-
-        var tombstones = tombstoneIds.Select(id => new Tombstone
-        {
-            IssueId = id,
-            OriginalTitle = "Old issue",
-            CleanedAt = DateTimeOffset.UtcNow,
-            CleanedBy = "user"
-        }).ToList();
+            new()
+            {
+                IssueId = "collid",
+                OriginalTitle = "Old issue",
+                CleanedAt = DateTimeOffset.UtcNow,
+                CleanedBy = "user"
+            }
+        };
 
         _storage.LoadTombstonesAsync(Arg.Any<CancellationToken>())
             .Returns(tombstones);
 
-        _idGenerator.Generate("Test Issue").Returns("id0000");
-        for (var i = 1; i <= 10; i++)
-        {
-            _idGenerator.Generate("Test Issue", i).Returns($"id{i:D4}");
-        }
+        // All 11 calls return the same colliding ID
+        _idGenerator.Generate().Returns("collid");
 
         var act = async () => await _sut.CreateAsync("Test Issue", IssueType.Task);
 
@@ -519,7 +511,7 @@ public class IssueServiceTests
     }
 
     [Test]
-    public async Task CreateAsync_UsesUnsaltedId_WhenNoTombstoneCollision()
+    public async Task CreateAsync_UsesFirstId_WhenNoCollision()
     {
         _storage.LoadTombstonesAsync(Arg.Any<CancellationToken>())
             .Returns(new List<Tombstone>
@@ -533,12 +525,12 @@ public class IssueServiceTests
                 }
             });
 
-        _idGenerator.Generate("Test Issue").Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var result = await _sut.CreateAsync("Test Issue", IssueType.Task);
 
         result.Id.Should().Be("abc123");
-        _idGenerator.DidNotReceive().Generate("Test Issue", Arg.Any<int>());
+        _idGenerator.Received(1).Generate();
     }
 
     #region Tag Validation
@@ -546,7 +538,7 @@ public class IssueServiceTests
     [Test]
     public void CreateAsync_ThrowsOnTagWithSpaces()
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var act = async () => await _sut.CreateAsync(
             title: "Test Issue",
@@ -560,7 +552,7 @@ public class IssueServiceTests
     [Test]
     public void CreateAsync_ThrowsOnTagWithReservedKey()
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var act = async () => await _sut.CreateAsync(
             title: "Test Issue",
@@ -574,7 +566,7 @@ public class IssueServiceTests
     [Test]
     public async Task CreateAsync_AcceptsKeyValueTag()
     {
-        _idGenerator.Generate(Arg.Any<string>()).Returns("abc123");
+        _idGenerator.Generate().Returns("abc123");
 
         var result = await _sut.CreateAsync(
             title: "Test Issue",

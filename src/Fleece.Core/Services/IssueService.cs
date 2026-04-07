@@ -76,21 +76,30 @@ public sealed partial class IssueService(
             }
         }
 
-        var id = idGenerator.Generate(title);
-
-        // Check for tombstone collision and retry with salt if needed
+        var existingIssues = await storage.LoadIssuesAsync(cancellationToken);
         var tombstones = await storage.LoadTombstonesAsync(cancellationToken);
-        var tombstoneIds = tombstones.Select(t => t.IssueId).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        const int maxSaltRetries = 10;
-        for (var salt = 1; salt <= maxSaltRetries && tombstoneIds.Contains(id); salt++)
+        var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var existing in existingIssues)
         {
-            id = idGenerator.Generate(title, salt);
+            usedIds.Add(existing.Id);
         }
 
-        if (tombstoneIds.Contains(id))
+        foreach (var tombstone in tombstones)
+        {
+            usedIds.Add(tombstone.IssueId);
+        }
+
+        var id = idGenerator.Generate();
+        const int maxRetries = 10;
+        for (var attempt = 1; attempt <= maxRetries && usedIds.Contains(id); attempt++)
+        {
+            id = idGenerator.Generate();
+        }
+
+        if (usedIds.Contains(id))
         {
             throw new InvalidOperationException(
-                $"Cannot generate a unique ID for title '{title}'. All salted variants collide with tombstoned issue IDs.");
+                "Cannot generate a unique ID. All attempts collide with existing or tombstoned issue IDs.");
         }
 
         var now = DateTimeOffset.UtcNow;

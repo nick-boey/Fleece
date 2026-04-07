@@ -16,7 +16,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISettingsService>(sp => new SettingsService(basePath));
 
         services.AddSingleton<IJsonlSerializer, JsonlSerializer>();
-        services.AddSingleton<IIdGenerator, Sha256IdGenerator>();
+        services.AddSingleton<IIdGenerator, GuidIdGenerator>();
         services.AddSingleton<ISchemaValidator, SchemaValidator>();
         services.AddSingleton<IStorageService>(sp =>
             new JsonlStorageService(

@@ -70,8 +70,8 @@ dotnet test tests/Fleece.Core.Tests
 The `fleece clean` command permanently removes soft-deleted issues (status `Deleted`) from `issues_{hash}.jsonl` and writes tombstone records to `tombstones_{hash}.jsonl`. Tombstone files are merged alongside issue files during `fleece merge`.
 
 Key details:
-- **Tombstone records** store `IssueId`, `OriginalTitle`, `CleanedAt`, and `CleanedBy`. The title is preserved because IDs are derived from titles via SHA256, so collision detection requires knowing what was tombstoned.
-- **ID collision prevention**: When `CreateAsync` generates an ID that matches a tombstoned issue, it retries with an incrementing salt (appended to the normalized title before hashing), up to 10 attempts.
+- **Tombstone records** store `IssueId`, `OriginalTitle`, `CleanedAt`, and `CleanedBy`. The title is preserved for historical reference.
+- **ID collision prevention**: IDs are random GUIDs (first 5 bytes, Base62-encoded to 6 chars). When `CreateAsync` generates an ID that matches an existing issue or tombstone, it retries with a new random ID, up to 10 attempts.
 - **Reference stripping**: By default, `clean` removes dangling `LinkedIssues` and `ParentIssues` references from remaining issues. Use `--no-strip-refs` to skip this.
 - **Optional flags**: `--include-complete`, `--include-closed`, `--include-archived` extend cleaning beyond just `Deleted` issues.
 - **Core service**: `ICleanService` / `CleanService` contains all business logic. The CLI `CleanCommand` is a thin wrapper.
