@@ -1,24 +1,16 @@
-using Fleece.Core.Services;
+using Fleece.Core.FunctionalCore;
 using FluentAssertions;
 using NUnit.Framework;
 
-namespace Fleece.Core.Tests.Services;
+namespace Fleece.Core.Tests.FunctionalCore;
 
 [TestFixture]
-public class Sha256IdGeneratorTests
+public class IdGenerationTests
 {
-    private Sha256IdGenerator _sut = null!;
-
-    [SetUp]
-    public void SetUp()
-    {
-        _sut = new Sha256IdGenerator();
-    }
-
     [Test]
     public void Generate_ReturnsExactlySixCharacters()
     {
-        var result = _sut.Generate("Test issue");
+        var result = IdGeneration.Generate("Test issue");
 
         result.Should().HaveLength(6);
     }
@@ -26,7 +18,7 @@ public class Sha256IdGeneratorTests
     [Test]
     public void Generate_ReturnsOnlyBase62Characters()
     {
-        var result = _sut.Generate("Test issue");
+        var result = IdGeneration.Generate("Test issue");
 
         result.Should().MatchRegex("^[0-9A-Za-z]{6}$");
     }
@@ -34,8 +26,8 @@ public class Sha256IdGeneratorTests
     [Test]
     public void Generate_IsDeterministic_SameTitleProducesSameId()
     {
-        var result1 = _sut.Generate("Fix the login bug");
-        var result2 = _sut.Generate("Fix the login bug");
+        var result1 = IdGeneration.Generate("Fix the login bug");
+        var result2 = IdGeneration.Generate("Fix the login bug");
 
         result1.Should().Be(result2);
     }
@@ -43,8 +35,8 @@ public class Sha256IdGeneratorTests
     [Test]
     public void Generate_NormalizesWhitespace_TrimsTitle()
     {
-        var result1 = _sut.Generate("Test issue");
-        var result2 = _sut.Generate("  Test issue  ");
+        var result1 = IdGeneration.Generate("Test issue");
+        var result2 = IdGeneration.Generate("  Test issue  ");
 
         result1.Should().Be(result2);
     }
@@ -52,9 +44,9 @@ public class Sha256IdGeneratorTests
     [Test]
     public void Generate_NormalizesCase_CaseInsensitive()
     {
-        var result1 = _sut.Generate("Test Issue");
-        var result2 = _sut.Generate("test issue");
-        var result3 = _sut.Generate("TEST ISSUE");
+        var result1 = IdGeneration.Generate("Test Issue");
+        var result2 = IdGeneration.Generate("test issue");
+        var result3 = IdGeneration.Generate("TEST ISSUE");
 
         result1.Should().Be(result2);
         result2.Should().Be(result3);
@@ -63,8 +55,8 @@ public class Sha256IdGeneratorTests
     [Test]
     public void Generate_DifferentTitles_ProduceDifferentIds()
     {
-        var result1 = _sut.Generate("First issue");
-        var result2 = _sut.Generate("Second issue");
+        var result1 = IdGeneration.Generate("First issue");
+        var result2 = IdGeneration.Generate("Second issue");
 
         result1.Should().NotBe(result2);
     }
@@ -72,7 +64,7 @@ public class Sha256IdGeneratorTests
     [Test]
     public void Generate_ThrowsOnNullTitle()
     {
-        var act = () => _sut.Generate(null!);
+        var act = () => IdGeneration.Generate(null!);
 
         act.Should().Throw<ArgumentException>();
     }
@@ -80,7 +72,7 @@ public class Sha256IdGeneratorTests
     [Test]
     public void Generate_ThrowsOnEmptyTitle()
     {
-        var act = () => _sut.Generate("");
+        var act = () => IdGeneration.Generate("");
 
         act.Should().Throw<ArgumentException>();
     }
@@ -88,7 +80,7 @@ public class Sha256IdGeneratorTests
     [Test]
     public void Generate_ThrowsOnWhitespaceOnlyTitle()
     {
-        var act = () => _sut.Generate("   ");
+        var act = () => IdGeneration.Generate("   ");
 
         act.Should().Throw<ArgumentException>();
     }
@@ -96,7 +88,7 @@ public class Sha256IdGeneratorTests
     [Test]
     public void Generate_HandlesUnicodeCharacters()
     {
-        var result = _sut.Generate("Test issue with unicode: \u00e9\u00e0\u00fc");
+        var result = IdGeneration.Generate("Test issue with unicode: éàü");
 
         result.Should().HaveLength(6);
         result.Should().MatchRegex("^[0-9A-Za-z]{6}$");
@@ -105,8 +97,8 @@ public class Sha256IdGeneratorTests
     [Test]
     public void GenerateWithSalt_ProducesDifferentIdThanUnsalted()
     {
-        var unsalted = _sut.Generate("Test issue", 0);
-        var salted = _sut.Generate("Test issue", 1);
+        var unsalted = IdGeneration.Generate("Test issue", 0);
+        var salted = IdGeneration.Generate("Test issue", 1);
 
         salted.Should().NotBe(unsalted);
     }
@@ -114,8 +106,8 @@ public class Sha256IdGeneratorTests
     [Test]
     public void GenerateWithZeroSalt_MatchesUnsaltedGenerate()
     {
-        var unsalted = _sut.Generate("Test issue");
-        var zeroSalt = _sut.Generate("Test issue", 0);
+        var unsalted = IdGeneration.Generate("Test issue");
+        var zeroSalt = IdGeneration.Generate("Test issue", 0);
 
         zeroSalt.Should().Be(unsalted);
     }
@@ -123,8 +115,8 @@ public class Sha256IdGeneratorTests
     [Test]
     public void GenerateWithSalt_IsDeterministic()
     {
-        var result1 = _sut.Generate("Test issue", 5);
-        var result2 = _sut.Generate("Test issue", 5);
+        var result1 = IdGeneration.Generate("Test issue", 5);
+        var result2 = IdGeneration.Generate("Test issue", 5);
 
         result1.Should().Be(result2);
     }
@@ -132,8 +124,8 @@ public class Sha256IdGeneratorTests
     [Test]
     public void GenerateWithSalt_DifferentSaltsProduceDifferentIds()
     {
-        var salt1 = _sut.Generate("Test issue", 1);
-        var salt2 = _sut.Generate("Test issue", 2);
+        var salt1 = IdGeneration.Generate("Test issue", 1);
+        var salt2 = IdGeneration.Generate("Test issue", 2);
 
         salt1.Should().NotBe(salt2);
     }
@@ -141,7 +133,7 @@ public class Sha256IdGeneratorTests
     [Test]
     public void GenerateWithSalt_ReturnsSixCharBase62()
     {
-        var result = _sut.Generate("Test issue", 3);
+        var result = IdGeneration.Generate("Test issue", 3);
 
         result.Should().HaveLength(6);
         result.Should().MatchRegex("^[0-9A-Za-z]{6}$");

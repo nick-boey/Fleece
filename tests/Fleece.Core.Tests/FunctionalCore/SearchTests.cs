@@ -1,18 +1,14 @@
+using Fleece.Core.FunctionalCore;
 using Fleece.Core.Models;
 using Fleece.Core.Search;
-using Fleece.Core.Services.Interfaces;
 using FluentAssertions;
-using NSubstitute;
 using NUnit.Framework;
 
-namespace Fleece.Core.Tests.Search;
+namespace Fleece.Core.Tests.FunctionalCore;
 
 [TestFixture]
-public class SearchServiceTests
+public class SearchTests
 {
-    private IIssueService _issueService = null!;
-    private SearchService _sut = null!;
-
     private static Issue CreateIssue(
         string id = "abc123",
         string title = "Test Issue",
@@ -44,17 +40,10 @@ public class SearchServiceTests
         };
     }
 
-    [SetUp]
-    public void SetUp()
-    {
-        _issueService = Substitute.For<IIssueService>();
-        _sut = new SearchService(_issueService);
-    }
-
     #region Basic Filtering
 
     [Test]
-    public async Task SearchAsync_StatusFilter_FiltersCorrectly()
+    public void SearchAsync_StatusFilter_FiltersCorrectly()
     {
         var issues = new List<Issue>
         {
@@ -62,17 +51,16 @@ public class SearchServiceTests
             CreateIssue(id: "2", status: IssueStatus.Progress),
             CreateIssue(id: "3", status: IssueStatus.Open)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("status:open");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("status:open");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
         result.Should().OnlyContain(i => i.Status == IssueStatus.Open);
     }
 
     [Test]
-    public async Task SearchAsync_TypeFilter_FiltersCorrectly()
+    public void SearchAsync_TypeFilter_FiltersCorrectly()
     {
         var issues = new List<Issue>
         {
@@ -80,17 +68,16 @@ public class SearchServiceTests
             CreateIssue(id: "2", type: IssueType.Feature),
             CreateIssue(id: "3", type: IssueType.Bug)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("type:bug");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("type:bug");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
         result.Should().OnlyContain(i => i.Type == IssueType.Bug);
     }
 
     [Test]
-    public async Task SearchAsync_PriorityFilter_FiltersCorrectly()
+    public void SearchAsync_PriorityFilter_FiltersCorrectly()
     {
         var issues = new List<Issue>
         {
@@ -98,17 +85,16 @@ public class SearchServiceTests
             CreateIssue(id: "2", priority: 2),
             CreateIssue(id: "3", priority: 1)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("priority:1");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("priority:1");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
         result.Should().OnlyContain(i => i.Priority == 1);
     }
 
     [Test]
-    public async Task SearchAsync_AssignedFilter_FiltersCorrectly()
+    public void SearchAsync_AssignedFilter_FiltersCorrectly()
     {
         var issues = new List<Issue>
         {
@@ -116,17 +102,16 @@ public class SearchServiceTests
             CreateIssue(id: "2", assignedTo: "jane"),
             CreateIssue(id: "3", assignedTo: "john")
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("assigned:john");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("assigned:john");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
         result.Should().OnlyContain(i => i.AssignedTo == "john");
     }
 
     [Test]
-    public async Task SearchAsync_TagFilter_FiltersCorrectly()
+    public void SearchAsync_TagFilter_FiltersCorrectly()
     {
         var issues = new List<Issue>
         {
@@ -134,17 +119,16 @@ public class SearchServiceTests
             CreateIssue(id: "2", tags: ["frontend"]),
             CreateIssue(id: "3", tags: ["backend", "urgent"])
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("tag:backend");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("tag:backend");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
         result.Should().OnlyContain(i => i.Tags.Contains("backend"));
     }
 
     [Test]
-    public async Task SearchAsync_LinkedPrFilter_FiltersCorrectly()
+    public void SearchAsync_LinkedPrFilter_FiltersCorrectly()
     {
         var issues = new List<Issue>
         {
@@ -152,10 +136,9 @@ public class SearchServiceTests
             CreateIssue(id: "2", linkedPr: 456),
             CreateIssue(id: "3", linkedPr: 123)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("pr:123");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("pr:123");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
         result.Should().OnlyContain(i => i.LinkedPR == 123);
@@ -166,7 +149,7 @@ public class SearchServiceTests
     #region Negation
 
     [Test]
-    public async Task SearchAsync_NegatedStatusFilter_ExcludesStatus()
+    public void SearchAsync_NegatedStatusFilter_ExcludesStatus()
     {
         var issues = new List<Issue>
         {
@@ -174,17 +157,16 @@ public class SearchServiceTests
             CreateIssue(id: "2", status: IssueStatus.Progress),
             CreateIssue(id: "3", status: IssueStatus.Review)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("-status:open");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("-status:open");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
         result.Should().NotContain(i => i.Status == IssueStatus.Open);
     }
 
     [Test]
-    public async Task SearchAsync_NegatedMultiValue_ExcludesAllValues()
+    public void SearchAsync_NegatedMultiValue_ExcludesAllValues()
     {
         var issues = new List<Issue>
         {
@@ -193,10 +175,9 @@ public class SearchServiceTests
             CreateIssue(id: "3", type: IssueType.Task),
             CreateIssue(id: "4", type: IssueType.Chore)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("-type:bug, chore;");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("-type:bug, chore;");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
         result.Should().NotContain(i => i.Type == IssueType.Bug);
@@ -208,7 +189,7 @@ public class SearchServiceTests
     #region Multi-Value (OR within filter)
 
     [Test]
-    public async Task SearchAsync_MultiValueStatus_MatchesAny()
+    public void SearchAsync_MultiValueStatus_MatchesAny()
     {
         var issues = new List<Issue>
         {
@@ -216,10 +197,9 @@ public class SearchServiceTests
             CreateIssue(id: "2", status: IssueStatus.Progress),
             CreateIssue(id: "3", status: IssueStatus.Review)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("status:open, progress;");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("status:open, progress;");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
         result.Should().Contain(i => i.Status == IssueStatus.Open);
@@ -227,7 +207,7 @@ public class SearchServiceTests
     }
 
     [Test]
-    public async Task SearchAsync_MultiValueType_MatchesAny()
+    public void SearchAsync_MultiValueType_MatchesAny()
     {
         var issues = new List<Issue>
         {
@@ -235,10 +215,9 @@ public class SearchServiceTests
             CreateIssue(id: "2", type: IssueType.Feature),
             CreateIssue(id: "3", type: IssueType.Task)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("type:bug, feature;");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("type:bug, feature;");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
         result.Should().Contain(i => i.Type == IssueType.Bug);
@@ -250,7 +229,7 @@ public class SearchServiceTests
     #region Full-Text Search
 
     [Test]
-    public async Task SearchAsync_TextToken_SearchesTitle()
+    public void SearchAsync_TextToken_SearchesTitle()
     {
         var issues = new List<Issue>
         {
@@ -258,16 +237,15 @@ public class SearchServiceTests
             CreateIssue(id: "2", title: "Add feature"),
             CreateIssue(id: "3", title: "Login page update")
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("login");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("login");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
     }
 
     [Test]
-    public async Task SearchAsync_TextToken_SearchesDescription()
+    public void SearchAsync_TextToken_SearchesDescription()
     {
         var issues = new List<Issue>
         {
@@ -275,16 +253,15 @@ public class SearchServiceTests
             CreateIssue(id: "2", title: "Issue 2", description: "Update database"),
             CreateIssue(id: "3", title: "Issue 3", description: "Authentication service")
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("authentication");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("authentication");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
     }
 
     [Test]
-    public async Task SearchAsync_TextToken_SearchesTags()
+    public void SearchAsync_TextToken_SearchesTags()
     {
         var issues = new List<Issue>
         {
@@ -292,16 +269,15 @@ public class SearchServiceTests
             CreateIssue(id: "2", title: "Issue 2", tags: ["frontend"]),
             CreateIssue(id: "3", title: "Issue 3", tags: ["api-gateway"])
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("api");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("api");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(2);
     }
 
     [Test]
-    public async Task SearchAsync_MultipleTextTokens_UsesAndLogic()
+    public void SearchAsync_MultipleTextTokens_UsesAndLogic()
     {
         var issues = new List<Issue>
         {
@@ -309,27 +285,25 @@ public class SearchServiceTests
             CreateIssue(id: "2", title: "Fix login display"),
             CreateIssue(id: "3", title: "Update authentication")
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("login authentication");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("login authentication");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("1");
     }
 
     [Test]
-    public async Task SearchAsync_TextToken_CaseInsensitive()
+    public void SearchAsync_TextToken_CaseInsensitive()
     {
         var issues = new List<Issue>
         {
             CreateIssue(id: "1", title: "Fix LOGIN bug"),
             CreateIssue(id: "2", title: "Add feature")
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("login");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("login");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(1);
     }
@@ -339,7 +313,7 @@ public class SearchServiceTests
     #region Combined Filters (AND logic)
 
     [Test]
-    public async Task SearchAsync_MultipleFilters_UsesAndLogic()
+    public void SearchAsync_MultipleFilters_UsesAndLogic()
     {
         var issues = new List<Issue>
         {
@@ -347,17 +321,16 @@ public class SearchServiceTests
             CreateIssue(id: "2", status: IssueStatus.Open, type: IssueType.Feature),
             CreateIssue(id: "3", status: IssueStatus.Progress, type: IssueType.Bug)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("status:open type:bug");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("status:open type:bug");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("1");
     }
 
     [Test]
-    public async Task SearchAsync_FilterAndText_CombinesWithAnd()
+    public void SearchAsync_FilterAndText_CombinesWithAnd()
     {
         var issues = new List<Issue>
         {
@@ -365,10 +338,9 @@ public class SearchServiceTests
             CreateIssue(id: "2", status: IssueStatus.Open, title: "Database issue"),
             CreateIssue(id: "3", status: IssueStatus.Progress, title: "Login update")
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("status:open login");
-        var result = await _sut.SearchAsync(query);
+        var query = SearchOps.ParseQuery("status:open login");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("1");
@@ -379,25 +351,24 @@ public class SearchServiceTests
     #region CLI Filter Precedence
 
     [Test]
-    public async Task SearchWithFiltersAsync_CliOverridesQueryForSameField()
+    public void SearchWithFiltersAsync_CliOverridesQueryForSameField()
     {
         var issues = new List<Issue>
         {
             CreateIssue(id: "1", status: IssueStatus.Open),
             CreateIssue(id: "2", status: IssueStatus.Progress)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         // Query says "status:progress" but CLI says "open"
-        var query = _sut.ParseQuery("status:progress");
-        var result = await _sut.SearchWithFiltersAsync(query, status: IssueStatus.Open);
+        var query = SearchOps.ParseQuery("status:progress");
+        var result = SearchOps.SearchWithFilters(issues, query, status: IssueStatus.Open);
 
         result.Should().HaveCount(1);
         result[0].Status.Should().Be(IssueStatus.Open);
     }
 
     [Test]
-    public async Task SearchWithFiltersAsync_CliAndQueryCombineForDifferentFields()
+    public void SearchWithFiltersAsync_CliAndQueryCombineForDifferentFields()
     {
         var issues = new List<Issue>
         {
@@ -405,11 +376,10 @@ public class SearchServiceTests
             CreateIssue(id: "2", status: IssueStatus.Open, type: IssueType.Feature),
             CreateIssue(id: "3", status: IssueStatus.Progress, type: IssueType.Bug)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         // Query says "type:bug" and CLI says "status:open"
-        var query = _sut.ParseQuery("type:bug");
-        var result = await _sut.SearchWithFiltersAsync(query, status: IssueStatus.Open);
+        var query = SearchOps.ParseQuery("type:bug");
+        var result = SearchOps.SearchWithFilters(issues, query, status: IssueStatus.Open);
 
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("1");
@@ -420,7 +390,7 @@ public class SearchServiceTests
     #region Terminal Status Handling
 
     [Test]
-    public async Task SearchAsync_ExcludesTerminalByDefault()
+    public void SearchAsync_ExcludesTerminalByDefault()
     {
         var issues = new List<Issue>
         {
@@ -428,17 +398,16 @@ public class SearchServiceTests
             CreateIssue(id: "2", status: IssueStatus.Complete),
             CreateIssue(id: "3", status: IssueStatus.Archived)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("");
-        var result = await _sut.SearchAsync(query, includeTerminal: false);
+        var query = SearchOps.ParseQuery("");
+        var result = SearchOps.Search(issues, query, includeTerminal: false);
 
         result.Should().HaveCount(1);
         result[0].Status.Should().Be(IssueStatus.Open);
     }
 
     [Test]
-    public async Task SearchAsync_IncludesTerminalWhenRequested()
+    public void SearchAsync_IncludesTerminalWhenRequested()
     {
         var issues = new List<Issue>
         {
@@ -446,10 +415,9 @@ public class SearchServiceTests
             CreateIssue(id: "2", status: IssueStatus.Complete),
             CreateIssue(id: "3", status: IssueStatus.Archived)
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("");
-        var result = await _sut.SearchAsync(query, includeTerminal: true);
+        var query = SearchOps.ParseQuery("");
+        var result = SearchOps.Search(issues, query, includeTerminal: true);
 
         result.Should().HaveCount(3);
     }
@@ -459,7 +427,7 @@ public class SearchServiceTests
     #region Context Search
 
     [Test]
-    public async Task SearchWithContextAsync_ReturnsMatchedAndContextIssues()
+    public void SearchWithContextAsync_ReturnsMatchedAndContextIssues()
     {
         var parentRef = new ParentIssueRef { ParentIssue = "parent1", SortOrder = "aaa" };
         var issues = new List<Issue>
@@ -493,10 +461,9 @@ public class SearchServiceTests
                 Tags = []
             }
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
-        var query = _sut.ParseQuery("login");
-        var result = await _sut.SearchWithContextAsync(query);
+        var query = SearchOps.ParseQuery("login");
+        var result = SearchOps.SearchWithContext(issues, query);
 
         result.MatchedIssues.Should().HaveCount(1);
         result.MatchedIssues[0].Id.Should().Be("child1");
@@ -515,7 +482,7 @@ public class SearchServiceTests
         var issue = CreateIssue();
         var query = SearchQuery.Empty;
 
-        var result = _sut.Matches(issue, query);
+        var result = SearchOps.Matches(issue, query);
 
         result.Should().BeTrue();
     }
@@ -524,9 +491,9 @@ public class SearchServiceTests
     public void Matches_MatchingFilter_ReturnsTrue()
     {
         var issue = CreateIssue(status: IssueStatus.Open);
-        var query = _sut.ParseQuery("status:open");
+        var query = SearchOps.ParseQuery("status:open");
 
-        var result = _sut.Matches(issue, query);
+        var result = SearchOps.Matches(issue, query);
 
         result.Should().BeTrue();
     }
@@ -535,9 +502,9 @@ public class SearchServiceTests
     public void Matches_NonMatchingFilter_ReturnsFalse()
     {
         var issue = CreateIssue(status: IssueStatus.Progress);
-        var query = _sut.ParseQuery("status:open");
+        var query = SearchOps.ParseQuery("status:open");
 
-        var result = _sut.Matches(issue, query);
+        var result = SearchOps.Matches(issue, query);
 
         result.Should().BeFalse();
     }

@@ -451,40 +451,5 @@ public class MigrationServiceTests
         result.Should().BeTrue();
     }
 
-    [Test]
-    public async Task MigrateLinkedPrToTags_Internal_ConvertsFieldToTag()
-    {
-        var timestamp = DateTimeOffset.UtcNow;
-        var issue = new Issue
-        {
-            Id = "test123",
-            Title = "Test",
-            TitleLastUpdate = timestamp,
-            Status = IssueStatus.Open,
-            StatusLastUpdate = timestamp,
-            Type = IssueType.Task,
-            TypeLastUpdate = timestamp,
-            LinkedPR = 123,
-            LinkedPRLastUpdate = timestamp,
-            LinkedPRModifiedBy = "migrator",
-            LinkedIssues = [],
-            ParentIssues = [],
-            Tags = [],
-            TagsLastUpdate = timestamp,
-            Questions = [],
-            LastUpdate = timestamp,
-            CreatedAt = timestamp
-        };
-
-        var result = MigrationService.MigrateLinkedPrToTags(issue);
-
-        result.LinkedPR.Should().BeNull();
-        result.LinkedPRLastUpdate.Should().BeNull();
-        result.LinkedPRModifiedBy.Should().BeNull();
-        result.Tags.Should().Contain("hsp-linked-pr=123");
-        result.TagsLastUpdate.Should().Be(timestamp);
-        result.TagsModifiedBy.Should().Be("migrator");
-    }
-
     #endregion
 }

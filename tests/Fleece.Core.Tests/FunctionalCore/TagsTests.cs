@@ -1,27 +1,19 @@
+using Fleece.Core.FunctionalCore;
 using Fleece.Core.Models;
-using Fleece.Core.Services;
 using FluentAssertions;
 using NUnit.Framework;
 
-namespace Fleece.Core.Tests.Services;
+namespace Fleece.Core.Tests.FunctionalCore;
 
 [TestFixture]
-public class TagServiceTests
+public class TagsTests
 {
-    private TagService _sut = null!;
-
-    [SetUp]
-    public void SetUp()
-    {
-        _sut = new TagService();
-    }
-
     #region ValidateTag
 
     [Test]
     public void ValidateTag_ReturnsNull_ForSimpleTag()
     {
-        var result = _sut.ValidateTag("backend");
+        var result = Tags.ValidateTag("backend");
 
         result.Should().BeNull();
     }
@@ -29,7 +21,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTag_ReturnsNull_ForKeyValueTag()
     {
-        var result = _sut.ValidateTag("project=frontend");
+        var result = Tags.ValidateTag("project=frontend");
 
         result.Should().BeNull();
     }
@@ -37,7 +29,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTag_ReturnsError_ForTagWithSpaces()
     {
-        var result = _sut.ValidateTag("bad tag");
+        var result = Tags.ValidateTag("bad tag");
 
         result.Should().NotBeNull();
         result.Should().Contain("whitespace");
@@ -46,7 +38,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTag_ReturnsError_ForMultipleEquals()
     {
-        var result = _sut.ValidateTag("key=value=extra");
+        var result = Tags.ValidateTag("key=value=extra");
 
         result.Should().NotBeNull();
         result.Should().Contain("multiple '='");
@@ -55,7 +47,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTag_ReturnsError_ForEmptyKey()
     {
-        var result = _sut.ValidateTag("=value");
+        var result = Tags.ValidateTag("=value");
 
         result.Should().NotBeNull();
         result.Should().Contain("empty key");
@@ -64,7 +56,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTag_ReturnsError_ForEmptyValue()
     {
-        var result = _sut.ValidateTag("key=");
+        var result = Tags.ValidateTag("key=");
 
         result.Should().NotBeNull();
         result.Should().Contain("empty value");
@@ -73,7 +65,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTag_ReturnsError_ForReservedKey()
     {
-        var result = _sut.ValidateTag("status=open");
+        var result = Tags.ValidateTag("status=open");
 
         result.Should().NotBeNull();
         result.Should().Contain("reserved");
@@ -82,7 +74,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTag_ReturnsError_ForReservedKey_CaseInsensitive()
     {
-        var result = _sut.ValidateTag("STATUS=open");
+        var result = Tags.ValidateTag("STATUS=open");
 
         result.Should().NotBeNull();
         result.Should().Contain("reserved");
@@ -106,7 +98,7 @@ public class TagServiceTests
     [TestCase("questions")]
     public void ValidateTag_ReturnsError_ForAllReservedKeys(string key)
     {
-        var result = _sut.ValidateTag($"{key}=somevalue");
+        var result = Tags.ValidateTag($"{key}=somevalue");
 
         result.Should().NotBeNull();
         result.Should().Contain("reserved");
@@ -115,7 +107,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTag_ReturnsError_ForEmptyTag()
     {
-        var result = _sut.ValidateTag("");
+        var result = Tags.ValidateTag("");
 
         result.Should().NotBeNull();
         result.Should().Contain("empty");
@@ -124,7 +116,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTag_ReturnsError_ForWhitespaceOnlyTag()
     {
-        var result = _sut.ValidateTag("   ");
+        var result = Tags.ValidateTag("   ");
 
         result.Should().NotBeNull();
         result.Should().Contain("empty");
@@ -137,7 +129,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTags_ReturnsEmpty_ForValidTags()
     {
-        var result = _sut.ValidateTags(["backend", "project=frontend", "urgent"]);
+        var result = Tags.ValidateTags(["backend", "project=frontend", "urgent"]);
 
         result.Should().BeEmpty();
     }
@@ -145,7 +137,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTags_ReturnsEmpty_ForNullTags()
     {
-        var result = _sut.ValidateTags(null);
+        var result = Tags.ValidateTags(null);
 
         result.Should().BeEmpty();
     }
@@ -153,7 +145,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTags_ReturnsEmpty_ForEmptyList()
     {
-        var result = _sut.ValidateTags([]);
+        var result = Tags.ValidateTags([]);
 
         result.Should().BeEmpty();
     }
@@ -161,7 +153,7 @@ public class TagServiceTests
     [Test]
     public void ValidateTags_ReturnsErrors_ForInvalidTags()
     {
-        var result = _sut.ValidateTags(["valid", "bad tag", "status=open"]);
+        var result = Tags.ValidateTags(["valid", "bad tag", "status=open"]);
 
         result.Should().HaveCount(2);
     }
@@ -173,7 +165,7 @@ public class TagServiceTests
     [Test]
     public void ParseTag_ReturnsKeyOnly_ForSimpleTag()
     {
-        var (key, value) = _sut.ParseTag("backend");
+        var (key, value) = Tags.ParseTag("backend");
 
         key.Should().Be("backend");
         value.Should().BeNull();
@@ -182,7 +174,7 @@ public class TagServiceTests
     [Test]
     public void ParseTag_ReturnsKeyAndValue_ForKeyValueTag()
     {
-        var (key, value) = _sut.ParseTag("project=frontend");
+        var (key, value) = Tags.ParseTag("project=frontend");
 
         key.Should().Be("project");
         value.Should().Be("frontend");
@@ -191,7 +183,7 @@ public class TagServiceTests
     [Test]
     public void ParseTag_HandlesEmptyString()
     {
-        var (key, value) = _sut.ParseTag("");
+        var (key, value) = Tags.ParseTag("");
 
         key.Should().Be(string.Empty);
         value.Should().BeNull();
@@ -200,7 +192,7 @@ public class TagServiceTests
     [Test]
     public void ParseTag_HandlesEqualsAtStart()
     {
-        var (key, value) = _sut.ParseTag("=value");
+        var (key, value) = Tags.ParseTag("=value");
 
         key.Should().Be(string.Empty);
         value.Should().Be("value");
@@ -209,7 +201,7 @@ public class TagServiceTests
     [Test]
     public void ParseTag_HandlesEqualsAtEnd()
     {
-        var (key, value) = _sut.ParseTag("key=");
+        var (key, value) = Tags.ParseTag("key=");
 
         key.Should().Be("key");
         value.Should().Be(string.Empty);
@@ -232,7 +224,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.HasKeyedTag(issue, "project", "frontend");
+        var result = Tags.HasKeyedTag(issue, "project", "frontend");
 
         result.Should().BeTrue();
     }
@@ -250,7 +242,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.HasKeyedTag(issue, "project", "frontend");
+        var result = Tags.HasKeyedTag(issue, "project", "frontend");
 
         result.Should().BeFalse();
     }
@@ -268,7 +260,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.HasKeyedTag(issue, "project", "frontend");
+        var result = Tags.HasKeyedTag(issue, "project", "frontend");
 
         result.Should().BeFalse();
     }
@@ -286,7 +278,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.HasKeyedTag(issue, "project", "frontend");
+        var result = Tags.HasKeyedTag(issue, "project", "frontend");
 
         result.Should().BeTrue();
     }
@@ -304,7 +296,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.HasKeyedTag(issue, "project", "frontend");
+        var result = Tags.HasKeyedTag(issue, "project", "frontend");
 
         result.Should().BeTrue();
     }
@@ -322,7 +314,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.HasKeyedTag(issue, "project", "frontend");
+        var result = Tags.HasKeyedTag(issue, "project", "frontend");
 
         result.Should().BeFalse();
     }
@@ -340,7 +332,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.HasKeyedTag(issue, "project", "frontend");
+        var result = Tags.HasKeyedTag(issue, "project", "frontend");
 
         result.Should().BeFalse();
     }
@@ -359,7 +351,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.HasKeyedTag(issue, "project", "frontend");
+        var result = Tags.HasKeyedTag(issue, "project", "frontend");
 
         result.Should().BeFalse();
     }
@@ -381,7 +373,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.GetKeyedTags(issue);
+        var result = Tags.GetKeyedTags(issue);
 
         result.Should().HaveCount(2);
         result.Should().ContainKey("project");
@@ -401,7 +393,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.GetKeyedTags(issue);
+        var result = Tags.GetKeyedTags(issue);
 
         result.Should().HaveCount(1);
         result["project"].Should().HaveCount(2);
@@ -422,7 +414,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.GetKeyedTags(issue);
+        var result = Tags.GetKeyedTags(issue);
 
         result.Should().BeEmpty();
     }
@@ -440,7 +432,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.GetKeyedTags(issue);
+        var result = Tags.GetKeyedTags(issue);
 
         result.Should().BeEmpty();
     }
@@ -458,7 +450,7 @@ public class TagServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        var result = _sut.GetKeyedTags(issue);
+        var result = Tags.GetKeyedTags(issue);
 
         // Should have one key with two values
         result.Should().HaveCount(1);
@@ -478,7 +470,7 @@ public class TagServiceTests
             Tags = ["project=frontend", "urgent"], LastUpdate = DateTimeOffset.UtcNow
         };
 
-        _sut.HasTagKey(issue, "project").Should().BeTrue();
+        Tags.HasTagKey(issue, "project").Should().BeTrue();
     }
 
     [Test]
@@ -490,7 +482,7 @@ public class TagServiceTests
             Tags = ["urgent", "backend"], LastUpdate = DateTimeOffset.UtcNow
         };
 
-        _sut.HasTagKey(issue, "urgent").Should().BeTrue();
+        Tags.HasTagKey(issue, "urgent").Should().BeTrue();
     }
 
     [Test]
@@ -502,7 +494,7 @@ public class TagServiceTests
             Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow
         };
 
-        _sut.HasTagKey(issue, "team").Should().BeFalse();
+        Tags.HasTagKey(issue, "team").Should().BeFalse();
     }
 
     [Test]
@@ -514,7 +506,7 @@ public class TagServiceTests
             Tags = ["Project=frontend"], LastUpdate = DateTimeOffset.UtcNow
         };
 
-        _sut.HasTagKey(issue, "project").Should().BeTrue();
+        Tags.HasTagKey(issue, "project").Should().BeTrue();
     }
 
     [Test]
@@ -526,7 +518,7 @@ public class TagServiceTests
             Tags = [], LastUpdate = DateTimeOffset.UtcNow
         };
 
-        _sut.HasTagKey(issue, "project").Should().BeFalse();
+        Tags.HasTagKey(issue, "project").Should().BeFalse();
     }
 
     #endregion
