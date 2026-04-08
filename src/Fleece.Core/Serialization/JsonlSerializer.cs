@@ -3,7 +3,7 @@ using Fleece.Core.Models;
 
 namespace Fleece.Core.Serialization;
 
-public interface IJsonlSerializer
+internal interface IJsonlSerializer
 {
     string SerializeIssue(Issue issue);
     Issue? DeserializeIssue(string line);
@@ -13,7 +13,7 @@ public interface IJsonlSerializer
     IReadOnlyList<Tombstone> DeserializeTombstones(string content);
 }
 
-public sealed class JsonlSerializer : IJsonlSerializer
+internal sealed class JsonlSerializer : IJsonlSerializer
 {
     public string SerializeIssue(Issue issue)
     {

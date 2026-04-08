@@ -19,6 +19,7 @@ public sealed partial class FleeceService : IFleeceService
     private readonly IIdGenerator _idGenerator;
     private readonly IGitConfigService _gitConfigService;
     private readonly ISettingsService _settingsService;
+    private readonly SyncStatusService? _syncStatusService;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     // Regex patterns for Git branch name validation (shared with IssueService)
@@ -28,16 +29,18 @@ public sealed partial class FleeceService : IFleeceService
     [GeneratedRegex(@"[~^:\?\*\[\]@{}\s\\]|\.\.|\.$|^\.|\.lock$|//$|^/|/$")]
     private static partial Regex InvalidBranchNamePattern();
 
-    public FleeceService(
+    internal FleeceService(
         IStorageService storage,
         IIdGenerator idGenerator,
         IGitConfigService gitConfigService,
-        ISettingsService settingsService)
+        ISettingsService settingsService,
+        SyncStatusService? syncStatusService = null)
     {
         _storage = storage;
         _idGenerator = idGenerator;
         _gitConfigService = gitConfigService;
         _settingsService = settingsService;
+        _syncStatusService = syncStatusService;
     }
 
     /// <summary>
@@ -906,6 +909,16 @@ public sealed partial class FleeceService : IFleeceService
         return await _storage.LoadIssuesWithDiagnosticsAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<string, SyncStatus>> GetSyncStatusesAsync(CancellationToken cancellationToken = default)
+    {
+        if (_syncStatusService is null)
+        {
+            return new Dictionary<string, SyncStatus>();
+        }
+
+        return await _syncStatusService.GetSyncStatusesAsync(cancellationToken);
+    }
+
     #endregion
 
     #region Private Helpers
@@ -913,7 +926,7 @@ public sealed partial class FleeceService : IFleeceService
     private async Task<IReadOnlyList<Issue>> LoadAndNormalizeAsync(CancellationToken cancellationToken)
     {
         var issues = await _storage.LoadIssuesAsync(cancellationToken);
-        return IssueService.NormalizeSortOrders(issues);
+        return Issues.NormalizeSortOrders(issues);
     }
 
     private static void ValidateBranchName(string? workingBranchId)

@@ -271,5 +271,11 @@ public interface IFleeceService
     /// </summary>
     Task<LoadIssuesResult> LoadIssuesWithDiagnosticsAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Gets the sync status for all issues by comparing working directory,
+    /// HEAD commit, and remote upstream.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, SyncStatus>> GetSyncStatusesAsync(CancellationToken cancellationToken = default);
+
     #endregion
 }

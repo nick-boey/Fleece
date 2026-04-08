@@ -16,7 +16,6 @@ namespace Fleece.Cli.Tests.Commands;
 public class TreeCommandTests
 {
     private IFleeceService _fleeceService = null!;
-    private ISyncStatusService _syncStatusService = null!;
     private ISettingsService _settingsService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
@@ -28,8 +27,7 @@ public class TreeCommandTests
     public void SetUp()
     {
         _fleeceService = Substitute.For<IFleeceService>();
-        _syncStatusService = Substitute.For<ISyncStatusService>();
-        _syncStatusService.GetSyncStatusesAsync(Arg.Any<CancellationToken>())
+        _fleeceService.GetSyncStatusesAsync(Arg.Any<CancellationToken>())
             .Returns(new Dictionary<string, SyncStatus>());
         _fleeceService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
             .Returns((false, string.Empty));
@@ -51,7 +49,7 @@ public class TreeCommandTests
                 }
             });
 
-        _command = new ListCommand(_fleeceService, _syncStatusService, _settingsService);
+        _command = new ListCommand(_fleeceService, _settingsService);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;

@@ -3,7 +3,10 @@ using Fleece.Core.Services.Interfaces;
 
 namespace Fleece.Core.Services;
 
-public sealed class GuidIdGenerator : IIdGenerator
+internal sealed class GuidIdGenerator : IIdGenerator
 {
-    public string Generate() => IdGeneration.Generate();
+    public string Generate()
+    {
+        return IdGeneration.Generate();
+    }
 }

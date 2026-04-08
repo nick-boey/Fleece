@@ -10,7 +10,6 @@ namespace Fleece.Cli.Commands;
 
 public sealed class ListCommand(
     IFleeceService fleeceService,
-    ISyncStatusService syncStatusService,
     ISettingsService settingsService) : AsyncCommand<ListSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ListSettings settings)
@@ -338,7 +337,7 @@ public sealed class ListCommand(
         IReadOnlyDictionary<string, SyncStatus>? syncStatuses = null;
         if (settings.SyncStatus)
         {
-            syncStatuses = await syncStatusService.GetSyncStatusesAsync();
+            syncStatuses = await fleeceService.GetSyncStatusesAsync();
         }
 
         if (settings.Json || settings.JsonVerbose)

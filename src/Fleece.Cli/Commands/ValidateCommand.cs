@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Fleece.Cli.Settings;
+using Fleece.Core.Models;
 using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
 using Spectre.Console.Cli;

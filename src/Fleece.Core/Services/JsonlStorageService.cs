@@ -6,7 +6,7 @@ using Fleece.Core.Services.Interfaces;
 
 namespace Fleece.Core.Services;
 
-public sealed class JsonlStorageService : IStorageService
+internal sealed class JsonlStorageService : IStorageService
 {
     private const string FleeceDirectory = ".fleece";
     private const string IssuesFileName = "issues.jsonl";

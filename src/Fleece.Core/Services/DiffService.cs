@@ -4,7 +4,7 @@ using Fleece.Core.Services.Interfaces;
 
 namespace Fleece.Core.Services;
 
-public sealed class DiffService(IJsonlSerializer serializer) : IDiffService
+internal sealed class DiffService(IJsonlSerializer serializer) : IDiffService
 {
     public async Task<DiffResult> CompareFilesAsync(
         string file1Path,

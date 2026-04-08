@@ -1,6 +1,6 @@
 namespace Fleece.Core.Services.Interfaces;
 
-public interface IIdGenerator
+internal interface IIdGenerator
 {
     string Generate();
 }

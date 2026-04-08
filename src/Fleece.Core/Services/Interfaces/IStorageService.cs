@@ -2,7 +2,7 @@ using Fleece.Core.Models;
 
 namespace Fleece.Core.Services.Interfaces;
 
-public interface IStorageService
+internal interface IStorageService
 {
     Task<IReadOnlyList<Issue>> LoadIssuesAsync(CancellationToken cancellationToken = default);
     Task SaveIssuesAsync(IReadOnlyList<Issue> issues, CancellationToken cancellationToken = default);

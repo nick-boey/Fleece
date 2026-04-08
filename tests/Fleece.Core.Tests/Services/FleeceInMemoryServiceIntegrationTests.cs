@@ -10,11 +10,11 @@ namespace Fleece.Core.Tests.Services;
 
 /// <summary>
 /// Integration tests for <see cref="FleeceInMemoryService"/> wired against real
-/// <see cref="IssueService"/>, <see cref="JsonlStorageService"/>,
+/// <see cref="FleeceService"/>, <see cref="JsonlStorageService"/>,
 /// and <see cref="IssueSerializationQueueService"/>
 /// — with actual JSONL files on disk.
 ///
-/// Only <see cref="IIdGenerator"/> and <see cref="IGitConfigService"/> are mocked
+/// Only <see cref="IGitConfigService"/> and <see cref="ISettingsService"/> are mocked
 /// to provide predictable IDs and avoid real git calls.
 /// </summary>
 [TestFixture]
@@ -25,15 +25,12 @@ public class FleeceInMemoryServiceIntegrationTests
 
     // Real components
     private JsonlStorageService _storageService = null!;
-    private IssueService _issueService = null!;
+    private FleeceService _fleeceService = null!;
     private IssueSerializationQueueService _queueService = null!;
     private FleeceInMemoryService _sut = null!;
 
     // Mocks
-    private IIdGenerator _idGenerator = null!;
     private IGitConfigService _gitConfigService = null!;
-
-    private int _idCounter;
 
     [SetUp]
     public void SetUp()
@@ -42,26 +39,21 @@ public class FleeceInMemoryServiceIntegrationTests
         _fleecePath = Path.Combine(_tempDir, ".fleece");
         Directory.CreateDirectory(_fleecePath);
 
-        _idCounter = 0;
-
-        _idGenerator = Substitute.For<IIdGenerator>();
-        _idGenerator.Generate()
-            .Returns(_ => $"test-{Interlocked.Increment(ref _idCounter)}");
-
         _gitConfigService = Substitute.For<IGitConfigService>();
         _gitConfigService.GetUserName().Returns("test-user");
 
         var serializer = new JsonlSerializer();
         var schemaValidator = new SchemaValidator();
+        var settingsService = Substitute.For<ISettingsService>();
+        var idGenerator = new GuidIdGenerator();
 
         _storageService = new JsonlStorageService(_tempDir, serializer, schemaValidator);
-        var tagService = new TagService();
-        _issueService = new IssueService(_storageService, _idGenerator, _gitConfigService, tagService);
+        _fleeceService = new FleeceService(_storageService, idGenerator, _gitConfigService, settingsService);
 
         _queueService = new IssueSerializationQueueService();
         _queueService.StartProcessing();
 
-        _sut = new FleeceInMemoryService(_issueService, _queueService, _tempDir);
+        _sut = new FleeceInMemoryService(_fleeceService, _queueService, _tempDir);
     }
 
     [TearDown]
@@ -234,7 +226,7 @@ public class FleeceInMemoryServiceIntegrationTests
         // Stand up a new service instance against the same temp directory
         var newQueueService = new IssueSerializationQueueService();
         newQueueService.StartProcessing();
-        using var newSut = new FleeceInMemoryService(_issueService, newQueueService, _tempDir);
+        using var newSut = new FleeceInMemoryService(_fleeceService, newQueueService, _tempDir);
 
         // The new instance should load the existing issue from disk
         var issues = await newSut.ListIssuesAsync();
@@ -358,13 +350,14 @@ public class FleeceInMemoryServiceIntegrationTests
         var serializer = new JsonlSerializer();
         var schemaValidator = new SchemaValidator();
         var storage = new JsonlStorageService(emptyDir, serializer, schemaValidator);
-        var tagService = new TagService();
-        var issueService = new IssueService(storage, _idGenerator, _gitConfigService, tagService);
+        var settingsService = Substitute.For<ISettingsService>();
+        var idGenerator = new GuidIdGenerator();
+        var fleeceServiceLocal = new FleeceService(storage, idGenerator, _gitConfigService, settingsService);
 
         var queue = new IssueSerializationQueueService();
         queue.StartProcessing();
 
-        using var sut = new FleeceInMemoryService(issueService, queue, emptyDir);
+        using var sut = new FleeceInMemoryService(fleeceServiceLocal, queue, emptyDir);
 
         // CRUD should still work (directory created lazily by storage)
         var issue = await sut.CreateIssueAsync("No dir test", IssueType.Task);
