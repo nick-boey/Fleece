@@ -95,7 +95,6 @@ public class TagsTests
     [TestCase("createdby")]
     [TestCase("createdat")]
     [TestCase("lastupdate")]
-    [TestCase("questions")]
     public void ValidateTag_ReturnsError_ForAllReservedKeys(string key)
     {
         var result = Tags.ValidateTag($"{key}=somevalue");

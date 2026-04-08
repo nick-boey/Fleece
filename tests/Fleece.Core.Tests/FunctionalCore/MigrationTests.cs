@@ -27,8 +27,8 @@ public class MigrationTests
             ParentIssuesLastUpdate = default,
             Tags = [],
             TagsLastUpdate = default,
-            Questions = [],
-            QuestionsLastUpdate = default,
+
+
             ExecutionMode = ExecutionMode.Series,
             ExecutionModeLastUpdate = default,
             LastUpdate = DateTimeOffset.UtcNow,
@@ -129,8 +129,8 @@ public class MigrationTests
             ParentIssuesLastUpdate = default,
             Tags = [],
             TagsLastUpdate = default,
-            Questions = [],
-            QuestionsLastUpdate = default,
+
+
             ExecutionMode = ExecutionMode.Series,
             ExecutionModeLastUpdate = default,
             LastUpdate = timestamp,
@@ -171,7 +171,7 @@ public class MigrationTests
             ParentIssues = [],
             Tags = [],
             TagsLastUpdate = timestamp,
-            Questions = [],
+
             LastUpdate = timestamp,
             CreatedAt = timestamp
         };

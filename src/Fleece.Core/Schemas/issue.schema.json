@@ -148,21 +148,6 @@
       "type": ["string", "null"],
       "description": "Username who last modified tags"
     },
-    "questions": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/question" },
-      "default": [],
-      "description": "Questions associated with this issue"
-    },
-    "questionsLastUpdate": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Timestamp when questions was last modified"
-    },
-    "questionsModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified questions"
-    },
     "workingBranchId": {
       "type": ["string", "null"],
       "description": "ID of the working branch for this issue"
@@ -242,46 +227,6 @@
       "enum": ["Series", "Parallel"],
       "default": "Series",
       "description": "Execution mode for child issues: Series (sequential) or Parallel (concurrent)"
-    },
-    "question": {
-      "type": "object",
-      "required": ["id", "text", "askedAt"],
-      "additionalProperties": false,
-      "description": "A question asked about an issue with optional answer",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the question (e.g., 'Q12345')",
-          "minLength": 1
-        },
-        "text": {
-          "type": "string",
-          "description": "The question text",
-          "minLength": 1
-        },
-        "answer": {
-          "type": ["string", "null"],
-          "description": "The answer text, if provided"
-        },
-        "askedAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "When the question was asked"
-        },
-        "askedBy": {
-          "type": ["string", "null"],
-          "description": "Who asked the question"
-        },
-        "answeredAt": {
-          "type": ["string", "null"],
-          "format": "date-time",
-          "description": "When the question was answered"
-        },
-        "answeredBy": {
-          "type": ["string", "null"],
-          "description": "Who answered the question"
-        }
-      }
     }
   }
 }

@@ -254,14 +254,6 @@ public interface IFleeceService
         bool includeChildren = true,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Updates the questions on an issue.
-    /// </summary>
-    Task<Issue> UpdateQuestionsAsync(
-        string id,
-        IReadOnlyList<Question> questions,
-        CancellationToken cancellationToken = default);
-
     #endregion
 
     #region Diagnostics

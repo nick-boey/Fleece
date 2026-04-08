@@ -102,15 +102,6 @@ public interface IFleeceInMemoryService : IDisposable
         CancellationToken ct = default);
 
     /// <summary>
-    /// Updates the questions on an issue, updating the cache immediately and queuing persistence to disk.
-    /// Returns null if the issue is not found.
-    /// </summary>
-    Task<Issue?> UpdateQuestionsAsync(
-        string issueId,
-        IReadOnlyList<Question> questions,
-        CancellationToken ct = default);
-
-    /// <summary>
     /// Deletes an issue (soft delete), updating the cache immediately and queuing persistence to disk.
     /// </summary>
     Task<bool> DeleteIssueAsync(string issueId, CancellationToken ct = default);

@@ -17,7 +17,6 @@ public sealed record IssueDto
     public int? Priority { get; init; }
     public string? AssignedTo { get; init; }
     public IReadOnlyList<string> Tags { get; init; } = [];
-    public IReadOnlyList<Question> Questions { get; init; } = [];
     public string? CreatedBy { get; init; }
     public string? WorkingBranchId { get; init; }
     public ExecutionMode ExecutionMode { get; init; } = ExecutionMode.Series;
@@ -38,7 +37,6 @@ public sealed record IssueDto
         Priority = issue.Priority,
         AssignedTo = issue.AssignedTo,
         Tags = issue.Tags,
-        Questions = issue.Questions,
         CreatedBy = issue.CreatedBy,
         WorkingBranchId = issue.WorkingBranchId,
         ExecutionMode = issue.ExecutionMode,

@@ -97,12 +97,6 @@ app.Configure(config =>
         .WithExample("prime", "workflow")
         .WithExample("prime", "commands");
 
-    config.AddCommand<QuestionCommand>("question")
-        .WithDescription("Manage questions on an issue")
-        .WithExample("question", "abc123", "--list")
-        .WithExample("question", "abc123", "--ask", "What is the expected behavior?")
-        .WithExample("question", "abc123", "--answer", "Q12345", "--text", "It should return a 200 status");
-
     config.AddCommand<ValidateCommand>("validate")
         .WithDescription("Validate issue dependencies for cycles")
         .WithExample("validate")

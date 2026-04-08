@@ -46,10 +46,6 @@ public sealed record Issue
     public DateTimeOffset TagsLastUpdate { get; init; }
     public string? TagsModifiedBy { get; init; }
 
-    public IReadOnlyList<Question> Questions { get; init; } = [];
-    public DateTimeOffset QuestionsLastUpdate { get; init; }
-    public string? QuestionsModifiedBy { get; init; }
-
     public string? WorkingBranchId { get; init; }
     public DateTimeOffset? WorkingBranchIdLastUpdate { get; init; }
     public string? WorkingBranchIdModifiedBy { get; init; }

@@ -209,23 +209,6 @@ public sealed class TuiApp
             lines.Add(new TextBlock(""));
         }
 
-        // Questions
-        if (issue.Questions.Count > 0)
-        {
-            lines.Add(new TextBlock($"─── Questions ({issue.Questions.Count}) ───"));
-            foreach (var q in issue.Questions)
-            {
-                var answered = q.Answer != null;
-                var indicator = answered ? "[✓]" : "[?]";
-                lines.Add(new TextBlock($"  {indicator} {q.Id}: {q.Text}"));
-                if (q.Answer != null)
-                {
-                    lines.Add(new TextBlock($"      {q.Answer}"));
-                }
-            }
-            lines.Add(new TextBlock(""));
-        }
-
         // Audit
         lines.Add(new TextBlock("─── Audit ───"));
         lines.Add(BuildPropertyRow("Created At", issue.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")));
