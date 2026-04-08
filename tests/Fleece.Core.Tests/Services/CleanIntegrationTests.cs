@@ -14,11 +14,11 @@ namespace Fleece.Core.Tests.Services;
 /// Covers the manual test plan items from the PR:
 ///   - <c>fleece delete</c> then <c>fleece clean --dry-run</c> shows the issue
 ///   - <c>fleece clean</c> removes the issue and creates tombstone file
-///   - <c>fleece create -t "&lt;same title&gt;"</c> generates a different (salted) ID
+///   - <c>fleece create -t "&lt;same title&gt;"</c> generates a different (random) ID
 ///   - <c>fleece merge</c> consolidates tombstone files
 ///
 /// Only <see cref="IGitConfigService"/> is mocked to avoid real git calls.
-/// Real <see cref="Sha256IdGenerator"/> is used to verify salted ID generation.
+/// Real <see cref="GuidIdGenerator"/> is used to verify random ID generation.
 /// </summary>
 [TestFixture]
 public class CleanIntegrationTests
@@ -31,7 +31,7 @@ public class CleanIntegrationTests
     private IssueService _issueService = null!;
     private CleanService _cleanService = null!;
     private MergeService _mergeService = null!;
-    private Sha256IdGenerator _idGenerator = null!;
+    private GuidIdGenerator _idGenerator = null!;
 
     // Mocks
     private IGitConfigService _gitConfigService = null!;
@@ -49,7 +49,7 @@ public class CleanIntegrationTests
         var serializer = new JsonlSerializer();
         var schemaValidator = new SchemaValidator();
 
-        _idGenerator = new Sha256IdGenerator();
+        _idGenerator = new GuidIdGenerator();
         _storageService = new JsonlStorageService(_tempDir, serializer, schemaValidator);
         var tagService = new TagService();
         _issueService = new IssueService(_storageService, _idGenerator, _gitConfigService, tagService);
@@ -229,10 +229,10 @@ public class CleanIntegrationTests
 
     #endregion
 
-    #region Create with same title generates salted ID
+    #region Create with same title generates different ID
 
     [Test]
-    public async Task Create_AfterClean_SameTitleGeneratesDifferentSaltedId()
+    public async Task Create_AfterClean_SameTitleGeneratesDifferentId()
     {
         // Arrange: create, delete, and clean an issue
         var original = await _issueService.CreateAsync("Recurring task", IssueType.Task);
@@ -247,7 +247,7 @@ public class CleanIntegrationTests
         // Act: create a new issue with the same title
         var recreated = await _issueService.CreateAsync("Recurring task", IssueType.Task);
 
-        // Assert: the new issue has a different ID due to salted generation
+        // Assert: the new issue has a different ID due to random generation
         recreated.Id.Should().NotBe(originalId);
         recreated.Title.Should().Be("Recurring task");
 
@@ -274,7 +274,7 @@ public class CleanIntegrationTests
         }
 
         // All generated IDs should be unique
-        ids.Should().HaveCount(3, "each iteration should produce a unique ID via salting");
+        ids.Should().HaveCount(3, "each iteration should produce a unique random ID");
 
         // Creating yet another issue with the same title should still work
         var final = await _issueService.CreateAsync("Repeated title", IssueType.Task);
@@ -514,7 +514,7 @@ public class CleanIntegrationTests
         var tombstones = await _storageService.LoadTombstonesAsync();
         tombstones.Should().ContainSingle(t => t.IssueId == issue1.Id);
 
-        // Step 5: Recreate with same title gets salted ID
+        // Step 5: Recreate with same title gets different random ID
         var recreated = await _issueService.CreateAsync("Feature: login page", IssueType.Feature);
         recreated.Id.Should().NotBe(issue1.Id);
 

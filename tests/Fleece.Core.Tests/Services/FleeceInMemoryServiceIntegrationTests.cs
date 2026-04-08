@@ -45,7 +45,7 @@ public class FleeceInMemoryServiceIntegrationTests
         _idCounter = 0;
 
         _idGenerator = Substitute.For<IIdGenerator>();
-        _idGenerator.Generate(Arg.Any<string>())
+        _idGenerator.Generate()
             .Returns(_ => $"test-{Interlocked.Increment(ref _idCounter)}");
 
         _gitConfigService = Substitute.For<IGitConfigService>();

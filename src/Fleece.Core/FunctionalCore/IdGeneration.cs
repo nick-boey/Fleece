@@ -1,6 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
-
 namespace Fleece.Core.FunctionalCore;
 
 public static class IdGeneration
@@ -9,21 +6,10 @@ public static class IdGeneration
     private const int IdLength = 6;
     private const int BytesToUse = 5;
 
-    public static string Generate(string title) => Generate(title, 0);
-
-    public static string Generate(string title, int salt)
+    public static string Generate()
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(title);
-
-        var normalized = title.Trim().ToLowerInvariant();
-        if (salt > 0)
-        {
-            normalized = $"{normalized}:{salt}";
-        }
-
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
-
-        return ToBase62(hash.AsSpan(0, BytesToUse));
+        var bytes = Guid.NewGuid().ToByteArray();
+        return ToBase62(bytes.AsSpan(0, BytesToUse));
     }
 
     private static string ToBase62(ReadOnlySpan<byte> bytes)
