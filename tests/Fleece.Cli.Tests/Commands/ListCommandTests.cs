@@ -17,7 +17,6 @@ namespace Fleece.Cli.Tests.Commands;
 public class ListCommandTests
 {
     private IFleeceService _fleeceService = null!;
-    private ISyncStatusService _syncStatusService = null!;
     private ISettingsService _settingsService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
@@ -34,8 +33,7 @@ public class ListCommandTests
         _fleeceService.LoadIssuesWithDiagnosticsAsync(Arg.Any<CancellationToken>())
             .Returns(new LoadIssuesResult());
 
-        _syncStatusService = Substitute.For<ISyncStatusService>();
-        _syncStatusService.GetSyncStatusesAsync(Arg.Any<CancellationToken>())
+        _fleeceService.GetSyncStatusesAsync(Arg.Any<CancellationToken>())
             .Returns(new Dictionary<string, SyncStatus>());
 
         _settingsService = Substitute.For<ISettingsService>();
@@ -53,7 +51,7 @@ public class ListCommandTests
                 }
             });
 
-        _command = new ListCommand(_fleeceService, _syncStatusService, _settingsService);
+        _command = new ListCommand(_fleeceService, _settingsService);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;

@@ -10,7 +10,7 @@ namespace Fleece.Core.Services;
 /// Service for determining the git sync status of issues by comparing
 /// working directory, HEAD commit, and remote upstream.
 /// </summary>
-public sealed class SyncStatusService : ISyncStatusService
+internal sealed class SyncStatusService
 {
     private const string FleeceDirectory = ".fleece";
     private const string IssuesFilePattern = "issues*.jsonl";
@@ -26,7 +26,6 @@ public sealed class SyncStatusService : ISyncStatusService
         _gitService = gitService;
     }
 
-    /// <inheritdoc />
     public async Task<IReadOnlyDictionary<string, SyncStatus>> GetSyncStatusesAsync(
         CancellationToken cancellationToken = default)
     {

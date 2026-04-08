@@ -1204,4 +1204,90 @@ public static class Issues
     }
 
     #endregion
+
+    #region Sort Order Normalization
+
+    /// <summary>
+    /// Groups siblings by parent, sorts alphabetically by title, and assigns LexoRank values
+    /// to any refs with missing SortOrder.
+    /// </summary>
+    public static IReadOnlyList<Issue> NormalizeSortOrders(IReadOnlyList<Issue> issues)
+    {
+        // Find all issues that have at least one ParentIssueRef with null/empty SortOrder
+        var needsNormalization = issues.Any(i =>
+            i.ParentIssues.Any(p => string.IsNullOrEmpty(p.SortOrder)));
+
+        if (!needsNormalization)
+        {
+            return issues;
+        }
+
+        // Build a lookup: parentId -> list of (issue, parentRef index) for refs missing SortOrder
+        var missingByParent = new Dictionary<string, List<(Issue Issue, int RefIndex)>>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < issues.Count; i++)
+        {
+            var issue = issues[i];
+            for (var j = 0; j < issue.ParentIssues.Count; j++)
+            {
+                var parentRef = issue.ParentIssues[j];
+                if (string.IsNullOrEmpty(parentRef.SortOrder))
+                {
+                    if (!missingByParent.TryGetValue(parentRef.ParentIssue, out var list))
+                    {
+                        list = [];
+                        missingByParent[parentRef.ParentIssue] = list;
+                    }
+
+                    list.Add((issue, j));
+                }
+            }
+        }
+
+        if (missingByParent.Count == 0)
+        {
+            return issues;
+        }
+
+        // Track which issues need updating: issueId -> new ParentIssues list
+        var updatedParentIssues = new Dictionary<string, List<ParentIssueRef>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (parentId, siblings) in missingByParent)
+        {
+            // Sort siblings alphabetically by title for deterministic ordering
+            var sorted = siblings.OrderBy(s => s.Issue.Title, StringComparer.Ordinal).ToList();
+            var ranks = LexoRank.GenerateInitialRanks(sorted.Count);
+
+            for (var i = 0; i < sorted.Count; i++)
+            {
+                var (issue, refIndex) = sorted[i];
+
+                if (!updatedParentIssues.TryGetValue(issue.Id, out var parentList))
+                {
+                    parentList = new List<ParentIssueRef>(issue.ParentIssues);
+                    updatedParentIssues[issue.Id] = parentList;
+                }
+
+                parentList[refIndex] = parentList[refIndex] with { SortOrder = ranks[i] };
+            }
+        }
+
+        // Rebuild the issues list with updated ParentIssues
+        var result = new List<Issue>(issues.Count);
+        foreach (var issue in issues)
+        {
+            if (updatedParentIssues.TryGetValue(issue.Id, out var newParents))
+            {
+                result.Add(issue with { ParentIssues = newParents });
+            }
+            else
+            {
+                result.Add(issue);
+            }
+        }
+
+        return result;
+    }
+
+    #endregion
 }

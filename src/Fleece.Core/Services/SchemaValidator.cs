@@ -7,7 +7,7 @@ namespace Fleece.Core.Services;
 /// <summary>
 /// Validates JSON schema against known Issue properties.
 /// </summary>
-public sealed class SchemaValidator : ISchemaValidator
+internal sealed class SchemaValidator : ISchemaValidator
 {
     private static readonly Lazy<HashSet<string>> KnownPropertiesCache = new(BuildKnownProperties);
 

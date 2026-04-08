@@ -9,12 +9,12 @@ namespace Fleece.Cli.Tui;
 /// </summary>
 public sealed class TuiCommand(
     IFleeceInMemoryService inMemoryService,
-    IStorageService storageService) : AsyncCommand<TuiSettings>
+    IFleeceService fleeceService) : AsyncCommand<TuiSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, TuiSettings settings)
     {
         // Check for multiple unmerged files (standard guard)
-        var (hasMultiple, message) = await storageService.HasMultipleUnmergedFilesAsync();
+        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {message}");

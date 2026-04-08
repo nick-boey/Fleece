@@ -14,8 +14,7 @@ namespace Fleece.Cli.Tests.Interceptors;
 public class AutoMergeInterceptorTests
 {
     private ISettingsService _settingsService = null!;
-    private IStorageService _storageService = null!;
-    private IMergeService _mergeService = null!;
+    private IFleeceService _fleeceService = null!;
     private IServiceProvider _serviceProvider = null!;
     private AutoMergeInterceptor _interceptor = null!;
     private StringWriter _consoleOutput = null!;
@@ -26,13 +25,11 @@ public class AutoMergeInterceptorTests
     public void SetUp()
     {
         _settingsService = Substitute.For<ISettingsService>();
-        _storageService = Substitute.For<IStorageService>();
-        _mergeService = Substitute.For<IMergeService>();
+        _fleeceService = Substitute.For<IFleeceService>();
 
         var services = new ServiceCollection();
         services.AddSingleton(_settingsService);
-        services.AddSingleton(_storageService);
-        services.AddSingleton(_mergeService);
+        services.AddSingleton(_fleeceService);
         _serviceProvider = services.BuildServiceProvider();
 
         _interceptor = new AutoMergeInterceptor(() => _serviceProvider);
@@ -84,7 +81,7 @@ public class AutoMergeInterceptorTests
 
         _interceptor.Intercept(context, settings);
 
-        _mergeService.DidNotReceive().FindAndResolveDuplicatesAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _fleeceService.DidNotReceive().MergeAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -104,7 +101,7 @@ public class AutoMergeInterceptorTests
         };
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
             .Returns(effectiveSettings);
-        _storageService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
+        _fleeceService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
             .Returns((false, string.Empty));
 
         var context = CreateContext("list");
@@ -112,7 +109,7 @@ public class AutoMergeInterceptorTests
 
         _interceptor.Intercept(context, settings);
 
-        _mergeService.DidNotReceive().FindAndResolveDuplicatesAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _fleeceService.DidNotReceive().MergeAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -132,9 +129,9 @@ public class AutoMergeInterceptorTests
         };
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
             .Returns(effectiveSettings);
-        _storageService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
+        _fleeceService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
             .Returns((true, "Multiple files found"));
-        _mergeService.FindAndResolveDuplicatesAsync(false, Arg.Any<CancellationToken>())
+        _fleeceService.MergeAsync(false, Arg.Any<CancellationToken>())
             .Returns(5);
 
         var context = CreateContext("list");
@@ -142,7 +139,7 @@ public class AutoMergeInterceptorTests
 
         _interceptor.Intercept(context, settings);
 
-        _mergeService.Received(1).FindAndResolveDuplicatesAsync(false, Arg.Any<CancellationToken>());
+        _fleeceService.Received(1).MergeAsync(false, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -162,9 +159,9 @@ public class AutoMergeInterceptorTests
         };
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
             .Returns(effectiveSettings);
-        _storageService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
+        _fleeceService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
             .Returns((true, "Multiple files found"));
-        _mergeService.FindAndResolveDuplicatesAsync(false, Arg.Any<CancellationToken>())
+        _fleeceService.MergeAsync(false, Arg.Any<CancellationToken>())
             .Returns(10);
 
         var context = CreateContext("list");
@@ -193,9 +190,9 @@ public class AutoMergeInterceptorTests
         };
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
             .Returns(effectiveSettings);
-        _storageService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
+        _fleeceService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
             .Returns((true, "Multiple files found"));
-        _mergeService.FindAndResolveDuplicatesAsync(false, Arg.Any<CancellationToken>())
+        _fleeceService.MergeAsync(false, Arg.Any<CancellationToken>())
             .Returns(0);
 
         var context = CreateContext("list");
@@ -222,7 +219,7 @@ public class AutoMergeInterceptorTests
         _interceptor.Intercept(context, settings);
 
         _settingsService.DidNotReceive().GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>());
-        _mergeService.DidNotReceive().FindAndResolveDuplicatesAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _fleeceService.DidNotReceive().MergeAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

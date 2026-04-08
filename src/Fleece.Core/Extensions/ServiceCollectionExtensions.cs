@@ -1,4 +1,3 @@
-using Fleece.Core.Search;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
@@ -14,40 +13,38 @@ public static class ServiceCollectionExtensions
 
         // Register settings service early so other services can depend on it
         services.AddSingleton<ISettingsService>(sp => new SettingsService(basePath));
+        services.AddSingleton<IGitConfigService>(sp =>
+            new GitConfigService(sp.GetRequiredService<ISettingsService>()));
+        services.AddSingleton<IGitService>(sp => new GitService(basePath));
 
+        // Internal infrastructure services
         services.AddSingleton<IJsonlSerializer, JsonlSerializer>();
-        services.AddSingleton<IIdGenerator, GuidIdGenerator>();
         services.AddSingleton<ISchemaValidator, SchemaValidator>();
+        services.AddSingleton<IIdGenerator, GuidIdGenerator>();
         services.AddSingleton<IStorageService>(sp =>
             new JsonlStorageService(
                 basePath,
                 sp.GetRequiredService<IJsonlSerializer>(),
                 sp.GetRequiredService<ISchemaValidator>()));
-        services.AddSingleton<IGitConfigService>(sp =>
-            new GitConfigService(sp.GetRequiredService<ISettingsService>()));
-        services.AddSingleton<IGitService>(sp => new GitService(basePath));
-        services.AddSingleton<ITagService, TagService>();
-        services.AddSingleton<IIssueService, IssueService>();
-        services.AddSingleton<IMergeService, MergeService>();
+
+        // DiffService (standalone utility for file comparison)
         services.AddSingleton<IDiffService, DiffService>();
-        services.AddSingleton<IMigrationService, MigrationService>();
-        services.AddSingleton<IValidationService, ValidationService>();
-        services.AddSingleton<IDependencyService, DependencyService>();
-        services.AddSingleton<ICleanService, CleanService>();
-        services.AddSingleton<IStorageServiceProvider, StorageServiceProvider>();
-        services.AddSingleton<IIssueServiceFactory, IssueServiceFactory>();
-        services.AddSingleton<ISyncStatusService>(sp =>
+
+        // SyncStatusService (internal, used by FleeceService)
+        services.AddSingleton(sp =>
             new SyncStatusService(
                 basePath,
                 sp.GetRequiredService<IJsonlSerializer>(),
                 sp.GetRequiredService<IGitService>()));
-        services.AddSingleton<ISearchService, SearchService>();
+
+        // Unified service
         services.AddSingleton<IFleeceService>(sp =>
             new FleeceService(
                 sp.GetRequiredService<IStorageService>(),
                 sp.GetRequiredService<IIdGenerator>(),
                 sp.GetRequiredService<IGitConfigService>(),
-                sp.GetRequiredService<ISettingsService>()));
+                sp.GetRequiredService<ISettingsService>(),
+                sp.GetRequiredService<SyncStatusService>()));
 
         return services;
     }
@@ -77,7 +74,7 @@ public static class ServiceCollectionExtensions
         });
         services.AddSingleton<IFleeceInMemoryService>(sp =>
             new FleeceInMemoryService(
-                sp.GetRequiredService<IIssueService>(),
+                sp.GetRequiredService<IFleeceService>(),
                 sp.GetRequiredService<IIssueSerializationQueue>(),
                 basePath));
 

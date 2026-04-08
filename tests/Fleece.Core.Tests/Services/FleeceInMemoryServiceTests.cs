@@ -12,7 +12,7 @@ namespace Fleece.Core.Tests.Services;
 [TestFixture]
 public class FleeceInMemoryServiceTests
 {
-    private IIssueService _issueService = null!;
+    private IFleeceService _fleeceService = null!;
     private IIssueSerializationQueue _serializationQueue = null!;
     private FleeceInMemoryService _sut = null!;
     private string _basePath = null!;
@@ -20,12 +20,12 @@ public class FleeceInMemoryServiceTests
     [SetUp]
     public void SetUp()
     {
-        _issueService = Substitute.For<IIssueService>();
+        _fleeceService = Substitute.For<IFleeceService>();
         _serializationQueue = Substitute.For<IIssueSerializationQueue>();
         _basePath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(_basePath);
 
-        _sut = new FleeceInMemoryService(_issueService, _serializationQueue, _basePath);
+        _sut = new FleeceInMemoryService(_fleeceService, _serializationQueue, _basePath);
     }
 
     [TearDown]
@@ -45,31 +45,31 @@ public class FleeceInMemoryServiceTests
     public async Task GetIssueAsync_LoadsCacheOnFirstRead()
     {
         var issue = new IssueBuilder().WithId("issue1").WithTitle("Test").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
         var result = await _sut.GetIssueAsync("issue1");
 
         result.Should().NotBeNull();
         result!.Id.Should().Be("issue1");
-        await _issueService.Received(1).GetAllAsync(Arg.Any<CancellationToken>());
+        await _fleeceService.Received(1).GetAllAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task GetIssueAsync_DoesNotReloadCacheOnSubsequentReads()
     {
         var issue = new IssueBuilder().WithId("issue1").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
         await _sut.GetIssueAsync("issue1");
         await _sut.GetIssueAsync("issue1");
 
-        await _issueService.Received(1).GetAllAsync(Arg.Any<CancellationToken>());
+        await _fleeceService.Received(1).GetAllAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task IsLoaded_IsFalseBeforeFirstRead_TrueAfter()
     {
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
 
         _sut.IsLoaded.Should().BeFalse();
         await _sut.GetIssueAsync("nonexistent");
@@ -82,7 +82,7 @@ public class FleeceInMemoryServiceTests
         var issue1 = new IssueBuilder().WithId("issue1").WithTitle("Original").Build();
         var issue2 = new IssueBuilder().WithId("issue1").WithTitle("Updated").Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>())
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>())
             .Returns([issue1], [issue2]);
 
         await _sut.GetIssueAsync("issue1");
@@ -107,14 +107,14 @@ public class FleeceInMemoryServiceTests
         Directory.CreateDirectory(fleecePath);
         File.WriteAllText(Path.Combine(fleecePath, "issues.jsonl"), "");
 
-        var issueService = Substitute.For<IIssueService>();
+        var fleeceServiceLocal = Substitute.For<IFleeceService>();
         var serializationQueue = Substitute.For<IIssueSerializationQueue>();
 
         var issueV1 = new IssueBuilder().WithId("issue1").WithTitle("Original").Build();
         var issueV2 = new IssueBuilder().WithId("issue1").WithTitle("ExternallyUpdated").Build();
 
         var callCount = 0;
-        issueService.GetAllAsync(Arg.Any<CancellationToken>())
+        fleeceServiceLocal.GetAllAsync(Arg.Any<CancellationToken>())
             .Returns(_ =>
             {
                 callCount++;
@@ -123,7 +123,7 @@ public class FleeceInMemoryServiceTests
                     : Task.FromResult<IReadOnlyList<Issue>>([issueV2]);
             });
 
-        using var sut = new FleeceInMemoryService(issueService, serializationQueue, watchBasePath);
+        using var sut = new FleeceInMemoryService(fleeceServiceLocal, serializationQueue, watchBasePath);
 
         // Act: trigger initial cache load
         var initial = await sut.GetIssueAsync("issue1");
@@ -156,19 +156,19 @@ public class FleeceInMemoryServiceTests
         Directory.CreateDirectory(fleecePath);
         File.WriteAllText(Path.Combine(fleecePath, "issues.jsonl"), "");
 
-        var issueService = Substitute.For<IIssueService>();
+        var fleeceServiceLocal = Substitute.For<IFleeceService>();
         var serializationQueue = Substitute.For<IIssueSerializationQueue>();
 
         var getAllCallCount = 0;
         var issue = new IssueBuilder().WithId("issue1").WithTitle("Test").Build();
-        issueService.GetAllAsync(Arg.Any<CancellationToken>())
+        fleeceServiceLocal.GetAllAsync(Arg.Any<CancellationToken>())
             .Returns(_ =>
             {
                 Interlocked.Increment(ref getAllCallCount);
                 return Task.FromResult<IReadOnlyList<Issue>>([issue]);
             });
 
-        using var sut = new FleeceInMemoryService(issueService, serializationQueue, watchBasePath);
+        using var sut = new FleeceInMemoryService(fleeceServiceLocal, serializationQueue, watchBasePath);
 
         // Trigger initial load
         await sut.GetIssueAsync("issue1");
@@ -204,7 +204,7 @@ public class FleeceInMemoryServiceTests
     [Test]
     public async Task GetIssueAsync_ReturnsNullForMissingIssue()
     {
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
 
         var result = await _sut.GetIssueAsync("nonexistent");
 
@@ -215,7 +215,7 @@ public class FleeceInMemoryServiceTests
     public async Task GetIssueAsync_IsCaseInsensitive()
     {
         var issue = new IssueBuilder().WithId("AbCdEf").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([issue]);
 
         var result = await _sut.GetIssueAsync("abcdef");
 
@@ -234,7 +234,7 @@ public class FleeceInMemoryServiceTests
             new IssueBuilder().WithId("arch1").WithStatus(IssueStatus.Archived).Build(),
             new IssueBuilder().WithId("del1").WithStatus(IssueStatus.Deleted).Build()
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.ListIssuesAsync();
 
@@ -250,7 +250,7 @@ public class FleeceInMemoryServiceTests
             new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build(),
             new IssueBuilder().WithId("comp1").WithStatus(IssueStatus.Complete).Build()
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.ListIssuesAsync(status: IssueStatus.Complete);
 
@@ -265,7 +265,7 @@ public class FleeceInMemoryServiceTests
             new IssueBuilder().WithId("task1").WithType(IssueType.Task).Build(),
             new IssueBuilder().WithId("bug1").WithType(IssueType.Bug).Build()
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.ListIssuesAsync(type: IssueType.Bug);
 
@@ -280,7 +280,7 @@ public class FleeceInMemoryServiceTests
             new IssueBuilder().WithId("p1").WithPriority(1).Build(),
             new IssueBuilder().WithId("p3").WithPriority(3).Build()
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.ListIssuesAsync(priority: 3);
 
@@ -290,7 +290,7 @@ public class FleeceInMemoryServiceTests
     [Test]
     public async Task SearchAsync_ReturnsEmptyForNullOrWhitespaceQuery()
     {
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
 
         var result = await _sut.SearchAsync("");
 
@@ -307,7 +307,7 @@ public class FleeceInMemoryServiceTests
             new IssueBuilder().WithId("t3").WithTitle("Unrelated").WithTags("login").Build(),
             new IssueBuilder().WithId("t4").WithTitle("Nothing here").Build()
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.SearchAsync("login");
 
@@ -324,7 +324,7 @@ public class FleeceInMemoryServiceTests
             new IssueBuilder().WithId("wrong-type").WithStatus(IssueStatus.Open).WithType(IssueType.Task).WithPriority(1).Build(),
             new IssueBuilder().WithId("wrong-priority").WithStatus(IssueStatus.Open).WithType(IssueType.Bug).WithPriority(3).Build()
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.FilterAsync(status: IssueStatus.Open, type: IssueType.Bug, priority: 1);
 
@@ -339,7 +339,7 @@ public class FleeceInMemoryServiceTests
             new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build(),
             new IssueBuilder().WithId("closed1").WithStatus(IssueStatus.Closed).Build()
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.FilterAsync();
 
@@ -354,7 +354,7 @@ public class FleeceInMemoryServiceTests
             new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build(),
             new IssueBuilder().WithId("closed1").WithStatus(IssueStatus.Closed).Build()
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.FilterAsync(includeTerminal: true);
 
@@ -369,7 +369,7 @@ public class FleeceInMemoryServiceTests
             new IssueBuilder().WithId("a1").WithAssignedTo("alice").Build(),
             new IssueBuilder().WithId("a2").WithAssignedTo("bob").Build()
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.FilterAsync(assignedTo: "alice");
 
@@ -384,7 +384,7 @@ public class FleeceInMemoryServiceTests
             new IssueBuilder().WithId("tagged").WithTags("urgent").Build(),
             new IssueBuilder().WithId("untagged").Build()
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.FilterAsync(tags: new List<string> { "urgent" });
 
@@ -399,7 +399,7 @@ public class FleeceInMemoryServiceTests
             new IssueBuilder().WithId("linked").WithLinkedPr(42).Build(),
             new IssueBuilder().WithId("unlinked").Build()
         };
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
         var result = await _sut.FilterAsync(linkedPr: 42);
 
@@ -414,8 +414,8 @@ public class FleeceInMemoryServiceTests
     public async Task CreateIssueAsync_UpdatesCacheAndEnqueuesWrite()
     {
         var issue = new IssueBuilder().WithId("new1").WithTitle("New Issue").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
-        _issueService.CreateAsync(
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
+        _fleeceService.CreateAsync(
             Arg.Any<string>(), Arg.Any<IssueType>(),
             Arg.Any<string?>(), Arg.Any<IssueStatus>(),
             Arg.Any<int?>(), Arg.Any<int?>(),
@@ -444,8 +444,8 @@ public class FleeceInMemoryServiceTests
     {
         var created = new IssueBuilder().WithId("new1").WithStatus(IssueStatus.Progress).Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
-        _issueService.CreateAsync(
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
+        _fleeceService.CreateAsync(
             Arg.Any<string>(), Arg.Any<IssueType>(),
             Arg.Any<string?>(), IssueStatus.Progress,
             Arg.Any<int?>(), Arg.Any<int?>(),
@@ -466,8 +466,8 @@ public class FleeceInMemoryServiceTests
         var original = new IssueBuilder().WithId("issue1").WithTitle("Original").Build();
         var updated = new IssueBuilder().WithId("issue1").WithTitle("Updated").Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([original]);
-        _issueService.UpdateAsync(
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([original]);
+        _fleeceService.UpdateAsync(
             "issue1",
             "Updated", Arg.Any<string?>(),
             Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(),
@@ -496,7 +496,7 @@ public class FleeceInMemoryServiceTests
     [Test]
     public async Task UpdateIssueAsync_ReturnsNullForMissingIssue()
     {
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
 
         var result = await _sut.UpdateIssueAsync("nonexistent", title: "Updated");
 
@@ -507,8 +507,8 @@ public class FleeceInMemoryServiceTests
     public async Task UpdateIssueAsync_HandlesKeyNotFoundException()
     {
         var original = new IssueBuilder().WithId("issue1").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([original]);
-        _issueService.UpdateAsync(
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([original]);
+        _fleeceService.UpdateAsync(
             "issue1",
             Arg.Any<string?>(), Arg.Any<string?>(),
             Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(),
@@ -534,9 +534,9 @@ public class FleeceInMemoryServiceTests
         var original = new IssueBuilder().WithId("issue1").Build();
         var deleted = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Deleted).Build();
 
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([original]);
-        _issueService.DeleteAsync("issue1", Arg.Any<CancellationToken>()).Returns(true);
-        _issueService.GetByIdAsync("issue1", Arg.Any<CancellationToken>()).Returns(deleted);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([original]);
+        _fleeceService.DeleteAsync("issue1", Arg.Any<CancellationToken>()).Returns(true);
+        _fleeceService.GetByIdAsync("issue1", Arg.Any<CancellationToken>()).Returns(deleted);
 
         var result = await _sut.DeleteIssueAsync("issue1");
 
@@ -556,8 +556,8 @@ public class FleeceInMemoryServiceTests
     [Test]
     public async Task DeleteIssueAsync_ReturnsFalseForMissingIssue()
     {
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
-        _issueService.DeleteAsync("nonexistent", Arg.Any<CancellationToken>()).Returns(false);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<Issue>());
+        _fleeceService.DeleteAsync("nonexistent", Arg.Any<CancellationToken>()).Returns(false);
 
         var result = await _sut.DeleteIssueAsync("nonexistent");
 
@@ -568,9 +568,9 @@ public class FleeceInMemoryServiceTests
     public async Task DeleteIssueAsync_RemovesFromCacheWhenGetByIdReturnsNull()
     {
         var original = new IssueBuilder().WithId("issue1").Build();
-        _issueService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([original]);
-        _issueService.DeleteAsync("issue1", Arg.Any<CancellationToken>()).Returns(true);
-        _issueService.GetByIdAsync("issue1", Arg.Any<CancellationToken>()).Returns((Issue?)null);
+        _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([original]);
+        _fleeceService.DeleteAsync("issue1", Arg.Any<CancellationToken>()).Returns(true);
+        _fleeceService.GetByIdAsync("issue1", Arg.Any<CancellationToken>()).Returns((Issue?)null);
 
         await _sut.DeleteIssueAsync("issue1");
 

@@ -11,7 +11,7 @@ namespace Fleece.Core.Services;
 /// Storage service that operates on a single specified JSONL file.
 /// Used when the --issues/-i option is provided to work with a custom file.
 /// </summary>
-public sealed partial class SingleFileStorageService : IStorageService
+internal sealed partial class SingleFileStorageService : IStorageService
 {
     private const int HashLength = 6;
 

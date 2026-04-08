@@ -18,7 +18,7 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
     private const string IssuesFileFilter = "issues*.jsonl";
     private static readonly TimeSpan ReloadDebounceInterval = TimeSpan.FromMilliseconds(500);
 
-    private readonly IIssueService _issueService;
+    private readonly IFleeceService _fleeceService;
     private readonly IIssueSerializationQueue _serializationQueue;
     private readonly string _basePath;
 
@@ -34,15 +34,15 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
     /// <summary>
     /// Creates a new instance of the in-memory service.
     /// </summary>
-    /// <param name="issueService">The underlying issue service for CRUD operations.</param>
+    /// <param name="fleeceService">The underlying fleece service for CRUD operations.</param>
     /// <param name="serializationQueue">The queue for asynchronous disk persistence.</param>
     /// <param name="basePath">The project base path containing the <c>.fleece/</c> directory.</param>
     public FleeceInMemoryService(
-        IIssueService issueService,
+        IFleeceService fleeceService,
         IIssueSerializationQueue serializationQueue,
         string basePath)
     {
-        _issueService = issueService;
+        _fleeceService = fleeceService;
         _serializationQueue = serializationQueue;
         _basePath = basePath;
 
@@ -198,7 +198,7 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
             ? IssueStatus.Draft : IssueStatus.Open);
 
         // Create via the underlying service (which writes to disk)
-        var issue = await _issueService.CreateAsync(
+        var issue = await _fleeceService.CreateAsync(
             title: title,
             type: type,
             description: description,
@@ -224,7 +224,7 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
             Type: WriteOperationType.Create,
             WriteAction: async innerCt =>
             {
-                // The issue was already created above via _issueService.CreateAsync,
+                // The issue was already created above via _fleeceService.CreateAsync,
                 // so we only need to ensure it is persisted. The underlying storage
                 // handles this — no additional action needed since the create call
                 // already wrote to disk.
@@ -268,7 +268,7 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
         Issue updated;
         try
         {
-            updated = await _issueService.UpdateAsync(
+            updated = await _fleeceService.UpdateAsync(
                 id: issueId,
                 title: title,
                 status: status,
@@ -359,7 +359,7 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
         Issue updated;
         try
         {
-            updated = await _issueService.UpdateAsync(
+            updated = await _fleeceService.UpdateAsync(
                 id: issueId,
                 title: title,
                 description: description,
@@ -443,7 +443,7 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
         Issue updated;
         try
         {
-            updated = await _issueService.UpdateQuestionsAsync(issueId, questions, ct);
+            updated = await _fleeceService.UpdateQuestionsAsync(issueId, questions, ct);
         }
         catch (KeyNotFoundException)
         {
@@ -487,12 +487,12 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
         ObjectDisposedException.ThrowIf(_disposed, this);
         await EnsureCacheLoadedAsync(ct);
 
-        var deleted = await _issueService.DeleteAsync(issueId, ct);
+        var deleted = await _fleeceService.DeleteAsync(issueId, ct);
 
         if (deleted)
         {
             // DeleteAsync soft-deletes (sets status to Deleted), so reload the issue
-            var updatedIssue = await _issueService.GetByIdAsync(issueId, ct);
+            var updatedIssue = await _fleeceService.GetByIdAsync(issueId, ct);
 
             _cacheLock.EnterWriteLock();
             try
@@ -556,7 +556,7 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
         await _loadLock.WaitAsync(ct);
         try
         {
-            var allIssues = await _issueService.GetAllAsync(ct);
+            var allIssues = await _fleeceService.GetAllAsync(ct);
 
             _cacheLock.EnterWriteLock();
             try

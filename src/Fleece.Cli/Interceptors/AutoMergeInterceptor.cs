@@ -68,8 +68,7 @@ public sealed class AutoMergeInterceptor : ICommandInterceptor
     private async Task InterceptAsync()
     {
         var settingsService = ServiceProvider.GetRequiredService<ISettingsService>();
-        var storageService = ServiceProvider.GetRequiredService<IStorageService>();
-        var mergeService = ServiceProvider.GetRequiredService<IMergeService>();
+        var fleeceService = ServiceProvider.GetRequiredService<IFleeceService>();
 
         // Check if auto-merge is enabled
         var effectiveSettings = await settingsService.GetEffectiveSettingsAsync();
@@ -79,14 +78,14 @@ public sealed class AutoMergeInterceptor : ICommandInterceptor
         }
 
         // Check if merge is needed
-        var (hasMultiple, _) = await storageService.HasMultipleUnmergedFilesAsync();
+        var (hasMultiple, _) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (!hasMultiple)
         {
             return;
         }
 
         // Perform the merge
-        var mergedCount = await mergeService.FindAndResolveDuplicatesAsync(dryRun: false);
+        var mergedCount = await fleeceService.MergeAsync(dryRun: false);
 
         // Show one-liner output if merge occurred
         if (mergedCount > 0)

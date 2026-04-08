@@ -5,7 +5,7 @@ namespace Fleece.Core.Services.Interfaces;
 /// <summary>
 /// Validates JSON schema against known Issue properties.
 /// </summary>
-public interface ISchemaValidator
+internal interface ISchemaValidator
 {
     /// <summary>
     /// Set of known property names for the Issue type (camelCase).
