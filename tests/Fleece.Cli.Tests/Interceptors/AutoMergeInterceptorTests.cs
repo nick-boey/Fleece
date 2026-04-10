@@ -243,7 +243,6 @@ public class AutoMergeInterceptorTests
     [TestCase("clean")]
     [TestCase("validate")]
     [TestCase("next")]
-    [TestCase("question")]
     [TestCase("dependency")]
     public void Intercept_ForNonSkippedCommands_ChecksSettings(string commandName)
     {

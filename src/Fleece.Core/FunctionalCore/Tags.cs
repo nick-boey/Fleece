@@ -17,7 +17,6 @@ public static class Tags
         "parentissues",
         "assignedto",
         "tags",
-        "questions",
         "workingbranchid",
         "executionmode",
         "createdby",

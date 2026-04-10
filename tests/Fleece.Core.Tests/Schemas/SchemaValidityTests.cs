@@ -106,26 +106,6 @@ public class SchemaValidityTests
     }
 
     [Test]
-    public void IssueSchema_QuestionDefinition_MatchesCSharpModel()
-    {
-        var questionDef = _issueSchema.RootElement
-            .GetProperty("$defs")
-            .GetProperty("question")
-            .GetProperty("properties");
-
-        var questionProperties = typeof(Question).GetProperties()
-            .Select(ToCamelCase)
-            .ToHashSet();
-
-        var schemaQuestionProps = questionDef
-            .EnumerateObject()
-            .Select(p => p.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        schemaQuestionProps.Should().BeEquivalentTo(questionProperties);
-    }
-
-    [Test]
     public void IssueSchema_RequiredFields_AreCorrect()
     {
         var requiredFields = _issueSchema.RootElement

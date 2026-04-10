@@ -862,43 +862,6 @@ public sealed partial class FleeceService : IFleeceService
             .ToList();
     }
 
-    public async Task<Issue> UpdateQuestionsAsync(
-        string id,
-        IReadOnlyList<Question> questions,
-        CancellationToken cancellationToken = default)
-    {
-        await _lock.WaitAsync(cancellationToken);
-        try
-        {
-            var issues = (await LoadAndNormalizeAsync(cancellationToken)).ToList();
-            var existingIndex = issues.FindIndex(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
-
-            if (existingIndex < 0)
-            {
-                throw new KeyNotFoundException($"Issue with ID '{id}' not found.");
-            }
-
-            var existing = issues[existingIndex];
-            var now = DateTimeOffset.UtcNow;
-            var modifiedBy = _gitConfigService.GetUserName();
-
-            var updated = existing with
-            {
-                Questions = questions,
-                QuestionsLastUpdate = now,
-                QuestionsModifiedBy = modifiedBy,
-                LastUpdate = now
-            };
-
-            issues[existingIndex] = updated;
-            await _storage.SaveIssuesAsync(issues, cancellationToken);
-            return updated;
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
 
     #endregion
 

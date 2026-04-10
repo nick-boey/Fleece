@@ -12,7 +12,6 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         ["statuses"] = StatusesContent,
         ["sync"] = SyncContent,
         ["json"] = JsonContent,
-        ["questions"] = QuestionsContent,
         ["next"] = NextContent,
         ["tree"] = TreeContent,
         ["merge"] = MergeContent
@@ -132,7 +131,6 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `statuses`
         - `sync`
         - `json`
-        - `questions`
         - `next`
         - `tree`
         - `merge`
@@ -318,24 +316,6 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `fleece list --tree --json` - Hierarchy as JSON
         - `fleece search "query" --json` - Results as JSON
 
-        """;
-
-    private const string QuestionsContent = """
-        # Questions
-
-        Ask clarifying questions on issues to gather requirements or resolve ambiguity.
-
-        ## Ask a Question
-
-        `fleece question <id> --ask "What is the expected behavior?"`
-
-        ## List Questions
-
-        `fleece question <id> --list`
-
-        ## Answer a Question
-
-        `fleece question <id> --answer <question-id> --text "The expected behavior is..."`
         """;
 
     private const string NextContent = """
