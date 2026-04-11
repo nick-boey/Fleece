@@ -301,7 +301,7 @@ public class DependenciesTests
     #region RemoveDependency
 
     [Test]
-    public void RemoveDependency_SuccessfulRemove_ReturnsUpdatedIssue()
+    public void RemoveDependency_SuccessfulRemove_SoftDeletesParent()
     {
         // Arrange
         var child = new IssueBuilder().WithId("child1")
@@ -312,7 +312,10 @@ public class DependenciesTests
 
         // Assert
         result.Id.Should().Be("child1");
-        result.ParentIssues.Should().BeEmpty();
+        result.ActiveParentIssues.Should().BeEmpty();
+        result.ParentIssues.Should().HaveCount(1);
+        result.ParentIssues[0].Active.Should().BeFalse();
+        result.ParentIssues[0].ParentIssue.Should().Be("parent1");
     }
 
     [Test]
@@ -339,10 +342,12 @@ public class DependenciesTests
         // Act
         var result = Dependencies.RemoveDependency(child, "parent1");
 
-        // Assert - should still have parent2
+        // Assert - should still have parent2 active, parent1 soft-deleted
         result.Id.Should().Be("child1");
-        result.ParentIssues.Should().HaveCount(1);
-        result.ParentIssues[0].ParentIssue.Should().Be("parent2");
+        result.ActiveParentIssues.Should().HaveCount(1);
+        result.ActiveParentIssues[0].ParentIssue.Should().Be("parent2");
+        result.ParentIssues.Should().HaveCount(2);
+        result.ParentIssues.Single(p => p.ParentIssue == "parent1").Active.Should().BeFalse();
     }
 
     #endregion

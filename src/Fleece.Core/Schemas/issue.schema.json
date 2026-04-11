@@ -98,15 +98,6 @@
       "default": [],
       "description": "References to parent issues with sort order for hierarchy/subtasks"
     },
-    "parentIssuesLastUpdate": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Timestamp when parentIssues was last modified"
-    },
-    "parentIssuesModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified parentIssues"
-    },
     "priority": {
       "type": ["integer", "null"],
       "description": "Priority level (lower number = higher priority)"
@@ -219,6 +210,20 @@
           "type": "string",
           "description": "Lexicographic sort order for ordering children under this parent",
           "minLength": 1
+        },
+        "lastUpdated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when this parent reference was last updated"
+        },
+        "updatedBy": {
+          "type": ["string", "null"],
+          "description": "Username who last updated this parent reference"
+        },
+        "active": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this parent reference is active (false = soft-deleted)"
         }
       }
     },

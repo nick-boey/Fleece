@@ -32,7 +32,7 @@ public static class Validation
         var parentMap = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var issue in issues)
         {
-            parentMap[issue.Id] = (issue.ParentIssues ?? []).Select(p => p.ParentIssue).ToList();
+            parentMap[issue.Id] = (issue.ActiveParentIssues ?? []).Select(p => p.ParentIssue).ToList();
         }
 
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -72,7 +72,7 @@ public static class Validation
         foreach (var issue in issues)
         {
             issueIds.Add(issue.Id);
-            adjacency[issue.Id] = (issue.ParentIssues ?? []).Select(p => p.ParentIssue).ToList();
+            adjacency[issue.Id] = (issue.ActiveParentIssues ?? []).Select(p => p.ParentIssue).ToList();
         }
 
         // Node colors for DFS: White = unvisited, Gray = in current path, Black = fully processed

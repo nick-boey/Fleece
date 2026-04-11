@@ -99,7 +99,7 @@ public static class Issues
 
         foreach (var issue in issueList)
         {
-            var parentIds = issue.ParentIssues
+            var parentIds = issue.ActiveParentIssues
                 .Where(p => issueLookup.ContainsKey(p.ParentIssue))
                 .Select(p => p.ParentIssue)
                 .ToList();
@@ -303,8 +303,8 @@ public static class Issues
 
         // Find root issues (no parent in the display set)
         var rootIssues = issuesToDisplay
-            .Where(i => i.ParentIssues.Count == 0 ||
-                        i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
+            .Where(i => i.ActiveParentIssues.Count == 0 ||
+                        i.ActiveParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
             .ToList();
         ApplyGraphSort(rootIssues, sort ?? GraphSortConfig.Default);
 
@@ -379,7 +379,7 @@ public static class Issues
                 continue;
             }
 
-            foreach (var parentRef in issue.ParentIssues)
+            foreach (var parentRef in issue.ActiveParentIssues)
             {
                 if (fullLookup.TryGetValue(parentRef.ParentIssue, out var parent))
                 {
@@ -419,8 +419,8 @@ public static class Issues
 
         // Find root issues (no parent in the display set)
         var rootIssues = issuesToDisplay
-            .Where(i => i.ParentIssues.Count == 0 ||
-                        i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
+            .Where(i => i.ActiveParentIssues.Count == 0 ||
+                        i.ActiveParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
             .ToList();
         ApplyGraphSort(rootIssues, sort ?? GraphSortConfig.Default);
 
@@ -601,7 +601,7 @@ public static class Issues
 
     private static ExecutionMode? GetParentExecutionMode(Issue issue, Dictionary<string, Issue> issueLookup)
     {
-        foreach (var parentRef in issue.ParentIssues)
+        foreach (var parentRef in issue.ActiveParentIssues)
         {
             if (issueLookup.TryGetValue(parentRef.ParentIssue, out var parent))
             {
@@ -999,7 +999,7 @@ public static class Issues
 
         foreach (var issue in issues)
         {
-            foreach (var parentRef in issue.ParentIssues)
+            foreach (var parentRef in issue.ActiveParentIssues)
             {
                 if (!issueLookup.ContainsKey(parentRef.ParentIssue))
                 {
@@ -1023,10 +1023,10 @@ public static class Issues
 
             kvp.Value.Sort((a, b) =>
             {
-                var sortA = a.ParentIssues
+                var sortA = a.ActiveParentIssues
                     .First(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase))
                     .SortOrder;
-                var sortB = b.ParentIssues
+                var sortB = b.ActiveParentIssues
                     .First(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase))
                     .SortOrder;
                 return string.Compare(sortA, sortB, StringComparison.Ordinal);
@@ -1103,7 +1103,7 @@ public static class Issues
                 continue;
             }
 
-            foreach (var parentRef in issue.ParentIssues)
+            foreach (var parentRef in issue.ActiveParentIssues)
             {
                 if (fullLookup.TryGetValue(parentRef.ParentIssue, out var parent))
                 {
@@ -1143,7 +1143,7 @@ public static class Issues
         var childrenOf = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var issue in fullLookup.Values)
         {
-            foreach (var parentRef in issue.ParentIssues)
+            foreach (var parentRef in issue.ActiveParentIssues)
             {
                 if (!childrenOf.TryGetValue(parentRef.ParentIssue, out var children))
                 {

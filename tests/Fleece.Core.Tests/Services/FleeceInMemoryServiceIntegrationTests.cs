@@ -255,7 +255,6 @@ public class FleeceInMemoryServiceIntegrationTests
             StatusLastUpdate = DateTimeOffset.UtcNow,
             TypeLastUpdate = DateTimeOffset.UtcNow,
             LinkedIssuesLastUpdate = DateTimeOffset.UtcNow,
-            ParentIssuesLastUpdate = DateTimeOffset.UtcNow,
             TagsLastUpdate = DateTimeOffset.UtcNow
         };
 

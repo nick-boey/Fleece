@@ -24,7 +24,6 @@ public class MigrationTests
             LinkedIssues = [],
             LinkedIssuesLastUpdate = default,
             ParentIssues = [],
-            ParentIssuesLastUpdate = default,
             Tags = [],
             TagsLastUpdate = default,
 
@@ -126,7 +125,6 @@ public class MigrationTests
             LinkedIssues = [],
             LinkedIssuesLastUpdate = default,
             ParentIssues = [],
-            ParentIssuesLastUpdate = default,
             Tags = [],
             TagsLastUpdate = default,
 

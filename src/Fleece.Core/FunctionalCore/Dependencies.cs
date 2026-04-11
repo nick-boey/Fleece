@@ -30,9 +30,13 @@ public static class Dependencies
     {
         position ??= new DependencyPosition();
 
-        // Check relationship doesn't already exist (only when not replacing)
-        if (!replaceExisting && child.ParentIssues.Any(p =>
-            string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase)))
+        // Check if parent already exists as inactive — if so, reactivate it
+        var existingInactive = child.ParentIssues.FirstOrDefault(p =>
+            string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase) && !p.Active);
+
+        // Check relationship doesn't already exist as active (only when not replacing)
+        if (!replaceExisting && existingInactive is null && child.ParentIssues.Any(p =>
+            string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase) && p.Active))
         {
             throw new InvalidOperationException(
                 $"Issue '{child.Id}' is already a child of '{parentId}'");
@@ -47,6 +51,15 @@ public static class Dependencies
         if (replaceExisting)
         {
             newParentIssues = new List<ParentIssueRef>();
+        }
+        else if (existingInactive is not null)
+        {
+            // Reactivate the inactive parent with new sort order
+            newParentIssues = child.ParentIssues.Select(p =>
+                string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase)
+                    ? p with { SortOrder = sortOrder, Active = true }
+                    : p).ToList();
+            return child with { ParentIssues = newParentIssues };
         }
         else
         {
@@ -80,7 +93,7 @@ public static class Dependencies
     public static Issue RemoveDependency(Issue child, string parentId)
     {
         var existingRef = child.ParentIssues.FirstOrDefault(p =>
-            string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase));
+            string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase) && p.Active);
 
         if (existingRef is null)
         {
@@ -88,9 +101,11 @@ public static class Dependencies
                 $"Issue '{child.Id}' is not a child of '{parentId}'");
         }
 
-        var newParentIssues = child.ParentIssues
-            .Where(p => !string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        // Soft-delete: set Active = false instead of removing
+        var newParentIssues = child.ParentIssues.Select(p =>
+            string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase)
+                ? p with { Active = false }
+                : p).ToList();
 
         return child with { ParentIssues = newParentIssues };
     }
@@ -136,7 +151,7 @@ public static class Dependencies
         var parentMap = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var issue in allIssues)
         {
-            parentMap[issue.Id] = (issue.ParentIssues ?? []).Select(p => p.ParentIssue).ToList();
+            parentMap[issue.Id] = (issue.ActiveParentIssues ?? []).Select(p => p.ParentIssue).ToList();
         }
 
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -249,11 +264,11 @@ public static class Dependencies
         IReadOnlyList<Issue> allIssues)
     {
         return allIssues
-            .Where(i => i.ParentIssues.Any(p =>
+            .Where(i => i.ActiveParentIssues.Any(p =>
                 string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase)))
             .Select(i => new SiblingInfo(
                 i,
-                i.ParentIssues
+                i.ActiveParentIssues
                     .First(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase))
                     .SortOrder))
             .OrderBy(x => x.SortOrder, StringComparer.Ordinal)

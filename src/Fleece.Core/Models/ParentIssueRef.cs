@@ -18,6 +18,21 @@ public sealed record ParentIssueRef
     public required string SortOrder { get; init; }
 
     /// <summary>
+    /// Timestamp when this parent reference was last updated.
+    /// </summary>
+    public DateTimeOffset LastUpdated { get; init; }
+
+    /// <summary>
+    /// Username who last updated this parent reference.
+    /// </summary>
+    public string? UpdatedBy { get; init; }
+
+    /// <summary>
+    /// Whether this parent reference is active. Inactive references represent soft-deleted parent relationships.
+    /// </summary>
+    public bool Active { get; init; } = true;
+
+    /// <summary>
     /// Parses a single parent issue reference from a string.
     /// Format: "issueId" or "issueId:sortOrder"
     /// </summary>

@@ -190,14 +190,14 @@ public static class TaskGraphRenderer
         }
 
         // Fall back to existing actual parent lookup
-        if (node.Issue.ParentIssues.Count == 0)
+        if (node.Issue.ActiveParentIssues.Count == 0)
         {
             return null;
         }
 
         TaskGraphNode? bestParent = null;
 
-        foreach (var parentRef in node.Issue.ParentIssues)
+        foreach (var parentRef in node.Issue.ActiveParentIssues)
         {
             if (nodeLookup.TryGetValue(parentRef.ParentIssue, out var parentNode))
             {

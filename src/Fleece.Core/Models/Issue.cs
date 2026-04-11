@@ -31,8 +31,13 @@ public sealed record Issue
     public string? LinkedIssuesModifiedBy { get; init; }
 
     public IReadOnlyList<ParentIssueRef> ParentIssues { get; init; } = [];
-    public DateTimeOffset ParentIssuesLastUpdate { get; init; }
-    public string? ParentIssuesModifiedBy { get; init; }
+
+    /// <summary>
+    /// Returns only active parent issue references (excludes soft-deleted parents).
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<ParentIssueRef> ActiveParentIssues =>
+        ParentIssues.Where(p => p.Active).ToList();
 
     public int? Priority { get; init; }
     public DateTimeOffset? PriorityLastUpdate { get; init; }

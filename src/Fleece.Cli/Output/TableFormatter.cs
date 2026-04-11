@@ -177,9 +177,9 @@ public static class TableFormatter
                 }
             }
         }
-        else if (issue.ParentIssues?.Count > 0)
+        else if (issue.ActiveParentIssues?.Count > 0)
         {
-            lines.Add($"[bold]Parent Issues:[/] {string.Join(", ", issue.ParentIssues.Select(p => p.ParentIssue))}");
+            lines.Add($"[bold]Parent Issues:[/] {string.Join(", ", issue.ActiveParentIssues.Select(p => p.ParentIssue))}");
         }
 
         if (!string.IsNullOrEmpty(issue.AssignedTo))

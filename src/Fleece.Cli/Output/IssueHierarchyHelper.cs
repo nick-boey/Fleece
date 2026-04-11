@@ -32,14 +32,14 @@ public static class IssueHierarchyHelper
         Dictionary<string, Issue> issueLookup,
         IReadOnlyList<Issue> allIssues)
     {
-        if (issue.ParentIssues is null || issue.ParentIssues.Count == 0)
+        if (issue.ActiveParentIssues is null || issue.ActiveParentIssues.Count == 0)
         {
             return [];
         }
 
         var result = new List<ParentContextDto>();
 
-        foreach (var parentRef in issue.ParentIssues)
+        foreach (var parentRef in issue.ActiveParentIssues)
         {
             if (!issueLookup.TryGetValue(parentRef.ParentIssue, out var parentIssue))
             {
@@ -101,12 +101,12 @@ public static class IssueHierarchyHelper
     internal static List<Issue> GetSortedChildren(string parentId, IReadOnlyList<Issue> allIssues)
     {
         return allIssues
-            .Where(i => i.ParentIssues?.Any(p =>
+            .Where(i => i.ActiveParentIssues?.Any(p =>
                 p.ParentIssue.Equals(parentId, StringComparison.OrdinalIgnoreCase)) ?? false)
             .Select(i => new
             {
                 Issue = i,
-                SortOrder = i.ParentIssues?.FirstOrDefault(p =>
+                SortOrder = i.ActiveParentIssues?.FirstOrDefault(p =>
                     p.ParentIssue.Equals(parentId, StringComparison.OrdinalIgnoreCase))?.SortOrder ?? "zzz"
             })
             .OrderBy(x => x.SortOrder, StringComparer.Ordinal)
