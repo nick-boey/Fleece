@@ -162,8 +162,11 @@ public class CleaningTests
         plan.StrippedReferences[0].ReferenceType.Should().Be("ParentIssues");
 
         plan.UpdatedIssues.Should().HaveCount(1);
-        plan.UpdatedIssues[0].ParentIssues.Should().HaveCount(1);
-        plan.UpdatedIssues[0].ParentIssues[0].ParentIssue.Should().Be("opn002");
+        plan.UpdatedIssues[0].ActiveParentIssues.Should().HaveCount(1);
+        plan.UpdatedIssues[0].ActiveParentIssues[0].ParentIssue.Should().Be("opn002");
+        // The dangling parent should be soft-deleted, not removed
+        plan.UpdatedIssues[0].ParentIssues.Should().HaveCount(2);
+        plan.UpdatedIssues[0].ParentIssues.Single(p => p.ParentIssue == "del001").Active.Should().BeFalse();
     }
 
     [Test]

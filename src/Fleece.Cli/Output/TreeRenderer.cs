@@ -29,7 +29,7 @@ public static class TreeRenderer
                 {
                     continue;
                 }
-                if (issue.ParentIssues?.Any(p => p.ParentIssue.Equals(parentId, StringComparison.OrdinalIgnoreCase)) ?? false)
+                if (issue.ActiveParentIssues?.Any(p => p.ParentIssue.Equals(parentId, StringComparison.OrdinalIgnoreCase)) ?? false)
                 {
                     descendantIds.Add(issue.Id);
                     queue.Enqueue(issue.Id);
@@ -63,7 +63,7 @@ public static class TreeRenderer
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var issue in issues)
         {
-            var parentsInSet = (issue.ParentIssues ?? [])
+            var parentsInSet = (issue.ActiveParentIssues ?? [])
                 .Count(p => issueLookup.ContainsKey(p.ParentIssue));
             counts[issue.Id] = Math.Max(1, parentsInSet);
         }
@@ -91,12 +91,12 @@ public static class TreeRenderer
         var rootIssues = issues
             .Where(i =>
             {
-                if (i.ParentIssues is null || i.ParentIssues.Count == 0)
+                if (i.ActiveParentIssues is null || i.ActiveParentIssues.Count == 0)
                 {
                     return true;
                 }
                 // Check if ALL parents are NOT in the lookup (meaning this is an orphan)
-                var allParentsMissing = i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue));
+                var allParentsMissing = i.ActiveParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue));
                 return allParentsMissing;
             })
             .OrderBy(i => i.Priority ?? 99)
@@ -152,11 +152,11 @@ public static class TreeRenderer
 
         // Find children (issues that have this issue as a parent), sorted by SortOrder
         var children = allIssues
-            .Where(i => i.ParentIssues?.Any(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase)) ?? false)
+            .Where(i => i.ActiveParentIssues?.Any(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase)) ?? false)
             .Select(i => new
             {
                 Issue = i,
-                SortOrder = i.ParentIssues?.FirstOrDefault(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase))?.SortOrder ?? "zzz"
+                SortOrder = i.ActiveParentIssues?.FirstOrDefault(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase))?.SortOrder ?? "zzz"
             })
             .OrderBy(x => x.SortOrder, StringComparer.Ordinal)
             .ThenBy(x => x.Issue.Priority ?? 99)
@@ -183,8 +183,8 @@ public static class TreeRenderer
 
         // Find root issues
         var rootIssues = issues
-            .Where(i => i.ParentIssues is null || i.ParentIssues.Count == 0 ||
-                        i.ParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
+            .Where(i => i.ActiveParentIssues is null || i.ActiveParentIssues.Count == 0 ||
+                        i.ActiveParentIssues.All(p => !issueLookup.ContainsKey(p.ParentIssue)))
             .OrderBy(i => i.Priority ?? 99)
             .ThenBy(i => i.Title)
             .ToList();
@@ -230,11 +230,11 @@ public static class TreeRenderer
         }
 
         var children = allIssues
-            .Where(i => i.ParentIssues?.Any(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase)) ?? false)
+            .Where(i => i.ActiveParentIssues?.Any(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase)) ?? false)
             .Select(i => new
             {
                 Issue = i,
-                SortOrder = i.ParentIssues?.FirstOrDefault(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase))?.SortOrder ?? "zzz"
+                SortOrder = i.ActiveParentIssues?.FirstOrDefault(p => p.ParentIssue.Equals(issue.Id, StringComparison.OrdinalIgnoreCase))?.SortOrder ?? "zzz"
             })
             .OrderBy(x => x.SortOrder, StringComparer.Ordinal)
             .ThenBy(x => x.Issue.Priority ?? 99)

@@ -161,6 +161,6 @@ public sealed class TuiAppState
         EditExecutionMode = EditingIssue.ExecutionMode;
         EditTags = string.Join(", ", EditingIssue.Tags);
         EditLinkedIssues = string.Join(", ", EditingIssue.LinkedIssues);
-        EditParentIssues = string.Join(", ", EditingIssue.ParentIssues.Select(p => $"{p.ParentIssue}:{p.SortOrder}"));
+        EditParentIssues = string.Join(", ", EditingIssue.ActiveParentIssues.Select(p => $"{p.ParentIssue}:{p.SortOrder}"));
     }
 }

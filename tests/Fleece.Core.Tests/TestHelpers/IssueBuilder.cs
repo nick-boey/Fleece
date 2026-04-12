@@ -159,8 +159,9 @@ public class IssueBuilder
         LinkedPRLastUpdate = _linkedPr is not null ? _lastUpdate : null,
         LinkedIssues = _linkedIssues,
         LinkedIssuesLastUpdate = _lastUpdate,
-        ParentIssues = _parentIssues,
-        ParentIssuesLastUpdate = _lastUpdate,
+        ParentIssues = _parentIssues.Select(p => p.LastUpdated == default
+            ? p with { LastUpdated = _lastUpdate, Active = true }
+            : p).ToList(),
         Priority = _priority,
         PriorityLastUpdate = _priority is not null ? _lastUpdate : null,
         AssignedTo = _assignedTo,

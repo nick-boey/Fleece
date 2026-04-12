@@ -33,7 +33,7 @@ public sealed record IssueDto
         LinkedPR = issue.LinkedPR,
         LinkedPRs = issue.LinkedPRs,
         LinkedIssues = issue.LinkedIssues,
-        ParentIssues = issue.ParentIssues,
+        ParentIssues = issue.ActiveParentIssues,
         Priority = issue.Priority,
         AssignedTo = issue.AssignedTo,
         Tags = issue.Tags,

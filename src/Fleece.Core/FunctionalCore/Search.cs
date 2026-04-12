@@ -100,7 +100,7 @@ public static class SearchOps
         {
             var issue = toProcess.Dequeue();
 
-            foreach (var parentRef in issue.ParentIssues)
+            foreach (var parentRef in issue.ActiveParentIssues)
             {
                 if (issueLookup.TryGetValue(parentRef.ParentIssue, out var parent))
                 {

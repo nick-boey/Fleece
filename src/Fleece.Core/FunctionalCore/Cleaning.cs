@@ -103,9 +103,9 @@ public static class Cleaning
                     modified = true;
                 }
 
-                // Strip ParentIssues
+                // Strip ParentIssues — soft-delete dangling refs
                 var danglingParents = issue.ParentIssues
-                    .Where(pi => cleanedIds.Contains(pi.ParentIssue))
+                    .Where(pi => cleanedIds.Contains(pi.ParentIssue) && pi.Active)
                     .ToList();
 
                 if (danglingParents.Count > 0)
@@ -120,13 +120,16 @@ public static class Cleaning
                         });
                     }
 
+                    var danglingParentIds = danglingParents
+                        .Select(p => p.ParentIssue)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
                     updated = updated with
                     {
-                        ParentIssues = issue.ParentIssues
-                            .Where(pi => !cleanedIds.Contains(pi.ParentIssue))
-                            .ToList(),
-                        ParentIssuesLastUpdate = now,
-                        ParentIssuesModifiedBy = cleanedBy
+                        ParentIssues = issue.ParentIssues.Select(pi =>
+                            danglingParentIds.Contains(pi.ParentIssue)
+                                ? pi with { Active = false, LastUpdated = now, UpdatedBy = cleanedBy }
+                                : pi).ToList()
                     };
                     modified = true;
                 }

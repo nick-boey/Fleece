@@ -32,7 +32,7 @@ public sealed record IssueSyncDto
         Type = issue.Type,
         LinkedPR = issue.LinkedPR,
         LinkedIssues = issue.LinkedIssues,
-        ParentIssues = issue.ParentIssues,
+        ParentIssues = issue.ActiveParentIssues,
         Priority = issue.Priority,
         AssignedTo = issue.AssignedTo,
         Tags = issue.Tags,

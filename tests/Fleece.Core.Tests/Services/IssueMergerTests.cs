@@ -280,4 +280,168 @@ public class IssueMergerTests
         result.MergedIssue.WorkingBranchId.Should().Be("new-branch");
         result.MergedIssue.WorkingBranchIdLastUpdate.Should().Be(newerTimestamp);
     }
+
+    #region Per-Parent Last-Write-Wins Merge Tests
+
+    [Test]
+    public void Merge_RemovingParentPersistsAfterMerge_WhenNewerTimestamp()
+    {
+        // Arrange - A removed parent1 (newer), B still has it active (older)
+        var olderTimestamp = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var newerTimestamp = DateTimeOffset.UtcNow.AddMinutes(-5);
+
+        var issueA = new IssueBuilder()
+            .WithId("child1")
+            .WithTitle("Child Issue")
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parent1", SortOrder = "a", Active = false, LastUpdated = newerTimestamp, UpdatedBy = "user-a" }
+            )
+            .Build();
+
+        var issueB = new IssueBuilder()
+            .WithId("child1")
+            .WithTitle("Child Issue")
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parent1", SortOrder = "a", Active = true, LastUpdated = olderTimestamp, UpdatedBy = "user-b" }
+            )
+            .Build();
+
+        // Act
+        var result = _sut.Merge(issueA, issueB);
+
+        // Assert - A's removal wins because it has the newer timestamp
+        result.MergedIssue.ParentIssues.Should().HaveCount(1);
+        result.MergedIssue.ParentIssues[0].ParentIssue.Should().Be("parent1");
+        result.MergedIssue.ParentIssues[0].Active.Should().BeFalse();
+        result.MergedIssue.ParentIssues[0].LastUpdated.Should().Be(newerTimestamp);
+        result.MergedIssue.ActiveParentIssues.Should().BeEmpty();
+    }
+
+    [Test]
+    public void Merge_AddingParentPersistsAfterMerge_WhenOnlyInOneSide()
+    {
+        // Arrange - A has parent1 (newer), B doesn't have it at all
+        var newerTimestamp = DateTimeOffset.UtcNow.AddMinutes(-5);
+
+        var issueA = new IssueBuilder()
+            .WithId("child1")
+            .WithTitle("Child Issue")
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parent1", SortOrder = "a", Active = true, LastUpdated = newerTimestamp, UpdatedBy = "user-a" }
+            )
+            .Build();
+
+        var issueB = new IssueBuilder()
+            .WithId("child1")
+            .WithTitle("Child Issue")
+            .WithParentIssues()
+            .Build();
+
+        // Act
+        var result = _sut.Merge(issueA, issueB);
+
+        // Assert - parent1 should be present and active
+        result.MergedIssue.ParentIssues.Should().HaveCount(1);
+        result.MergedIssue.ParentIssues[0].ParentIssue.Should().Be("parent1");
+        result.MergedIssue.ParentIssues[0].Active.Should().BeTrue();
+        result.MergedIssue.ActiveParentIssues.Should().HaveCount(1);
+    }
+
+    [Test]
+    public void Merge_IndependentParentChanges_MergeCorrectly()
+    {
+        // Arrange - A adds parent1 (newer), B adds parent2 (newer)
+        var timestamp = DateTimeOffset.UtcNow.AddMinutes(-5);
+
+        var issueA = new IssueBuilder()
+            .WithId("child1")
+            .WithTitle("Child Issue")
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parent1", SortOrder = "a", Active = true, LastUpdated = timestamp, UpdatedBy = "user-a" }
+            )
+            .Build();
+
+        var issueB = new IssueBuilder()
+            .WithId("child1")
+            .WithTitle("Child Issue")
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parent2", SortOrder = "b", Active = true, LastUpdated = timestamp, UpdatedBy = "user-b" }
+            )
+            .Build();
+
+        // Act
+        var result = _sut.Merge(issueA, issueB);
+
+        // Assert - both parents should be present and active
+        result.MergedIssue.ParentIssues.Should().HaveCount(2);
+        result.MergedIssue.ActiveParentIssues.Should().HaveCount(2);
+        result.MergedIssue.ParentIssues.Select(p => p.ParentIssue)
+            .Should().BeEquivalentTo(["parent1", "parent2"]);
+    }
+
+    [Test]
+    public void Merge_SortOrderUsesNewerTimestampPerParent()
+    {
+        // Arrange - A has parent1 with sort "a" (newer), B has parent1 with sort "z" (older)
+        var olderTimestamp = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var newerTimestamp = DateTimeOffset.UtcNow.AddMinutes(-5);
+
+        var issueA = new IssueBuilder()
+            .WithId("child1")
+            .WithTitle("Child Issue")
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parent1", SortOrder = "a", Active = true, LastUpdated = newerTimestamp, UpdatedBy = "user-a" }
+            )
+            .Build();
+
+        var issueB = new IssueBuilder()
+            .WithId("child1")
+            .WithTitle("Child Issue")
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parent1", SortOrder = "z", Active = true, LastUpdated = olderTimestamp, UpdatedBy = "user-b" }
+            )
+            .Build();
+
+        // Act
+        var result = _sut.Merge(issueA, issueB);
+
+        // Assert - A's sort order wins because it has the newer timestamp
+        result.MergedIssue.ParentIssues.Should().HaveCount(1);
+        result.MergedIssue.ParentIssues[0].ParentIssue.Should().Be("parent1");
+        result.MergedIssue.ParentIssues[0].SortOrder.Should().Be("a");
+        result.MergedIssue.ParentIssues[0].LastUpdated.Should().Be(newerTimestamp);
+    }
+
+    [Test]
+    public void Merge_AWinsTies_WhenTimestampsEqual()
+    {
+        // Arrange - Both have same timestamp, A should win
+        var sameTimestamp = DateTimeOffset.UtcNow;
+
+        var issueA = new IssueBuilder()
+            .WithId("child1")
+            .WithTitle("Child Issue")
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parent1", SortOrder = "a", Active = false, LastUpdated = sameTimestamp, UpdatedBy = "user-a" }
+            )
+            .Build();
+
+        var issueB = new IssueBuilder()
+            .WithId("child1")
+            .WithTitle("Child Issue")
+            .WithParentIssues(
+                new ParentIssueRef { ParentIssue = "parent1", SortOrder = "z", Active = true, LastUpdated = sameTimestamp, UpdatedBy = "user-b" }
+            )
+            .Build();
+
+        // Act
+        var result = _sut.Merge(issueA, issueB);
+
+        // Assert - A wins ties
+        result.MergedIssue.ParentIssues.Should().HaveCount(1);
+        result.MergedIssue.ParentIssues[0].Active.Should().BeFalse();
+        result.MergedIssue.ParentIssues[0].SortOrder.Should().Be("a");
+    }
+
+    #endregion
 }

@@ -185,7 +185,7 @@ public sealed class TuiApp
         }
 
         // Relationships
-        if (issue.LinkedIssues.Count > 0 || issue.ParentIssues.Count > 0)
+        if (issue.LinkedIssues.Count > 0 || issue.ActiveParentIssues.Count > 0)
         {
             lines.Add(new TextBlock("─── Relationships ───"));
             if (issue.LinkedIssues.Count > 0)
@@ -193,9 +193,9 @@ public sealed class TuiApp
                 lines.Add(BuildPropertyRow("Linked Issues", string.Join(", ", issue.LinkedIssues)));
             }
 
-            if (issue.ParentIssues.Count > 0)
+            if (issue.ActiveParentIssues.Count > 0)
             {
-                lines.Add(BuildPropertyRow("Parent Issues", string.Join(", ", issue.ParentIssues.Select(p => $"{p.ParentIssue}:{p.SortOrder}"))));
+                lines.Add(BuildPropertyRow("Parent Issues", string.Join(", ", issue.ActiveParentIssues.Select(p => $"{p.ParentIssue}:{p.SortOrder}"))));
             }
 
             lines.Add(new TextBlock(""));

@@ -139,9 +139,12 @@ public sealed partial class FleeceService : IFleeceService
                 LinkedIssues = linkedIssues ?? [],
                 LinkedIssuesLastUpdate = now,
                 LinkedIssuesModifiedBy = createdBy,
-                ParentIssues = parentIssues ?? [],
-                ParentIssuesLastUpdate = now,
-                ParentIssuesModifiedBy = createdBy,
+                ParentIssues = (parentIssues ?? []).Select(p => p with
+                {
+                    LastUpdated = now,
+                    UpdatedBy = createdBy,
+                    Active = true
+                }).ToList(),
                 AssignedTo = assignedTo,
                 AssignedToLastUpdate = assignedTo is not null ? now : null,
                 AssignedToModifiedBy = assignedTo is not null ? createdBy : null,
@@ -233,9 +236,14 @@ public sealed partial class FleeceService : IFleeceService
                 LinkedIssues = linkedIssues ?? existing.LinkedIssues,
                 LinkedIssuesLastUpdate = linkedIssues is not null ? now : existing.LinkedIssuesLastUpdate,
                 LinkedIssuesModifiedBy = linkedIssues is not null ? modifiedBy : existing.LinkedIssuesModifiedBy,
-                ParentIssues = parentIssues ?? existing.ParentIssues,
-                ParentIssuesLastUpdate = parentIssues is not null ? now : existing.ParentIssuesLastUpdate,
-                ParentIssuesModifiedBy = parentIssues is not null ? modifiedBy : existing.ParentIssuesModifiedBy,
+                ParentIssues = parentIssues is not null
+                    ? parentIssues.Select(p => p with
+                    {
+                        LastUpdated = now,
+                        UpdatedBy = modifiedBy,
+                        Active = true
+                    }).ToList()
+                    : existing.ParentIssues,
                 AssignedTo = assignedTo ?? existing.AssignedTo,
                 AssignedToLastUpdate = assignedTo is not null ? now : existing.AssignedToLastUpdate,
                 AssignedToModifiedBy = assignedTo is not null ? modifiedBy : existing.AssignedToModifiedBy,
@@ -468,11 +476,22 @@ public sealed partial class FleeceService : IFleeceService
             var childIndex = allIssues.FindIndex(i => i.Id.Equals(resolvedChild.Id, StringComparison.OrdinalIgnoreCase));
             var now = DateTimeOffset.UtcNow;
             var modifiedBy = _gitConfigService.GetUserName();
+
+            // Stamp only the newly added/reactivated parent ref; keep existing refs' timestamps unchanged
+            var stampedParents = updated.ParentIssues.Select(p =>
+            {
+                var existingRef = allIssues[childIndex].ParentIssues.FirstOrDefault(ep =>
+                    string.Equals(ep.ParentIssue, p.ParentIssue, StringComparison.OrdinalIgnoreCase));
+                if (existingRef is null || existingRef.SortOrder != p.SortOrder || existingRef.Active != p.Active)
+                {
+                    return p with { LastUpdated = now, UpdatedBy = modifiedBy };
+                }
+                return existingRef;
+            }).ToList();
+
             var persisted = allIssues[childIndex] with
             {
-                ParentIssues = updated.ParentIssues,
-                ParentIssuesLastUpdate = now,
-                ParentIssuesModifiedBy = modifiedBy,
+                ParentIssues = stampedParents,
                 LastUpdate = now
             };
             allIssues[childIndex] = persisted;
@@ -500,15 +519,23 @@ public sealed partial class FleeceService : IFleeceService
 
             var updated = Dependencies.RemoveDependency(resolvedChild, resolvedParent.Id);
 
-            // Persist
+            // Persist — stamp the soft-deleted parent ref
             var childIndex = allIssues.FindIndex(i => i.Id.Equals(resolvedChild.Id, StringComparison.OrdinalIgnoreCase));
             var now = DateTimeOffset.UtcNow;
             var modifiedBy = _gitConfigService.GetUserName();
+
+            var stampedParents = updated.ParentIssues.Select(p =>
+            {
+                if (string.Equals(p.ParentIssue, resolvedParent.Id, StringComparison.OrdinalIgnoreCase) && !p.Active)
+                {
+                    return p with { LastUpdated = now, UpdatedBy = modifiedBy };
+                }
+                return p;
+            }).ToList();
+
             var persisted = allIssues[childIndex] with
             {
-                ParentIssues = updated.ParentIssues,
-                ParentIssuesLastUpdate = now,
-                ParentIssuesModifiedBy = modifiedBy,
+                ParentIssues = stampedParents,
                 LastUpdate = now
             };
             allIssues[childIndex] = persisted;
@@ -552,7 +579,7 @@ public sealed partial class FleeceService : IFleeceService
             var resolvedChild = ResolveIssue(allIssues, childId, "child");
 
             // Check if child is actually under this parent
-            var isChild = resolvedChild.ParentIssues.Any(p =>
+            var isChild = resolvedChild.ActiveParentIssues.Any(p =>
                 string.Equals(p.ParentIssue, resolvedParent.Id, StringComparison.OrdinalIgnoreCase));
 
             if (!isChild)
@@ -598,31 +625,31 @@ public sealed partial class FleeceService : IFleeceService
             var now = DateTimeOffset.UtcNow;
             var modifiedBy = _gitConfigService.GetUserName();
 
-            // Apply normalized sibling changes to allIssues
+            // Apply normalized sibling changes to allIssues — stamp modified parent refs
             foreach (var sibling in modifiedSiblings)
             {
                 var sibIndex = allIssues.FindIndex(i => i.Id.Equals(sibling.Id, StringComparison.OrdinalIgnoreCase));
                 if (sibIndex >= 0)
                 {
+                    var stampedParents = StampModifiedParentRefs(
+                        allIssues[sibIndex].ParentIssues, sibling.ParentIssues, now, modifiedBy);
                     allIssues[sibIndex] = allIssues[sibIndex] with
                     {
-                        ParentIssues = sibling.ParentIssues,
-                        ParentIssuesLastUpdate = now,
-                        ParentIssuesModifiedBy = modifiedBy,
+                        ParentIssues = stampedParents,
                         LastUpdate = now
                     };
                 }
             }
 
-            // Apply the moved issue
+            // Apply the moved issue — stamp modified parent refs
             var movedIndex = allIssues.FindIndex(i => i.Id.Equals(movedIssue.Id, StringComparison.OrdinalIgnoreCase));
             if (movedIndex >= 0)
             {
+                var stampedParents = StampModifiedParentRefs(
+                    allIssues[movedIndex].ParentIssues, movedIssue.ParentIssues, now, modifiedBy);
                 allIssues[movedIndex] = allIssues[movedIndex] with
                 {
-                    ParentIssues = movedIssue.ParentIssues,
-                    ParentIssuesLastUpdate = now,
-                    ParentIssuesModifiedBy = modifiedBy,
+                    ParentIssues = stampedParents,
                     LastUpdate = now
                 };
             }
@@ -944,6 +971,31 @@ public sealed partial class FleeceService : IFleeceService
                 CollectAncestorIds(parentId, graph, resultIds);
             }
         }
+    }
+
+    /// <summary>
+    /// Stamps per-parent timestamps on refs that changed between old and new lists.
+    /// </summary>
+    private static IReadOnlyList<ParentIssueRef> StampModifiedParentRefs(
+        IReadOnlyList<ParentIssueRef> oldParents,
+        IReadOnlyList<ParentIssueRef> newParents,
+        DateTimeOffset now,
+        string? modifiedBy)
+    {
+        var oldDict = oldParents
+            .GroupBy(p => p.ParentIssue, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        return newParents.Select(p =>
+        {
+            if (oldDict.TryGetValue(p.ParentIssue, out var oldRef) &&
+                oldRef.SortOrder == p.SortOrder &&
+                oldRef.Active == p.Active)
+            {
+                return oldRef; // Unchanged — keep original timestamps
+            }
+            return p with { LastUpdated = now, UpdatedBy = modifiedBy };
+        }).ToList();
     }
 
     private static Issue ResolveIssue(IReadOnlyList<Issue> allIssues, string partialId, string role)
