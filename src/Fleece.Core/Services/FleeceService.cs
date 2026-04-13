@@ -916,7 +916,12 @@ public sealed partial class FleeceService : IFleeceService
     private async Task<IReadOnlyList<Issue>> LoadAndNormalizeAsync(CancellationToken cancellationToken)
     {
         var issues = await _storage.LoadIssuesAsync(cancellationToken);
-        return Issues.NormalizeSortOrders(issues);
+        // Repair legacy on-disk shapes in memory (e.g., parent refs written before per-ref
+        // timestamp/active fields existed would otherwise deserialize with Active=false and
+        // disappear from hierarchy rendering). Persisting the migrated form still requires
+        // an explicit `fleece migrate`.
+        var repaired = Migration.IsMigrationNeeded(issues) ? Migration.Migrate(issues) : issues;
+        return Issues.NormalizeSortOrders(repaired);
     }
 
     private static void ValidateBranchName(string? workingBranchId)
