@@ -33,6 +33,10 @@ public sealed class EditSettings : FleeceCommandSettings
     [Description("Replace linked issue IDs (comma-separated)")]
     public string? LinkedIssues { get; init; }
 
+    [CommandOption("--linked-pr <PR>")]
+    [Description("Link a pull request number (stored as hsp-linked-pr keyed tag)")]
+    public int? LinkedPr { get; init; }
+
     [CommandOption("-a|--assign <USER>")]
     [Description("New assignee username")]
     public string? AssignedTo { get; init; }

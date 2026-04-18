@@ -29,8 +29,7 @@ app.Configure(config =>
     config.SetInterceptor(autoMergeInterceptor);
 
     config.AddCommand<CreateCommand>("create")
-        .WithDescription("Create a new issue. Run without options to open an interactive editor with a YAML template.")
-        .WithExample("create")
+        .WithDescription("Create a new issue. --title and --type are required.")
         .WithExample("create", "--title", "Fix login bug", "--type", "bug", "-p", "1");
 
     config.AddCommand<ListCommand>("list")
@@ -41,8 +40,7 @@ app.Configure(config =>
         .WithExample("list", "--next");
 
     config.AddCommand<EditCommand>("edit")
-        .WithDescription("Edit an existing issue. Run with only an ID to open an interactive editor with the issue's current values.")
-        .WithExample("edit", "abc123")
+        .WithDescription("Edit an existing issue. At least one field flag is required.")
         .WithExample("edit", "abc123", "--status", "complete");
 
     config.AddCommand<DeleteCommand>("delete")

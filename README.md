@@ -14,7 +14,6 @@ Fleece is a lightweight, file-based issue tracking system designed to live along
 ## Features
 
 - Create, edit, and track issues with a simple CLI
-- Interactive editor-based issue creation with YAML templates
 - JSONL storage format for easy parsing and diffing
 - Change history tracking with user attribution
 - Conflict detection and resolution for collaborative workflows
@@ -45,10 +44,7 @@ Issues are stored in `.fleece/issues.jsonl` in your repository root. The directo
 ### Create an issue
 
 ```bash
-# Interactive creation (opens editor with YAML template)
-fleece create
-
-# Command-line creation
+# Create an issue (--title and --type required)
 fleece create --title "Add user authentication" --type feature
 
 # Create with tags

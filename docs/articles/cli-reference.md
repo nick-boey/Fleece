@@ -16,16 +16,12 @@ Complete documentation for all Fleece CLI commands.
 Create a new issue.
 
 ```bash
-# Interactive mode (opens editor with YAML template)
-fleece create
-
-# Command-line mode
 fleece create --title <title> --type <type> [options]
 ```
 
-When run with no arguments, opens your default editor with a YAML template for interactive issue creation. The editor is determined by the `VISUAL` or `EDITOR` environment variable, or defaults to `notepad` on Windows, `open` on macOS, or `nano`/`vim` on Linux.
+`--title` and `--type` are required. The command does not open an external editor.
 
-**Required Options (command-line mode):**
+**Required Options:**
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--title` | `-t` | Issue title (used to generate ID) |
@@ -46,9 +42,6 @@ When run with no arguments, opens your default editor with a YAML template for i
 
 **Examples:**
 ```bash
-# Interactive mode - opens editor
-fleece create
-
 # Create a simple task
 fleece create --title "Update documentation" --type task
 
@@ -165,14 +158,10 @@ fleece tree --json
 Edit an existing issue.
 
 ```bash
-# Interactive mode (opens editor with current values)
-fleece edit <id>
-
-# Command-line mode
 fleece edit <id> [options]
 ```
 
-When run with only an ID (no other options), opens your default editor with the issue's current values pre-filled in a YAML template. The editor is determined by the `VISUAL` or `EDITOR` environment variable, or defaults to `notepad` on Windows, `open` on macOS, or `nano`/`vim` on Linux.
+At least one field flag is required. The command does not open an external editor.
 
 **Arguments:**
 | Argument | Description |
@@ -198,9 +187,6 @@ When run with only an ID (no other options), opens your default editor with the 
 
 **Examples:**
 ```bash
-# Interactive mode - opens editor with current values
-fleece edit abc123
-
 # Mark as complete
 fleece edit abc123 --status complete
 
