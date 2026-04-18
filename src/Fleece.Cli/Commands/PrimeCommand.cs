@@ -206,9 +206,8 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         ## Creating and Editing
 
-        - `fleece create` - Open interactive editor with YAML template
-        - `fleece create -t <title> -y {task|bug|chore|feature|verify} [OPTIONS]` - Create from command line
-        - `fleece edit <id> [OPTIONS]` - Update from command line
+        - `fleece create -t <title> -y {task|bug|chore|feature|verify} [OPTIONS]` - Create an issue
+        - `fleece edit <id> [OPTIONS]` - Update an issue (at least one field flag required)
 
         **Create/Edit Options:**
         - `-p, --priority` - Set priority (1-5)

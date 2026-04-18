@@ -40,10 +40,7 @@ fleece --version
 Issues are stored in `.fleece/` in your repository root. The directory is created automatically when you create your first issue.
 
 ```bash
-# Interactive creation (opens editor with YAML template)
-fleece create
-
-# Command-line creation
+# Create an issue (--title and --type required)
 fleece create --title "Add user authentication" --type feature
 ```
 

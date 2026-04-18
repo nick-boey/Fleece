@@ -29,6 +29,10 @@ public sealed class CreateSettings : FleeceCommandSettings
     [Description("Comma-separated linked issue IDs")]
     public string? LinkedIssues { get; init; }
 
+    [CommandOption("--linked-pr <PR>")]
+    [Description("Link a pull request number (stored as hsp-linked-pr keyed tag)")]
+    public int? LinkedPr { get; init; }
+
     [CommandOption("--parent-issues <ISSUES>")]
     [Description("Comma-separated parent issue IDs with optional sort order (e.g., abc123,def456:bbb)")]
     public string? ParentIssues { get; init; }
