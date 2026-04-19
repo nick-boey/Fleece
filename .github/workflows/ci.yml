@@ -29,6 +29,11 @@ jobs:
       - name: Run tests
         run: dotnet test --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --results-directory ./TestResults
 
+      - name: CLI smoke test
+        run: |
+          dotnet run --project src/Fleece.Cli --no-build --configuration Release -- --help
+          dotnet run --project src/Fleece.Cli --no-build --configuration Release -- list --json
+
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()
