@@ -4,5 +4,7 @@
   href: architecture.md
 - name: CLI Reference
   href: cli-reference.md
+- name: Testing
+  href: testing.md
 - name: CI/CD
   href: ci-cd.md
