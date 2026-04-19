@@ -65,6 +65,23 @@ dotnet test
 dotnet test tests/Fleece.Core.Tests
 ```
 
+### Test projects
+
+| Project | Scope |
+|---------|-------|
+| `tests/Fleece.Core.Tests` | Unit tests for `Fleece.Core` services. |
+| `tests/Fleece.Cli.Tests` | DI composition + command-resolution checks for the CLI. |
+| `tests/Fleece.Cli.E2E.Tests` | In-process CLI scenarios against `MockFileSystem` + `TestConsole` (fast). |
+| `tests/Fleece.Cli.Integration.Tests` | Real-disk + real-git scenarios (`commit`, `merge`). `[NonParallelizable]`. |
+
+### Verify snapshots (CLI E2E suite)
+
+`tests/Fleece.Cli.E2E.Tests` uses [`Verify.NUnit`](https://github.com/VerifyTests/Verify) for golden-file snapshots of human-readable CLI output. Snapshots live in `tests/Fleece.Cli.E2E.Tests/Snapshots/` and are committed to the repo.
+
+- **Regenerating snapshots after an intentional output change**: delete the relevant `*.verified.txt` file(s) and rerun `dotnet test`. Verify will produce `*.received.txt`; rename to `*.verified.txt` to accept. Alternatively use the Verify CLI or IDE tooling.
+- **Reviewing snapshot diffs in a PR**: treat `.verified.txt` diffs as user-facing output changes — they should be reviewed like any other UX change.
+- **JSON output is not snapshotted**: tests parse `--json` output structurally. Only stable human-readable stdout uses snapshots.
+
 ### Clean Command and Tombstones
 
 The `fleece clean` command permanently removes soft-deleted issues (status `Deleted`) from `issues_{hash}.jsonl` and writes tombstone records to `tombstones_{hash}.jsonl`. Tombstone files are merged alongside issue files during `fleece merge`.

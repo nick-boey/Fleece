@@ -26,8 +26,17 @@ jobs:
       - name: Build solution
         run: dotnet build --no-restore --configuration Release
 
-      - name: Run tests
-        run: dotnet test --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --results-directory ./TestResults
+      - name: Run unit tests
+        run: dotnet test tests/Fleece.Core.Tests/Fleece.Core.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=core-tests.trx" --results-directory ./TestResults
+
+      - name: Run CLI composition tests
+        run: dotnet test tests/Fleece.Cli.Tests/Fleece.Cli.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=cli-tests.trx" --results-directory ./TestResults
+
+      - name: Run CLI E2E scenario tests (mock FS)
+        run: dotnet test tests/Fleece.Cli.E2E.Tests/Fleece.Cli.E2E.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=cli-e2e-tests.trx" --results-directory ./TestResults
+
+      - name: Run CLI integration tests (real FS + git)
+        run: dotnet test tests/Fleece.Cli.Integration.Tests/Fleece.Cli.Integration.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=cli-integration-tests.trx" --results-directory ./TestResults
 
       - name: CLI smoke test
         run: |
