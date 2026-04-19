@@ -3,6 +3,7 @@ using System.Text.Json;
 using Fleece.Core.Models;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services.Interfaces;
+using System.IO.Abstractions;
 
 namespace Fleece.Core.Services;
 
@@ -18,12 +19,18 @@ internal sealed class SyncStatusService
     private readonly string _workingDirectory;
     private readonly IJsonlSerializer _serializer;
     private readonly IGitService _gitService;
+    private readonly IFileSystem _fileSystem;
 
-    public SyncStatusService(string workingDirectory, IJsonlSerializer serializer, IGitService gitService)
+    public SyncStatusService(
+        string workingDirectory,
+        IJsonlSerializer serializer,
+        IGitService gitService,
+        IFileSystem? fileSystem = null)
     {
         _workingDirectory = workingDirectory;
         _serializer = serializer;
         _gitService = gitService;
+        _fileSystem = fileSystem ?? new Testably.Abstractions.RealFileSystem();
     }
 
     public async Task<IReadOnlyDictionary<string, SyncStatus>> GetSyncStatusesAsync(
@@ -86,18 +93,18 @@ internal sealed class SyncStatusService
     private async Task<IReadOnlyList<Issue>> LoadIssuesFromWorkingDirectoryAsync(
         CancellationToken cancellationToken)
     {
-        var fleecePath = Path.Combine(_workingDirectory, FleeceDirectory);
-        if (!Directory.Exists(fleecePath))
+        var fleecePath = _fileSystem.Path.Combine(_workingDirectory, FleeceDirectory);
+        if (!_fileSystem.Directory.Exists(fleecePath))
         {
             return [];
         }
 
         var allIssues = new List<Issue>();
-        var files = Directory.GetFiles(fleecePath, IssuesFilePattern);
+        var files = _fileSystem.Directory.GetFiles(fleecePath, IssuesFilePattern);
 
         foreach (var file in files)
         {
-            var content = await File.ReadAllTextAsync(file, cancellationToken);
+            var content = await _fileSystem.File.ReadAllTextAsync(file, cancellationToken);
             var issues = _serializer.DeserializeIssues(content);
             allIssues.AddRange(issues);
         }

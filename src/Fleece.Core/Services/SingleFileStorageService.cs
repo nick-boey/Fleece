@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Fleece.Core.Models;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services.Interfaces;
+using System.IO.Abstractions;
 
 namespace Fleece.Core.Services;
 
@@ -19,6 +20,7 @@ internal sealed partial class SingleFileStorageService : IStorageService
     private readonly bool _useHashNaming;
     private readonly IJsonlSerializer _serializer;
     private readonly ISchemaValidator _schemaValidator;
+    private readonly IFileSystem _fileSystem;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     /// <summary>
@@ -27,14 +29,19 @@ internal sealed partial class SingleFileStorageService : IStorageService
     [GeneratedRegex(@"^issues_[a-f0-9]{6}\.jsonl$", RegexOptions.IgnoreCase)]
     private static partial Regex StandardIssueFilePattern();
 
-    public SingleFileStorageService(string filePath, IJsonlSerializer serializer, ISchemaValidator schemaValidator)
+    public SingleFileStorageService(
+        string filePath,
+        IJsonlSerializer serializer,
+        ISchemaValidator schemaValidator,
+        IFileSystem? fileSystem = null)
     {
-        _filePath = Path.GetFullPath(filePath);
+        _fileSystem = fileSystem ?? new Testably.Abstractions.RealFileSystem();
+        _filePath = _fileSystem.Path.GetFullPath(filePath);
         _serializer = serializer;
         _schemaValidator = schemaValidator;
 
         // Determine if this file follows the standard naming pattern
-        var fileName = Path.GetFileName(filePath);
+        var fileName = _fileSystem.Path.GetFileName(filePath);
         _useHashNaming = StandardIssueFilePattern().IsMatch(fileName);
     }
 
@@ -43,12 +50,12 @@ internal sealed partial class SingleFileStorageService : IStorageService
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            if (!File.Exists(_filePath))
+            if (!_fileSystem.File.Exists(_filePath))
             {
                 return [];
             }
 
-            var content = await File.ReadAllTextAsync(_filePath, cancellationToken);
+            var content = await _fileSystem.File.ReadAllTextAsync(_filePath, cancellationToken);
             return _serializer.DeserializeIssues(content);
         }
         finally
@@ -62,10 +69,10 @@ internal sealed partial class SingleFileStorageService : IStorageService
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            var directory = Path.GetDirectoryName(_filePath);
+            var directory = _fileSystem.Path.GetDirectoryName(_filePath);
             if (!string.IsNullOrEmpty(directory))
             {
-                Directory.CreateDirectory(directory);
+                _fileSystem.Directory.CreateDirectory(directory);
             }
 
             var lines = issues.Select(_serializer.SerializeIssue).ToList();
@@ -76,20 +83,20 @@ internal sealed partial class SingleFileStorageService : IStorageService
                 var content = string.Join(Environment.NewLine, lines);
                 var hash = ComputeContentHash(content);
                 var newFileName = $"issues_{hash}.jsonl";
-                var newFilePath = Path.Combine(directory ?? ".", newFileName);
+                var newFilePath = _fileSystem.Path.Combine(directory ?? ".", newFileName);
 
                 // Delete old file if different from new path
-                if (File.Exists(_filePath) && !string.Equals(_filePath, newFilePath, StringComparison.OrdinalIgnoreCase))
+                if (_fileSystem.File.Exists(_filePath) && !string.Equals(_filePath, newFilePath, StringComparison.OrdinalIgnoreCase))
                 {
-                    File.Delete(_filePath);
+                    _fileSystem.File.Delete(_filePath);
                 }
 
-                await File.WriteAllLinesAsync(newFilePath, lines, cancellationToken);
+                await _fileSystem.File.WriteAllLinesAsync(newFilePath, lines, cancellationToken);
             }
             else
             {
                 // For non-standard filenames, simply overwrite the file
-                await File.WriteAllLinesAsync(_filePath, lines, cancellationToken);
+                await _fileSystem.File.WriteAllLinesAsync(_filePath, lines, cancellationToken);
             }
         }
         finally
@@ -103,17 +110,17 @@ internal sealed partial class SingleFileStorageService : IStorageService
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            var directory = Path.GetDirectoryName(_filePath);
+            var directory = _fileSystem.Path.GetDirectoryName(_filePath);
             if (!string.IsNullOrEmpty(directory))
             {
-                Directory.CreateDirectory(directory);
+                _fileSystem.Directory.CreateDirectory(directory);
             }
 
             // Load existing issues and add new one
             var existingIssues = new List<Issue>();
-            if (File.Exists(_filePath))
+            if (_fileSystem.File.Exists(_filePath))
             {
-                var content = await File.ReadAllTextAsync(_filePath, cancellationToken);
+                var content = await _fileSystem.File.ReadAllTextAsync(_filePath, cancellationToken);
                 existingIssues.AddRange(_serializer.DeserializeIssues(content));
             }
 
@@ -125,20 +132,20 @@ internal sealed partial class SingleFileStorageService : IStorageService
                 var combinedContent = string.Join(Environment.NewLine, lines);
                 var hash = ComputeContentHash(combinedContent);
                 var newFileName = $"issues_{hash}.jsonl";
-                var newFilePath = Path.Combine(directory ?? ".", newFileName);
+                var newFilePath = _fileSystem.Path.Combine(directory ?? ".", newFileName);
 
                 // Delete old file if different from new path
-                if (File.Exists(_filePath) && !string.Equals(_filePath, newFilePath, StringComparison.OrdinalIgnoreCase))
+                if (_fileSystem.File.Exists(_filePath) && !string.Equals(_filePath, newFilePath, StringComparison.OrdinalIgnoreCase))
                 {
-                    File.Delete(_filePath);
+                    _fileSystem.File.Delete(_filePath);
                 }
 
-                await File.WriteAllLinesAsync(newFilePath, lines, cancellationToken);
+                await _fileSystem.File.WriteAllLinesAsync(newFilePath, lines, cancellationToken);
             }
             else
             {
                 // For non-standard filenames, simply overwrite the file
-                await File.WriteAllLinesAsync(_filePath, lines, cancellationToken);
+                await _fileSystem.File.WriteAllLinesAsync(_filePath, lines, cancellationToken);
             }
         }
         finally
@@ -149,10 +156,10 @@ internal sealed partial class SingleFileStorageService : IStorageService
 
     public Task EnsureDirectoryExistsAsync(CancellationToken cancellationToken = default)
     {
-        var directory = Path.GetDirectoryName(_filePath);
+        var directory = _fileSystem.Path.GetDirectoryName(_filePath);
         if (!string.IsNullOrEmpty(directory))
         {
-            Directory.CreateDirectory(directory);
+            _fileSystem.Directory.CreateDirectory(directory);
         }
         return Task.CompletedTask;
     }
@@ -160,7 +167,7 @@ internal sealed partial class SingleFileStorageService : IStorageService
     public Task<IReadOnlyList<string>> GetAllIssueFilesAsync(CancellationToken cancellationToken = default)
     {
         // For single file operation, return only this file if it exists
-        if (File.Exists(_filePath))
+        if (_fileSystem.File.Exists(_filePath))
         {
             return Task.FromResult<IReadOnlyList<string>>(new[] { _filePath });
         }
@@ -172,12 +179,12 @@ internal sealed partial class SingleFileStorageService : IStorageService
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            if (!File.Exists(filePath))
+            if (!_fileSystem.File.Exists(filePath))
             {
                 return [];
             }
 
-            var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+            var content = await _fileSystem.File.ReadAllTextAsync(filePath, cancellationToken);
             return _serializer.DeserializeIssues(content);
         }
         finally
@@ -188,9 +195,9 @@ internal sealed partial class SingleFileStorageService : IStorageService
 
     public Task DeleteIssueFileAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        if (File.Exists(filePath))
+        if (_fileSystem.File.Exists(filePath))
         {
-            File.Delete(filePath);
+            _fileSystem.File.Delete(filePath);
         }
         return Task.CompletedTask;
     }
@@ -200,19 +207,19 @@ internal sealed partial class SingleFileStorageService : IStorageService
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            var directory = Path.GetDirectoryName(_filePath);
+            var directory = _fileSystem.Path.GetDirectoryName(_filePath);
             if (!string.IsNullOrEmpty(directory))
             {
-                Directory.CreateDirectory(directory);
+                _fileSystem.Directory.CreateDirectory(directory);
             }
 
             var lines = issues.Select(_serializer.SerializeIssue).ToList();
             var content = string.Join(Environment.NewLine, lines);
             var hash = ComputeContentHash(content);
             var fileName = $"issues_{hash}.jsonl";
-            var filePath = Path.Combine(directory ?? ".", fileName);
+            var filePath = _fileSystem.Path.Combine(directory ?? ".", fileName);
 
-            await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
+            await _fileSystem.File.WriteAllLinesAsync(filePath, lines, cancellationToken);
             return filePath;
         }
         finally
@@ -232,7 +239,7 @@ internal sealed partial class SingleFileStorageService : IStorageService
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            if (!File.Exists(_filePath))
+            if (!_fileSystem.File.Exists(_filePath))
             {
                 return new LoadIssuesResult
                 {
@@ -241,7 +248,7 @@ internal sealed partial class SingleFileStorageService : IStorageService
                 };
             }
 
-            var content = await File.ReadAllTextAsync(_filePath, cancellationToken);
+            var content = await _fileSystem.File.ReadAllTextAsync(_filePath, cancellationToken);
             var diagnostic = _schemaValidator.ValidateJsonlContent(_filePath, content);
             var issues = _serializer.DeserializeIssues(content);
 

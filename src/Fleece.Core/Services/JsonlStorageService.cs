@@ -3,6 +3,7 @@ using System.Text;
 using Fleece.Core.Models;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services.Interfaces;
+using System.IO.Abstractions;
 
 namespace Fleece.Core.Services;
 
@@ -18,22 +19,28 @@ internal sealed class JsonlStorageService : IStorageService
     private readonly string _basePath;
     private readonly IJsonlSerializer _serializer;
     private readonly ISchemaValidator _schemaValidator;
+    private readonly IFileSystem _fileSystem;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
-    public JsonlStorageService(string basePath, IJsonlSerializer serializer, ISchemaValidator schemaValidator)
+    public JsonlStorageService(
+        string basePath,
+        IJsonlSerializer serializer,
+        ISchemaValidator schemaValidator,
+        IFileSystem? fileSystem = null)
     {
         _basePath = basePath;
         _serializer = serializer;
         _schemaValidator = schemaValidator;
+        _fileSystem = fileSystem ?? new Testably.Abstractions.RealFileSystem();
     }
 
-    private string FleeceDirectoryPath => Path.Combine(_basePath, FleeceDirectory);
-    private string IssuesFilePath => Path.Combine(FleeceDirectoryPath, IssuesFileName);
-    private string TombstonesFilePath => Path.Combine(FleeceDirectoryPath, TombstonesFileName);
+    private string FleeceDirectoryPath => _fileSystem.Path.Combine(_basePath, FleeceDirectory);
+    private string IssuesFilePath => _fileSystem.Path.Combine(FleeceDirectoryPath, IssuesFileName);
+    private string TombstonesFilePath => _fileSystem.Path.Combine(FleeceDirectoryPath, TombstonesFileName);
 
     public async Task EnsureDirectoryExistsAsync(CancellationToken cancellationToken = default)
     {
-        await Task.Run(() => Directory.CreateDirectory(FleeceDirectoryPath), cancellationToken);
+        await Task.Run(() => _fileSystem.Directory.CreateDirectory(FleeceDirectoryPath), cancellationToken);
     }
 
     public async Task<IReadOnlyList<Issue>> LoadIssuesAsync(CancellationToken cancellationToken = default)
@@ -46,7 +53,7 @@ internal sealed class JsonlStorageService : IStorageService
 
             foreach (var file in files)
             {
-                var content = await File.ReadAllTextAsync(file, cancellationToken);
+                var content = await _fileSystem.File.ReadAllTextAsync(file, cancellationToken);
                 var issues = _serializer.DeserializeIssues(content);
                 allIssues.AddRange(issues);
             }
@@ -74,16 +81,16 @@ internal sealed class JsonlStorageService : IStorageService
             var content = string.Join(Environment.NewLine, lines);
             var hash = ComputeContentHash(content);
             var fileName = $"issues_{hash}.jsonl";
-            var filePath = Path.Combine(FleeceDirectoryPath, fileName);
+            var filePath = _fileSystem.Path.Combine(FleeceDirectoryPath, fileName);
 
             // Delete old issue files before writing new one
             var existingFiles = GetAllIssueFilesInternal();
             foreach (var file in existingFiles)
             {
-                File.Delete(file);
+                _fileSystem.File.Delete(file);
             }
 
-            await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
+            await _fileSystem.File.WriteAllLinesAsync(filePath, lines, cancellationToken);
         }
         finally
         {
@@ -104,7 +111,7 @@ internal sealed class JsonlStorageService : IStorageService
 
             foreach (var file in existingFiles)
             {
-                var content = await File.ReadAllTextAsync(file, cancellationToken);
+                var content = await _fileSystem.File.ReadAllTextAsync(file, cancellationToken);
                 var issues = _serializer.DeserializeIssues(content);
                 existingIssues.AddRange(issues);
             }
@@ -115,15 +122,15 @@ internal sealed class JsonlStorageService : IStorageService
             var combinedContent = string.Join(Environment.NewLine, lines);
             var hash = ComputeContentHash(combinedContent);
             var fileName = $"issues_{hash}.jsonl";
-            var filePath = Path.Combine(FleeceDirectoryPath, fileName);
+            var filePath = _fileSystem.Path.Combine(FleeceDirectoryPath, fileName);
 
             // Delete old issue files before writing new one
             foreach (var file in existingFiles)
             {
-                File.Delete(file);
+                _fileSystem.File.Delete(file);
             }
 
-            await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
+            await _fileSystem.File.WriteAllLinesAsync(filePath, lines, cancellationToken);
         }
         finally
         {
@@ -141,12 +148,12 @@ internal sealed class JsonlStorageService : IStorageService
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            if (!File.Exists(filePath))
+            if (!_fileSystem.File.Exists(filePath))
             {
                 return [];
             }
 
-            var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+            var content = await _fileSystem.File.ReadAllTextAsync(filePath, cancellationToken);
             return _serializer.DeserializeIssues(content);
         }
         finally
@@ -157,9 +164,9 @@ internal sealed class JsonlStorageService : IStorageService
 
     public Task DeleteIssueFileAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        if (File.Exists(filePath))
+        if (_fileSystem.File.Exists(filePath))
         {
-            File.Delete(filePath);
+            _fileSystem.File.Delete(filePath);
         }
         return Task.CompletedTask;
     }
@@ -175,9 +182,9 @@ internal sealed class JsonlStorageService : IStorageService
             var content = string.Join(Environment.NewLine, lines);
             var hash = ComputeContentHash(content);
             var fileName = $"issues_{hash}.jsonl";
-            var filePath = Path.Combine(FleeceDirectoryPath, fileName);
+            var filePath = _fileSystem.Path.Combine(FleeceDirectoryPath, fileName);
 
-            await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
+            await _fileSystem.File.WriteAllLinesAsync(filePath, lines, cancellationToken);
             return filePath;
         }
         finally
@@ -188,16 +195,16 @@ internal sealed class JsonlStorageService : IStorageService
 
     private IReadOnlyList<string> GetAllIssueFilesInternal()
     {
-        if (!Directory.Exists(FleeceDirectoryPath))
+        if (!_fileSystem.Directory.Exists(FleeceDirectoryPath))
         {
             return [];
         }
 
         // Get all files matching issues*.jsonl pattern
-        var files = Directory.GetFiles(FleeceDirectoryPath, IssuesFilePattern);
+        var files = _fileSystem.Directory.GetFiles(FleeceDirectoryPath, IssuesFilePattern);
 
         // Also check for legacy issues.jsonl (without hash)
-        if (files.Length == 0 && File.Exists(IssuesFilePath))
+        if (files.Length == 0 && _fileSystem.File.Exists(IssuesFilePath))
         {
             return [IssuesFilePath];
         }
@@ -215,7 +222,7 @@ internal sealed class JsonlStorageService : IStorageService
 
             foreach (var file in files)
             {
-                var content = await File.ReadAllTextAsync(file, cancellationToken);
+                var content = await _fileSystem.File.ReadAllTextAsync(file, cancellationToken);
                 var tombstones = _serializer.DeserializeTombstones(content);
                 allTombstones.AddRange(tombstones);
             }
@@ -241,17 +248,17 @@ internal sealed class JsonlStorageService : IStorageService
 
             var hash = GetCurrentIssuesHashInternal();
             var fileName = string.IsNullOrEmpty(hash) ? TombstonesFileName : $"tombstones_{hash}.jsonl";
-            var filePath = Path.Combine(FleeceDirectoryPath, fileName);
+            var filePath = _fileSystem.Path.Combine(FleeceDirectoryPath, fileName);
 
             // Delete old tombstone files before writing new one
             var existingFiles = GetAllTombstoneFilesInternal();
             foreach (var file in existingFiles)
             {
-                File.Delete(file);
+                _fileSystem.File.Delete(file);
             }
 
             var lines = tombstones.Select(_serializer.SerializeTombstone);
-            await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
+            await _fileSystem.File.WriteAllLinesAsync(filePath, lines, cancellationToken);
         }
         finally
         {
@@ -272,7 +279,7 @@ internal sealed class JsonlStorageService : IStorageService
 
             foreach (var file in existingFiles)
             {
-                var content = await File.ReadAllTextAsync(file, cancellationToken);
+                var content = await _fileSystem.File.ReadAllTextAsync(file, cancellationToken);
                 var existing = _serializer.DeserializeTombstones(content);
                 existingTombstones.AddRange(existing);
             }
@@ -281,16 +288,16 @@ internal sealed class JsonlStorageService : IStorageService
 
             var hash = GetCurrentIssuesHashInternal();
             var fileName = string.IsNullOrEmpty(hash) ? TombstonesFileName : $"tombstones_{hash}.jsonl";
-            var filePath = Path.Combine(FleeceDirectoryPath, fileName);
+            var filePath = _fileSystem.Path.Combine(FleeceDirectoryPath, fileName);
 
             // Delete old tombstone files before writing new one
             foreach (var file in existingFiles)
             {
-                File.Delete(file);
+                _fileSystem.File.Delete(file);
             }
 
             var lines = existingTombstones.Select(_serializer.SerializeTombstone);
-            await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
+            await _fileSystem.File.WriteAllLinesAsync(filePath, lines, cancellationToken);
         }
         finally
         {
@@ -305,14 +312,14 @@ internal sealed class JsonlStorageService : IStorageService
 
     private IReadOnlyList<string> GetAllTombstoneFilesInternal()
     {
-        if (!Directory.Exists(FleeceDirectoryPath))
+        if (!_fileSystem.Directory.Exists(FleeceDirectoryPath))
         {
             return [];
         }
 
-        var files = Directory.GetFiles(FleeceDirectoryPath, TombstonesFilePattern);
+        var files = _fileSystem.Directory.GetFiles(FleeceDirectoryPath, TombstonesFilePattern);
 
-        if (files.Length == 0 && File.Exists(TombstonesFilePath))
+        if (files.Length == 0 && _fileSystem.File.Exists(TombstonesFilePath))
         {
             return [TombstonesFilePath];
         }
@@ -329,7 +336,7 @@ internal sealed class JsonlStorageService : IStorageService
         }
 
         // Extract hash from first issues file (e.g., "issues_abc123.jsonl" -> "abc123")
-        var fileName = Path.GetFileNameWithoutExtension(issueFiles[0]);
+        var fileName = _fileSystem.Path.GetFileNameWithoutExtension(issueFiles[0]);
         if (fileName.StartsWith("issues_") && fileName.Length > 7)
         {
             return fileName[7..];
@@ -347,13 +354,13 @@ internal sealed class JsonlStorageService : IStorageService
 
         if (issueFiles.Count > 1)
         {
-            var fileNames = issueFiles.Select(Path.GetFileName);
+            var fileNames = issueFiles.Select(_fileSystem.Path.GetFileName);
             messages.Add($"Multiple unmerged issue files found: {string.Join(", ", fileNames)}");
         }
 
         if (tombstoneFiles.Count > 1)
         {
-            var fileNames = tombstoneFiles.Select(Path.GetFileName);
+            var fileNames = tombstoneFiles.Select(_fileSystem.Path.GetFileName);
             messages.Add($"Multiple unmerged tombstone files found: {string.Join(", ", fileNames)}");
         }
 
@@ -377,7 +384,7 @@ internal sealed class JsonlStorageService : IStorageService
 
             foreach (var file in files)
             {
-                var content = await File.ReadAllTextAsync(file, cancellationToken);
+                var content = await _fileSystem.File.ReadAllTextAsync(file, cancellationToken);
 
                 // Validate schema and collect diagnostics
                 var diagnostic = _schemaValidator.ValidateJsonlContent(file, content);

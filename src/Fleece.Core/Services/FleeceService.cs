@@ -49,11 +49,13 @@ public sealed partial class FleeceService : IFleeceService
     public static FleeceService ForFile(
         string filePath,
         ISettingsService settingsService,
-        IGitConfigService gitConfigService)
+        IGitConfigService gitConfigService,
+        System.IO.Abstractions.IFileSystem? fileSystem = null)
     {
+        var fs = fileSystem ?? new Testably.Abstractions.RealFileSystem();
         var serializer = new JsonlSerializer();
         var schemaValidator = new SchemaValidator();
-        var storage = new SingleFileStorageService(filePath, serializer, schemaValidator);
+        var storage = new SingleFileStorageService(filePath, serializer, schemaValidator, fs);
         var idGenerator = new GuidIdGenerator();
         return new FleeceService(storage, idGenerator, gitConfigService, settingsService);
     }

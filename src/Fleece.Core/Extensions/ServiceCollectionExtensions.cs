@@ -2,17 +2,25 @@ using Fleece.Core.Serialization;
 using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
+using System.IO.Abstractions;
+using Testably.Abstractions;
 
 namespace Fleece.Core.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddFleeceCore(this IServiceCollection services, string? basePath = null)
+    public static IServiceCollection AddFleeceCore(
+        this IServiceCollection services,
+        string? basePath = null,
+        IFileSystem? fileSystem = null)
     {
-        basePath ??= Directory.GetCurrentDirectory();
+        var fs = fileSystem ?? new RealFileSystem();
+        basePath ??= fs.Directory.GetCurrentDirectory();
+
+        services.AddSingleton(fs);
 
         // Register settings service early so other services can depend on it
-        services.AddSingleton<ISettingsService>(sp => new SettingsService(basePath));
+        services.AddSingleton<ISettingsService>(sp => new SettingsService(basePath, sp.GetRequiredService<IFileSystem>()));
         services.AddSingleton<IGitConfigService>(sp =>
             new GitConfigService(sp.GetRequiredService<ISettingsService>()));
         services.AddSingleton<IGitService>(sp => new GitService(basePath));
@@ -25,17 +33,22 @@ public static class ServiceCollectionExtensions
             new JsonlStorageService(
                 basePath,
                 sp.GetRequiredService<IJsonlSerializer>(),
-                sp.GetRequiredService<ISchemaValidator>()));
+                sp.GetRequiredService<ISchemaValidator>(),
+                sp.GetRequiredService<IFileSystem>()));
 
         // DiffService (standalone utility for file comparison)
-        services.AddSingleton<IDiffService, DiffService>();
+        services.AddSingleton<IDiffService>(sp =>
+            new DiffService(
+                sp.GetRequiredService<IJsonlSerializer>(),
+                sp.GetRequiredService<IFileSystem>()));
 
         // SyncStatusService (internal, used by FleeceService)
         services.AddSingleton(sp =>
             new SyncStatusService(
                 basePath,
                 sp.GetRequiredService<IJsonlSerializer>(),
-                sp.GetRequiredService<IGitService>()));
+                sp.GetRequiredService<IGitService>(),
+                sp.GetRequiredService<IFileSystem>()));
 
         // Unified service
         services.AddSingleton<IFleeceService>(sp =>
@@ -59,11 +72,18 @@ public static class ServiceCollectionExtensions
     /// The project base path containing the <c>.fleece/</c> directory.
     /// Defaults to the current working directory if not specified.
     /// </param>
-    public static IServiceCollection AddFleeceInMemoryService(this IServiceCollection services, string? basePath = null)
+    /// <param name="fileSystem">
+    /// Optional filesystem abstraction. Defaults to <see cref="RealFileSystem"/> when not provided.
+    /// </param>
+    public static IServiceCollection AddFleeceInMemoryService(
+        this IServiceCollection services,
+        string? basePath = null,
+        IFileSystem? fileSystem = null)
     {
-        basePath ??= Directory.GetCurrentDirectory();
+        var fs = fileSystem ?? new RealFileSystem();
+        basePath ??= fs.Directory.GetCurrentDirectory();
 
-        services.AddFleeceCore(basePath);
+        services.AddFleeceCore(basePath, fs);
 
         services.AddSingleton<IssueSerializationQueueService>();
         services.AddSingleton<IIssueSerializationQueue>(sp =>
@@ -76,7 +96,8 @@ public static class ServiceCollectionExtensions
             new FleeceInMemoryService(
                 sp.GetRequiredService<IFleeceService>(),
                 sp.GetRequiredService<IIssueSerializationQueue>(),
-                basePath));
+                basePath,
+                sp.GetRequiredService<IFileSystem>()));
 
         return services;
     }

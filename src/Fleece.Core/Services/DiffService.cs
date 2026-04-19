@@ -1,18 +1,19 @@
 using Fleece.Core.Models;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services.Interfaces;
+using System.IO.Abstractions;
 
 namespace Fleece.Core.Services;
 
-internal sealed class DiffService(IJsonlSerializer serializer) : IDiffService
+internal sealed class DiffService(IJsonlSerializer serializer, IFileSystem fileSystem) : IDiffService
 {
     public async Task<DiffResult> CompareFilesAsync(
         string file1Path,
         string file2Path,
         CancellationToken cancellationToken = default)
     {
-        var content1 = await File.ReadAllTextAsync(file1Path, cancellationToken);
-        var content2 = await File.ReadAllTextAsync(file2Path, cancellationToken);
+        var content1 = await fileSystem.File.ReadAllTextAsync(file1Path, cancellationToken);
+        var content2 = await fileSystem.File.ReadAllTextAsync(file2Path, cancellationToken);
 
         var issues1 = serializer.DeserializeIssues(content1);
         var issues2 = serializer.DeserializeIssues(content2);

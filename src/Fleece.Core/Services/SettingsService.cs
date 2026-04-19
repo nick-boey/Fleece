@@ -2,6 +2,7 @@ using System.Text.Json;
 using Fleece.Core.Models;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services.Interfaces;
+using System.IO.Abstractions;
 
 namespace Fleece.Core.Services;
 
@@ -11,35 +12,35 @@ namespace Fleece.Core.Services;
 /// </summary>
 public sealed class SettingsService : ISettingsService
 {
-    private static readonly string GlobalSettingsDirectory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".fleece");
-
-    private static readonly string GlobalSettingsFilePath = Path.Combine(
-        GlobalSettingsDirectory,
-        "settings.json");
-
+    private readonly IFileSystem _fileSystem;
+    private readonly string _globalSettingsDirectory;
+    private readonly string _globalSettingsFilePath;
     private readonly string _localSettingsPath;
 
-    public SettingsService(string basePath)
+    public SettingsService(string basePath, IFileSystem? fileSystem = null)
     {
-        _localSettingsPath = Path.Combine(basePath, ".fleece", "settings.json");
+        _fileSystem = fileSystem ?? new Testably.Abstractions.RealFileSystem();
+        _globalSettingsDirectory = _fileSystem.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".fleece");
+        _globalSettingsFilePath = _fileSystem.Path.Combine(_globalSettingsDirectory, "settings.json");
+        _localSettingsPath = _fileSystem.Path.Combine(basePath, ".fleece", "settings.json");
     }
 
-    public string GetGlobalSettingsPath() => GlobalSettingsFilePath;
+    public string GetGlobalSettingsPath() => _globalSettingsFilePath;
 
     public string GetLocalSettingsPath() => _localSettingsPath;
 
     public async Task<FleeceSettings?> LoadSettingsFromFileAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(filePath))
+        if (!_fileSystem.File.Exists(filePath))
         {
             return null;
         }
 
         try
         {
-            var json = await File.ReadAllTextAsync(filePath, cancellationToken);
+            var json = await _fileSystem.File.ReadAllTextAsync(filePath, cancellationToken);
             return JsonSerializer.Deserialize(json, FleeceJsonContext.Default.FleeceSettings);
         }
         catch (JsonException)
@@ -50,26 +51,26 @@ public sealed class SettingsService : ISettingsService
     }
 
     public Task<FleeceSettings?> LoadGlobalSettingsAsync(CancellationToken cancellationToken = default)
-        => LoadSettingsFromFileAsync(GlobalSettingsFilePath, cancellationToken);
+        => LoadSettingsFromFileAsync(_globalSettingsFilePath, cancellationToken);
 
     public Task<FleeceSettings?> LoadLocalSettingsAsync(CancellationToken cancellationToken = default)
         => LoadSettingsFromFileAsync(_localSettingsPath, cancellationToken);
 
     public async Task SaveSettingsToFileAsync(string filePath, FleeceSettings settings, CancellationToken cancellationToken = default)
     {
-        var directory = Path.GetDirectoryName(filePath);
-        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+        var directory = _fileSystem.Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrEmpty(directory) && !_fileSystem.Directory.Exists(directory))
         {
-            Directory.CreateDirectory(directory);
+            _fileSystem.Directory.CreateDirectory(directory);
         }
 
         // Use FleeceSettingsWriteContext which has WriteIndented = true for human-readable output
         var json = JsonSerializer.Serialize(settings, FleeceSettingsWriteContext.Default.FleeceSettings);
-        await File.WriteAllTextAsync(filePath, json, cancellationToken);
+        await _fileSystem.File.WriteAllTextAsync(filePath, json, cancellationToken);
     }
 
     public Task SaveGlobalSettingsAsync(FleeceSettings settings, CancellationToken cancellationToken = default)
-        => SaveSettingsToFileAsync(GlobalSettingsFilePath, settings, cancellationToken);
+        => SaveSettingsToFileAsync(_globalSettingsFilePath, settings, cancellationToken);
 
     public Task SaveLocalSettingsAsync(FleeceSettings settings, CancellationToken cancellationToken = default)
         => SaveSettingsToFileAsync(_localSettingsPath, settings, cancellationToken);
@@ -90,7 +91,7 @@ public sealed class SettingsService : ISettingsService
         bool global = false,
         CancellationToken cancellationToken = default)
     {
-        var filePath = global ? GlobalSettingsFilePath : _localSettingsPath;
+        var filePath = global ? _globalSettingsFilePath : _localSettingsPath;
         var existing = await LoadSettingsFromFileAsync(filePath, cancellationToken) ?? new FleeceSettings();
 
         var updated = key.ToLowerInvariant() switch
