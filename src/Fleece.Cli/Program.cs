@@ -1,8 +1,8 @@
 using System.Reflection;
 using System.Text;
+using Fleece.Cli;
 using Fleece.Cli.Commands;
 using Fleece.Cli.Interceptors;
-using Fleece.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console.Cli;
 
@@ -14,7 +14,7 @@ var version = Assembly.GetExecutingAssembly()
     ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
     ?? "1.0.0";
 
-var services = new ServiceCollection();
+var services = CliComposition.BuildServices();
 
 var registrar = new TypeRegistrar(services);
 var app = new CommandApp(registrar);
