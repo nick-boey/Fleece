@@ -70,11 +70,11 @@ public static class TreeRenderer
         return counts;
     }
 
-    public static void RenderTree(List<Issue> issues)
+    public static void RenderTree(IAnsiConsole console, List<Issue> issues)
     {
         if (issues.Count == 0)
         {
-            AnsiConsole.MarkupLine("[dim]No issues found[/]");
+            console.MarkupLine("[dim]No issues found[/]");
             return;
         }
 
@@ -106,23 +106,24 @@ public static class TreeRenderer
         // Render each root issue and its children using depth-first traversal
         foreach (var root in rootIssues)
         {
-            RenderIssueNode(root, "", true, true, issueLookup, renderCount, totalAppearances, issues);
+            RenderIssueNode(console, root, "", true, true, issueLookup, renderCount, totalAppearances, issues);
         }
 
         // Render any orphaned issues that weren't reached (shouldn't happen normally)
         var orphans = issues.Where(i => !renderCount.ContainsKey(i.Id)).ToList();
         if (orphans.Count > 0)
         {
-            AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLine("[dim]Unlinked issues:[/]");
+            console.WriteLine();
+            console.MarkupLine("[dim]Unlinked issues:[/]");
             foreach (var orphan in orphans)
             {
-                RenderIssueNode(orphan, "", true, true, issueLookup, renderCount, totalAppearances, issues);
+                RenderIssueNode(console, orphan, "", true, true, issueLookup, renderCount, totalAppearances, issues);
             }
         }
     }
 
     private static void RenderIssueNode(
+        IAnsiConsole console,
         Issue issue,
         string prefix,
         bool isLast,
@@ -142,7 +143,7 @@ public static class TreeRenderer
 
         // Render the current issue
         var connector = isRoot ? "" : (isLast ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ");
-        AnsiConsole.MarkupLine($"{prefix}{connector}{IssueLineFormatter.FormatMarkup(issue)}{appearanceSuffix}");
+        console.MarkupLine($"{prefix}{connector}{IssueLineFormatter.FormatMarkup(issue)}{appearanceSuffix}");
 
         // Only show children on the first encounter
         if (currentCount > 1)
@@ -170,7 +171,7 @@ public static class TreeRenderer
         {
             var child = children[i];
             var isLastChild = i == children.Count - 1;
-            RenderIssueNode(child, childPrefix, isLastChild, false, issueLookup, renderCount, totalAppearances, allIssues);
+            RenderIssueNode(console, child, childPrefix, isLastChild, false, issueLookup, renderCount, totalAppearances, allIssues);
         }
     }
 

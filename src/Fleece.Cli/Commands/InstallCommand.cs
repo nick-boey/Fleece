@@ -6,7 +6,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class InstallCommand : Command<InstallSettings>
+public sealed class InstallCommand(IAnsiConsole console) : Command<InstallSettings>
 {
     private const string ClaudeDirectory = ".claude";
     private const string SettingsFileName = "settings.json";
@@ -80,11 +80,11 @@ public sealed class InstallCommand : Command<InstallSettings>
         var options = new JsonSerializerOptions { WriteIndented = true };
         File.WriteAllText(settingsPath, root.ToJsonString(options));
 
-        AnsiConsole.MarkupLine("[green]Claude Code hooks installed successfully![/]");
-        AnsiConsole.MarkupLine($"[dim]Settings written to: {settingsPath}[/]");
-        AnsiConsole.MarkupLine("");
-        AnsiConsole.MarkupLine("The following hooks were configured:");
-        AnsiConsole.MarkupLine("  [bold]SessionStart:[/] fleece prime (provides issue context)");
+        console.MarkupLine("[green]Claude Code hooks installed successfully![/]");
+        console.MarkupLine($"[dim]Settings written to: {settingsPath}[/]");
+        console.MarkupLine("");
+        console.MarkupLine("The following hooks were configured:");
+        console.MarkupLine("  [bold]SessionStart:[/] fleece prime (provides issue context)");
 
         return 0;
     }

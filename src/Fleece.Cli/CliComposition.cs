@@ -1,6 +1,7 @@
 using Fleece.Cli.Commands;
 using Fleece.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
 
 namespace Fleece.Cli;
 
@@ -38,6 +39,7 @@ public static class CliComposition
     {
         var services = new ServiceCollection();
         services.AddFleeceInMemoryService(basePath);
+        services.AddSingleton<IAnsiConsole>(_ => AnsiConsole.Console);
         return services;
     }
 }

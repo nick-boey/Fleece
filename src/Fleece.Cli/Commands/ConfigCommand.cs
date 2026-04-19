@@ -7,7 +7,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class ConfigCommand(ISettingsService settingsService) : AsyncCommand<ConfigSettings>
+public sealed class ConfigCommand(ISettingsService settingsService, IAnsiConsole console) : AsyncCommand<ConfigSettings>
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -50,7 +50,7 @@ public sealed class ConfigCommand(ISettingsService settingsService) : AsyncComma
             var parts = settings.Set.Split('=', 2);
             if (parts.Length != 2)
             {
-                AnsiConsole.MarkupLine("[red]Error:[/] Invalid format. Use: --set key=value");
+                console.MarkupLine("[red]Error:[/] Invalid format. Use: --set key=value");
                 return 1;
             }
 
@@ -58,12 +58,12 @@ public sealed class ConfigCommand(ISettingsService settingsService) : AsyncComma
             {
                 await settingsService.SetSettingAsync(parts[0], parts[1], settings.Global);
                 var scope = settings.Global ? "global" : "local";
-                AnsiConsole.MarkupLine($"[green]Set[/] {parts[0]} = {parts[1]} [dim]({scope})[/]");
+                console.MarkupLine($"[green]Set[/] {parts[0]} = {parts[1]} [dim]({scope})[/]");
                 return 0;
             }
             catch (ArgumentException ex)
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+                console.MarkupLine($"[red]Error:[/] {ex.Message}");
                 return 1;
             }
         }
@@ -82,7 +82,7 @@ public sealed class ConfigCommand(ISettingsService settingsService) : AsyncComma
 
             if (value is null)
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Unknown setting: {settings.Get}. Valid settings are: autoMerge, identity, syncBranch");
+                console.MarkupLine($"[red]Error:[/] Unknown setting: {settings.Get}. Valid settings are: autoMerge, identity, syncBranch");
                 return 1;
             }
 
@@ -100,23 +100,23 @@ public sealed class ConfigCommand(ISettingsService settingsService) : AsyncComma
         }
 
         // No options: show usage
-        AnsiConsole.MarkupLine("[bold]Usage:[/]");
-        AnsiConsole.MarkupLine("  fleece config --list              Show all settings with sources");
-        AnsiConsole.MarkupLine("  fleece config --get <key>         Get a setting value");
-        AnsiConsole.MarkupLine("  fleece config --set <key>=<value> Set a local setting");
-        AnsiConsole.MarkupLine("  fleece config --global --set ...  Set a global setting");
-        AnsiConsole.MarkupLine("  fleece config --path              Show local settings file path");
-        AnsiConsole.MarkupLine("  fleece config --global --path     Show global settings file path");
-        AnsiConsole.MarkupLine("");
-        AnsiConsole.MarkupLine("[bold]Available settings:[/]");
-        AnsiConsole.MarkupLine("  autoMerge   Auto-merge issues before operations (true/false)");
-        AnsiConsole.MarkupLine("  identity    User identity for ModifiedBy fields");
-        AnsiConsole.MarkupLine("  syncBranch  Branch for issue synchronization");
+        console.MarkupLine("[bold]Usage:[/]");
+        console.MarkupLine("  fleece config --list              Show all settings with sources");
+        console.MarkupLine("  fleece config --get <key>         Get a setting value");
+        console.MarkupLine("  fleece config --set <key>=<value> Set a local setting");
+        console.MarkupLine("  fleece config --global --set ...  Set a global setting");
+        console.MarkupLine("  fleece config --path              Show local settings file path");
+        console.MarkupLine("  fleece config --global --path     Show global settings file path");
+        console.MarkupLine("");
+        console.MarkupLine("[bold]Available settings:[/]");
+        console.MarkupLine("  autoMerge   Auto-merge issues before operations (true/false)");
+        console.MarkupLine("  identity    User identity for ModifiedBy fields");
+        console.MarkupLine("  syncBranch  Branch for issue synchronization");
 
         return 0;
     }
 
-    private static void RenderEffectiveSettingsTable(EffectiveSettings effective)
+    private void RenderEffectiveSettingsTable(EffectiveSettings effective)
     {
         var table = new Table();
         table.AddColumn("Setting");
@@ -138,7 +138,7 @@ public sealed class ConfigCommand(ISettingsService settingsService) : AsyncComma
             effective.SyncBranch ?? "[dim](not set)[/]",
             FormatSource(effective.Sources.SyncBranch));
 
-        AnsiConsole.Write(table);
+        console.Write(table);
     }
 
     private static void RenderEffectiveSettingsJson(EffectiveSettings effective)

@@ -6,14 +6,14 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class SearchCommand(IFleeceService fleeceService) : AsyncCommand<SearchSettings>
+public sealed class SearchCommand(IFleeceService fleeceService, IAnsiConsole console) : AsyncCommand<SearchSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, SearchSettings settings)
     {
         var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
@@ -25,7 +25,7 @@ public sealed class SearchCommand(IFleeceService fleeceService) : AsyncCommand<S
         }
         else
         {
-            TableFormatter.RenderIssues(issues);
+            TableFormatter.RenderIssues(console, issues);
         }
 
         return 0;

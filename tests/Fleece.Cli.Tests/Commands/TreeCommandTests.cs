@@ -7,8 +7,8 @@ using Fleece.Core.Tests.TestHelpers;
 using FluentAssertions;
 using NSubstitute;
 using NUnit.Framework;
-using Spectre.Console;
 using Spectre.Console.Cli;
+using Spectre.Console.Testing;
 
 namespace Fleece.Cli.Tests.Commands;
 
@@ -19,9 +19,9 @@ public class TreeCommandTests
     private ISettingsService _settingsService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
+    private TestConsole _console = null!;
     private StringWriter _consoleOutput = null!;
     private TextWriter _originalConsole = null!;
-    private IAnsiConsole _originalAnsiConsole = null!;
 
     [SetUp]
     public void SetUp()
@@ -49,26 +49,24 @@ public class TreeCommandTests
                 }
             });
 
-        _command = new ListCommand(_fleeceService, _settingsService);
+        _console = new TestConsole();
+        _command = new ListCommand(_fleeceService, _settingsService, _console);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;
-        _originalAnsiConsole = AnsiConsole.Console;
         _consoleOutput = new StringWriter();
         Console.SetOut(_consoleOutput);
-        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Out = new AnsiConsoleOutput(_consoleOutput)
-        });
     }
 
     [TearDown]
     public void TearDown()
     {
-        AnsiConsole.Console = _originalAnsiConsole;
         Console.SetOut(_originalConsole);
         _consoleOutput.Dispose();
+        _console.Dispose();
     }
+
+    private string CombinedOutput() => _console.Output + _consoleOutput.ToString();
 
     [Test]
     public async Task ExecuteAsync_TreeOutput_UsesSharedIssueLineFormatter()
@@ -105,9 +103,8 @@ public class TreeCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString();
+        var output = CombinedOutput();
 
-        // Tree should use the shared IssueLineFormatter format.
         output.Should().Contain("parent1");
         output.Should().Contain("[task]");
         output.Should().Contain("[open]");
@@ -145,7 +142,7 @@ public class TreeCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString();
+        var output = CombinedOutput();
 
         output.Should().Contain("abc123");
         output.Should().Contain("[feature]");
@@ -193,14 +190,12 @@ public class TreeCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString();
+        var output = CombinedOutput();
 
-        // All issues should appear in output
         output.Should().Contain("parent1");
         output.Should().Contain("child1");
         output.Should().Contain("child2");
 
-        // Tree structure characters should be present
         output.Should().ContainAny("├", "└");
     }
 
@@ -227,7 +222,7 @@ public class TreeCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString();
+        var output = CombinedOutput();
         output.Should().Contain("task1");
         output.Should().Contain("A task");
     }
@@ -240,7 +235,7 @@ public class TreeCommandTests
         var result = await _command.ExecuteAsync(_context, settings);
 
         result.Should().Be(1);
-        _consoleOutput.ToString().Should().Contain("--tree and --next cannot be used together");
+        CombinedOutput().Should().Contain("--tree and --next cannot be used together");
     }
 
     #region Search Integration Tests
@@ -291,7 +286,6 @@ public class TreeCommandTests
 
         result.Should().Be(0);
 
-        // Verify search was called
         _fleeceService.Received(1).ParseSearchQuery("login");
         await _fleeceService.Received(1).SearchWithContextAsync(
             query,
@@ -299,7 +293,6 @@ public class TreeCommandTests
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
             Arg.Any<bool>(), Arg.Any<CancellationToken>());
 
-        // Verify filtered graph was built
         await _fleeceService.Received(1).BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>());
     }
 
@@ -328,8 +321,7 @@ public class TreeCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString();
-        output.Should().Contain("No issues found matching search");
+        CombinedOutput().Should().Contain("No issues found matching search");
     }
 
     [Test]
@@ -354,7 +346,7 @@ public class TreeCommandTests
         _fleeceService.ParseSearchQuery("type:bug").Returns(query);
         _fleeceService.SearchWithContextAsync(
                 query,
-                IssueStatus.Open,  // CLI status filter
+                IssueStatus.Open,
                 Arg.Any<IssueType?>(),
                 Arg.Any<int?>(),
                 Arg.Any<string?>(),
@@ -383,10 +375,9 @@ public class TreeCommandTests
 
         result.Should().Be(0);
 
-        // Verify search received CLI status filter
         await _fleeceService.Received(1).SearchWithContextAsync(
             query,
-            IssueStatus.Open,  // CLI status passed through
+            IssueStatus.Open,
             Arg.Any<IssueType?>(),
             Arg.Any<int?>(),
             Arg.Any<string?>(),
@@ -424,10 +415,8 @@ public class TreeCommandTests
 
         result.Should().Be(0);
 
-        // Verify BuildTaskGraphLayoutAsync was called (not BuildFilteredTaskGraphLayoutAsync)
         await _fleeceService.Received(1).BuildTaskGraphLayoutAsync(Arg.Any<InactiveVisibility>(), Arg.Any<string?>(), Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>());
 
-        // Verify search was NOT called
         _fleeceService.DidNotReceive().ParseSearchQuery(Arg.Any<string?>());
     }
 
@@ -477,7 +466,7 @@ public class TreeCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString();
+        var output = CombinedOutput();
         output.Should().Contain("abc123");
         output.Should().Contain("Login bug fix");
     }

@@ -5,11 +5,11 @@ namespace Fleece.Cli.Output;
 
 public static class TableFormatter
 {
-    public static void RenderIssues(IReadOnlyList<Issue> issues, IReadOnlyDictionary<string, SyncStatus>? syncStatuses = null)
+    public static void RenderIssues(IAnsiConsole console, IReadOnlyList<Issue> issues, IReadOnlyDictionary<string, SyncStatus>? syncStatuses = null)
     {
         if (issues.Count == 0)
         {
-            AnsiConsole.MarkupLine("[dim]No issues found.[/]");
+            console.MarkupLine("[dim]No issues found.[/]");
             return;
         }
 
@@ -85,8 +85,8 @@ public static class TableFormatter
             }
         }
 
-        AnsiConsole.Write(table);
-        AnsiConsole.MarkupLine($"[dim]{issues.Count} issue(s)[/]");
+        console.Write(table);
+        console.MarkupLine($"[dim]{issues.Count} issue(s)[/]");
     }
 
     /// <summary>
@@ -100,7 +100,7 @@ public static class TableFormatter
         _ => ("?", "white")
     };
 
-    public static void RenderIssue(Issue issue, IssueShowDto? context = null)
+    public static void RenderIssue(IAnsiConsole console, Issue issue, IssueShowDto? context = null)
     {
         var panel = new Panel(BuildIssueContent(issue, context))
         {
@@ -108,7 +108,7 @@ public static class TableFormatter
             Border = BoxBorder.Rounded
         };
 
-        AnsiConsole.Write(panel);
+        console.Write(panel);
     }
 
     private static string BuildIssueContent(Issue issue, IssueShowDto? context = null)

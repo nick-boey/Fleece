@@ -6,8 +6,8 @@ using Fleece.Core.Tests.TestHelpers;
 using FluentAssertions;
 using NSubstitute;
 using NUnit.Framework;
-using Spectre.Console;
 using Spectre.Console.Cli;
+using Spectre.Console.Testing;
 
 namespace Fleece.Cli.Tests.Commands;
 
@@ -19,9 +19,7 @@ public class EditCommandTests
     private IGitConfigService _gitConfigService = null!;
     private EditCommand _command = null!;
     private CommandContext _context = null!;
-    private StringWriter _consoleOutput = null!;
-    private TextWriter _originalConsole = null!;
-    private IAnsiConsole _originalAnsiConsole = null!;
+    private TestConsole _console = null!;
 
     [SetUp]
     public void SetUp()
@@ -42,26 +40,16 @@ public class EditCommandTests
 
         _settingsService = Substitute.For<ISettingsService>();
         _gitConfigService = Substitute.For<IGitConfigService>();
+        _console = new TestConsole();
 
-        _command = new EditCommand(_fleeceService, _settingsService, _gitConfigService);
+        _command = new EditCommand(_fleeceService, _settingsService, _gitConfigService, _console);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "edit", null);
-
-        _originalConsole = Console.Out;
-        _originalAnsiConsole = AnsiConsole.Console;
-        _consoleOutput = new StringWriter();
-        Console.SetOut(_consoleOutput);
-        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Out = new AnsiConsoleOutput(_consoleOutput)
-        });
     }
 
     [TearDown]
     public void TearDown()
     {
-        AnsiConsole.Console = _originalAnsiConsole;
-        Console.SetOut(_originalConsole);
-        _consoleOutput.Dispose();
+        _console.Dispose();
     }
 
     [Test]
@@ -72,7 +60,7 @@ public class EditCommandTests
         var exitCode = await _command.ExecuteAsync(_context, settings);
 
         exitCode.Should().Be(1);
-        var output = _consoleOutput.ToString();
+        var output = _console.Output;
         output.Should().Contain("at least one field flag");
         output.Should().Contain("--title");
         output.Should().Contain("--status");
@@ -87,7 +75,7 @@ public class EditCommandTests
         var exitCode = await _command.ExecuteAsync(_context, settings);
 
         exitCode.Should().Be(1);
-        _consoleOutput.ToString().Should().Contain("at least one field flag");
+        _console.Output.Should().Contain("at least one field flag");
         await _fleeceService.DidNotReceiveWithAnyArgs().UpdateAsync(id: Arg.Any<string>());
     }
 
@@ -108,7 +96,7 @@ public class EditCommandTests
         var exitCode = await _command.ExecuteAsync(_context, settings);
 
         exitCode.Should().Be(0);
-        _consoleOutput.ToString().Should().NotContain("at least one field flag");
+        _console.Output.Should().NotContain("at least one field flag");
         await _fleeceService.Received(1).UpdateAsync(id: "abc123", linkedPr: 42);
     }
 

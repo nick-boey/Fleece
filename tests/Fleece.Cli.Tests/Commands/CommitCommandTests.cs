@@ -4,8 +4,8 @@ using Fleece.Core.Services.Interfaces;
 using FluentAssertions;
 using NSubstitute;
 using NUnit.Framework;
-using Spectre.Console;
 using Spectre.Console.Cli;
+using Spectre.Console.Testing;
 
 namespace Fleece.Cli.Tests.Commands;
 
@@ -15,9 +15,7 @@ public class CommitCommandTests
     private IGitService _gitService = null!;
     private CommitCommand _command = null!;
     private CommandContext _context = null!;
-    private StringWriter _consoleOutput = null!;
-    private TextWriter _originalConsole = null!;
-    private IAnsiConsole _originalAnsiConsole = null!;
+    private TestConsole _console = null!;
 
     [SetUp]
     public void SetUp()
@@ -28,25 +26,15 @@ public class CommitCommandTests
         _gitService.HasFleeceChanges().Returns(true);
         _gitService.CommitFleeceChanges(Arg.Any<string>()).Returns(GitOperationResult.Ok());
 
-        _command = new CommitCommand(_gitService);
+        _console = new TestConsole();
+        _command = new CommitCommand(_gitService, _console);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "commit", null);
-
-        _originalConsole = Console.Out;
-        _originalAnsiConsole = AnsiConsole.Console;
-        _consoleOutput = new StringWriter();
-        Console.SetOut(_consoleOutput);
-        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Out = new AnsiConsoleOutput(_consoleOutput)
-        });
     }
 
     [TearDown]
     public void TearDown()
     {
-        Console.SetOut(_originalConsole);
-        AnsiConsole.Console = _originalAnsiConsole;
-        _consoleOutput.Dispose();
+        _console.Dispose();
     }
 
     [Test]

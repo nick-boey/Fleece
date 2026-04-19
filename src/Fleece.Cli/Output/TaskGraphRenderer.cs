@@ -30,11 +30,11 @@ public static class TaskGraphRenderer
     /// <summary>
     /// Renders a task graph to the console.
     /// </summary>
-    public static void Render(TaskGraph graph)
+    public static void Render(IAnsiConsole console, TaskGraph graph)
     {
         if (graph.Nodes.Count == 0)
         {
-            AnsiConsole.MarkupLine("[dim]No issues found[/]");
+            console.MarkupLine("[dim]No issues found[/]");
             return;
         }
 
@@ -154,19 +154,18 @@ public static class TaskGraphRenderer
 
                 if (isContextOnly)
                 {
-                    AnsiConsole.MarkupLine($"{graphPart}  [dim]{id} {title}{appearanceSuffix}[/]");
+                    console.MarkupLine($"{graphPart}  [dim]{id} {title}{appearanceSuffix}[/]");
                 }
                 else
                 {
                     var statusColor = GetStatusColor(node.Issue.Status);
                     var suffix = appearanceSuffix.Length > 0 ? $" [dim]{appearanceSuffix}[/]" : "";
-                    AnsiConsole.MarkupLine($"{graphPart}  [{statusColor}]{id} {title}[/]{suffix}");
+                    console.MarkupLine($"{graphPart}  [{statusColor}]{id} {title}[/]{suffix}");
                 }
             }
             else
             {
-                // Connector row
-                AnsiConsole.WriteLine(graphPart);
+                console.WriteLine(graphPart);
             }
         }
     }

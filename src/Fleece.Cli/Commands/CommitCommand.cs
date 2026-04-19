@@ -6,7 +6,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class CommitCommand(IGitService gitService) : Command<CommitSettings>
+public sealed class CommitCommand(IGitService gitService, IAnsiConsole console) : Command<CommitSettings>
 {
     private const string DefaultCommitMessage = "Update fleece issues";
 
@@ -21,7 +21,7 @@ public sealed class CommitCommand(IGitService gitService) : Command<CommitSettin
             }
             else
             {
-                AnsiConsole.MarkupLine("[red]Error:[/] git command not found. Please ensure git is installed and available in PATH.");
+                console.MarkupLine("[red]Error:[/] git command not found. Please ensure git is installed and available in PATH.");
             }
             return 1;
         }
@@ -35,7 +35,7 @@ public sealed class CommitCommand(IGitService gitService) : Command<CommitSettin
             }
             else
             {
-                AnsiConsole.MarkupLine("[red]Error:[/] Not a git repository. Please run this command from within a git repository.");
+                console.MarkupLine("[red]Error:[/] Not a git repository. Please run this command from within a git repository.");
             }
             return 1;
         }
@@ -49,7 +49,7 @@ public sealed class CommitCommand(IGitService gitService) : Command<CommitSettin
             }
             else
             {
-                AnsiConsole.MarkupLine("[yellow]No changes to commit in .fleece directory.[/]");
+                console.MarkupLine("[yellow]No changes to commit in .fleece directory.[/]");
             }
             return 0;
         }
@@ -73,7 +73,7 @@ public sealed class CommitCommand(IGitService gitService) : Command<CommitSettin
             }
             else
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] {result.ErrorMessage}");
+                console.MarkupLine($"[red]Error:[/] {result.ErrorMessage}");
             }
             return 1;
         }
@@ -85,25 +85,25 @@ public sealed class CommitCommand(IGitService gitService) : Command<CommitSettin
         }
         else
         {
-            AnsiConsole.MarkupLine($"[green]Committed:[/] {Markup.Escape(message)}");
+            console.MarkupLine($"[green]Committed:[/] {Markup.Escape(message)}");
             if (settings.Push)
             {
-                AnsiConsole.MarkupLine("[green]Pushed to remote[/]");
+                console.MarkupLine("[green]Pushed to remote[/]");
             }
         }
 
         return 0;
     }
 
-    private static void OutputJsonError(string error)
+    private void OutputJsonError(string error)
     {
         var result = new { success = false, error };
-        AnsiConsole.WriteLine(JsonSerializer.Serialize(result));
+        console.WriteLine(JsonSerializer.Serialize(result));
     }
 
-    private static void OutputJsonResult(bool committed, bool pushed, string? message, string? warning = null)
+    private void OutputJsonResult(bool committed, bool pushed, string? message, string? warning = null)
     {
         var result = new { success = true, committed, pushed, message, warning };
-        AnsiConsole.WriteLine(JsonSerializer.Serialize(result));
+        console.WriteLine(JsonSerializer.Serialize(result));
     }
 }

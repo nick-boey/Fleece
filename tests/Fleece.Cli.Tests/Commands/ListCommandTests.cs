@@ -8,8 +8,8 @@ using Fleece.Core.Tests.TestHelpers;
 using FluentAssertions;
 using NSubstitute;
 using NUnit.Framework;
-using Spectre.Console;
 using Spectre.Console.Cli;
+using Spectre.Console.Testing;
 
 namespace Fleece.Cli.Tests.Commands;
 
@@ -20,9 +20,9 @@ public class ListCommandTests
     private ISettingsService _settingsService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
+    private TestConsole _console = null!;
     private StringWriter _consoleOutput = null!;
     private TextWriter _originalConsole = null!;
-    private IAnsiConsole _originalAnsiConsole = null!;
 
     [SetUp]
     public void SetUp()
@@ -51,26 +51,24 @@ public class ListCommandTests
                 }
             });
 
-        _command = new ListCommand(_fleeceService, _settingsService);
+        _console = new TestConsole();
+        _command = new ListCommand(_fleeceService, _settingsService, _console);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;
-        _originalAnsiConsole = AnsiConsole.Console;
         _consoleOutput = new StringWriter();
         Console.SetOut(_consoleOutput);
-        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Out = new AnsiConsoleOutput(_consoleOutput)
-        });
     }
 
     [TearDown]
     public void TearDown()
     {
-        AnsiConsole.Console = _originalAnsiConsole;
         Console.SetOut(_originalConsole);
         _consoleOutput.Dispose();
+        _console.Dispose();
     }
+
+    private string CombinedOutput() => _console.Output + _consoleOutput.ToString();
 
     [Test]
     public async Task ExecuteAsync_OneLine_UsesSharedIssueLineFormatterPlainText()
@@ -102,17 +100,14 @@ public class ListCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString();
+        var output = CombinedOutput();
 
-        // Verify the output matches IssueLineFormatter.FormatPlainText format:
-        // {id} {status} {type} {title}
         var expectedLine1 = IssueLineFormatter.FormatPlainText(issue1);
         var expectedLine2 = IssueLineFormatter.FormatPlainText(issue2);
 
         output.Should().Contain(expectedLine1);
         output.Should().Contain(expectedLine2);
 
-        // Verify the exact format
         output.Should().Contain("abc123 open task First issue");
         output.Should().Contain("def456 progress bug Second issue");
     }
@@ -140,9 +135,7 @@ public class ListCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString();
-
-        output.Should().Contain("xyz789 review feature Review issue");
+        CombinedOutput().Should().Contain("xyz789 review feature Review issue");
     }
 
     [Test]
@@ -168,7 +161,7 @@ public class ListCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString().Trim();
+        var output = CombinedOutput().Trim();
         var expected = IssueLineFormatter.FormatPlainText(issue);
 
         output.Should().Be(expected);
@@ -190,9 +183,7 @@ public class ListCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString();
-
-        output.Should().Contain("No issues found");
+        CombinedOutput().Should().Contain("No issues found");
     }
 
     #region Search Integration Tests
@@ -222,7 +213,6 @@ public class ListCommandTests
 
         result.Should().Be(0);
 
-        // Verify search was called on fleece service
         _fleeceService.Received(1).ParseSearchQuery("login");
         await _fleeceService.Received(1).SearchWithFiltersAsync(
             query,
@@ -230,7 +220,6 @@ public class ListCommandTests
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
             Arg.Any<bool>(), Arg.Any<CancellationToken>());
 
-        // Verify FilterAsync was NOT called
         await _fleeceService.DidNotReceive().FilterAsync(
             Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
@@ -251,7 +240,7 @@ public class ListCommandTests
         _fleeceService.ParseSearchQuery("type:bug").Returns(query);
         _fleeceService.SearchWithFiltersAsync(
                 query,
-                IssueStatus.Open,  // CLI status filter
+                IssueStatus.Open,
                 Arg.Any<IssueType?>(),
                 Arg.Any<int?>(),
                 Arg.Any<string?>(),
@@ -267,10 +256,9 @@ public class ListCommandTests
 
         result.Should().Be(0);
 
-        // Verify search service received CLI status filter
         await _fleeceService.Received(1).SearchWithFiltersAsync(
             query,
-            IssueStatus.Open,  // CLI status passed through
+            IssueStatus.Open,
             Arg.Any<IssueType?>(),
             Arg.Any<int?>(),
             Arg.Any<string?>(),
@@ -312,7 +300,7 @@ public class ListCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString();
+        var output = CombinedOutput();
         output.Should().Contain("abc123 open bug Login issue");
         output.Should().Contain("def456 progress feature Login page");
     }
@@ -335,8 +323,7 @@ public class ListCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString();
-        output.Should().Contain("No issues found");
+        CombinedOutput().Should().Contain("No issues found");
     }
 
     [Test]
@@ -361,13 +348,11 @@ public class ListCommandTests
 
         result.Should().Be(0);
 
-        // Verify filter was called (not search)
         await _fleeceService.Received(1).FilterAsync(
             Arg.Any<IssueStatus?>(), Arg.Any<IssueType?>(), Arg.Any<int?>(),
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
             Arg.Any<bool>(), Arg.Any<CancellationToken>());
 
-        // Verify search was NOT called
         _fleeceService.DidNotReceive().ParseSearchQuery(Arg.Any<string?>());
     }
 
