@@ -7,7 +7,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class DeleteCommand(IFleeceService fleeceService, ISettingsService settingsService, IGitConfigService gitConfigService) : AsyncCommand<DeleteSettings>
+public sealed class DeleteCommand(IFleeceService fleeceService, ISettingsService settingsService, IGitConfigService gitConfigService, IAnsiConsole console) : AsyncCommand<DeleteSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, DeleteSettings settings)
     {
@@ -20,7 +20,7 @@ public sealed class DeleteCommand(IFleeceService fleeceService, ISettingsService
         var (hasMultiple, message) = await fleece.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
@@ -28,14 +28,14 @@ public sealed class DeleteCommand(IFleeceService fleeceService, ISettingsService
 
         if (matches.Count == 0)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
+            console.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
             return 1;
         }
 
         if (matches.Count > 1)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.Id}':");
-            TableFormatter.RenderIssues(matches);
+            console.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.Id}':");
+            TableFormatter.RenderIssues(console, matches);
             return 1;
         }
 
@@ -44,12 +44,12 @@ public sealed class DeleteCommand(IFleeceService fleeceService, ISettingsService
 
         if (deleted)
         {
-            AnsiConsole.MarkupLine($"[green]Deleted issue[/] [bold]{resolvedId}[/]");
+            console.MarkupLine($"[green]Deleted issue[/] [bold]{resolvedId}[/]");
             return 0;
         }
         else
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{resolvedId}' not found");
+            console.MarkupLine($"[red]Error:[/] Issue '{resolvedId}' not found");
             return 1;
         }
     }

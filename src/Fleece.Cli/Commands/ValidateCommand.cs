@@ -7,7 +7,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class ValidateCommand(IFleeceService fleeceService)
+public sealed class ValidateCommand(IFleeceService fleeceService, IAnsiConsole console)
     : AsyncCommand<ValidateSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ValidateSettings settings)
@@ -15,14 +15,14 @@ public sealed class ValidateCommand(IFleeceService fleeceService)
         var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
         if (!settings.Json)
         {
-            AnsiConsole.MarkupLine("[dim]Validating issue dependencies...[/]");
-            AnsiConsole.WriteLine();
+            console.MarkupLine("[dim]Validating issue dependencies...[/]");
+            console.WriteLine();
         }
 
         var result = await fleeceService.ValidateDependenciesAsync();
@@ -39,7 +39,7 @@ public sealed class ValidateCommand(IFleeceService fleeceService)
         return result.IsValid ? 0 : 1;
     }
 
-    private static void RenderJson(DependencyValidationResult result)
+    private void RenderJson(DependencyValidationResult result)
     {
         var output = new
         {
@@ -49,28 +49,28 @@ public sealed class ValidateCommand(IFleeceService fleeceService)
         };
 
         var options = new JsonSerializerOptions { WriteIndented = true };
-        AnsiConsole.WriteLine(JsonSerializer.Serialize(output, options));
+        console.WriteLine(JsonSerializer.Serialize(output, options));
     }
 
-    private static void RenderText(DependencyValidationResult result)
+    private void RenderText(DependencyValidationResult result)
     {
         if (result.IsValid)
         {
-            AnsiConsole.MarkupLine("[green]No cycles detected. All dependencies are valid.[/]");
+            console.MarkupLine("[green]No cycles detected. All dependencies are valid.[/]");
             return;
         }
 
-        AnsiConsole.MarkupLine($"[red]Found {result.Cycles.Count} cycle(s):[/]");
-        AnsiConsole.WriteLine();
+        console.MarkupLine($"[red]Found {result.Cycles.Count} cycle(s):[/]");
+        console.WriteLine();
 
         for (int i = 0; i < result.Cycles.Count; i++)
         {
             var cycle = result.Cycles[i];
             var cycleString = string.Join(" → ", cycle.IssueIds);
-            AnsiConsole.MarkupLine($"  [yellow]Cycle {i + 1}:[/] {cycleString}");
+            console.MarkupLine($"  [yellow]Cycle {i + 1}:[/] {cycleString}");
         }
 
-        AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"[red]Validation failed:[/] {result.Cycles.Count} cycle(s) detected");
+        console.WriteLine();
+        console.MarkupLine($"[red]Validation failed:[/] {result.Cycles.Count} cycle(s) detected");
     }
 }

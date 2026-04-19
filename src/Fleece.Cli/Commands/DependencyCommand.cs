@@ -7,7 +7,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class DependencyCommand(IFleeceService fleeceService)
+public sealed class DependencyCommand(IFleeceService fleeceService, IAnsiConsole console)
     : AsyncCommand<DependencySettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, DependencySettings settings)
@@ -15,7 +15,7 @@ public sealed class DependencyCommand(IFleeceService fleeceService)
         var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
@@ -34,9 +34,9 @@ public sealed class DependencyCommand(IFleeceService fleeceService)
                 }
                 else
                 {
-                    AnsiConsole.MarkupLine(
+                    console.MarkupLine(
                         $"[green]Removed[/] [bold]{settings.ParentId}[/] as parent of [bold]{settings.ChildId}[/]");
-                    TableFormatter.RenderIssue(result);
+                    TableFormatter.RenderIssue(console, result);
                 }
             }
             else
@@ -57,9 +57,9 @@ public sealed class DependencyCommand(IFleeceService fleeceService)
                 else
                 {
                     var action = settings.Replace ? "Set" : "Added";
-                    AnsiConsole.MarkupLine(
+                    console.MarkupLine(
                         $"[green]{action}[/] [bold]{settings.ParentId}[/] as parent of [bold]{settings.ChildId}[/]");
-                    TableFormatter.RenderIssue(result);
+                    TableFormatter.RenderIssue(console, result);
                 }
             }
 
@@ -67,12 +67,12 @@ public sealed class DependencyCommand(IFleeceService fleeceService)
         }
         catch (KeyNotFoundException ex)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+            console.MarkupLine($"[red]Error:[/] {ex.Message}");
             return 1;
         }
         catch (InvalidOperationException ex)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+            console.MarkupLine($"[red]Error:[/] {ex.Message}");
             return 1;
         }
     }

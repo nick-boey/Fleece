@@ -8,7 +8,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class CreateCommand(IFleeceService fleeceService, ISettingsService settingsService, IGitConfigService gitConfigService, IGitService gitService) : AsyncCommand<CreateSettings>
+public sealed class CreateCommand(IFleeceService fleeceService, ISettingsService settingsService, IGitConfigService gitConfigService, IGitService gitService, IAnsiConsole console) : AsyncCommand<CreateSettings>
 {
     private IFleeceService _fleece = fleeceService;
 
@@ -22,19 +22,19 @@ public sealed class CreateCommand(IFleeceService fleeceService, ISettingsService
         var (hasMultiple, message) = await _fleece.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
         if (string.IsNullOrWhiteSpace(settings.Title))
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] --title is required. See 'fleece create --help'.");
+            console.MarkupLine("[red]Error:[/] --title is required. See 'fleece create --help'.");
             return 1;
         }
 
         if (string.IsNullOrWhiteSpace(settings.Type))
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] --type is required. See 'fleece create --help'.");
+            console.MarkupLine("[red]Error:[/] --type is required. See 'fleece create --help'.");
             return 1;
         }
 
@@ -45,7 +45,7 @@ public sealed class CreateCommand(IFleeceService fleeceService, ISettingsService
     {
         if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var issueType))
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea, verify");
+            console.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea, verify");
             return 1;
         }
 
@@ -54,7 +54,7 @@ public sealed class CreateCommand(IFleeceService fleeceService, ISettingsService
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out status))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: draft, open, progress, review, complete, archived, closed");
+                console.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: draft, open, progress, review, complete, archived, closed");
                 return 1;
             }
         }
@@ -82,7 +82,7 @@ public sealed class CreateCommand(IFleeceService fleeceService, ISettingsService
         {
             if (!Enum.TryParse<ExecutionMode>(settings.ExecutionMode, ignoreCase: true, out var parsedMode))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid execution mode '{settings.ExecutionMode}'. Use: series, parallel");
+                console.MarkupLine($"[red]Error:[/] Invalid execution mode '{settings.ExecutionMode}'. Use: series, parallel");
                 return 1;
             }
             executionMode = parsedMode;
@@ -110,8 +110,8 @@ public sealed class CreateCommand(IFleeceService fleeceService, ISettingsService
             }
             else
             {
-                AnsiConsole.MarkupLine($"[green]Created issue[/] [bold]{issue.Id}[/]");
-                TableFormatter.RenderIssue(issue);
+                console.MarkupLine($"[green]Created issue[/] [bold]{issue.Id}[/]");
+                TableFormatter.RenderIssue(console, issue);
             }
 
             HandleGitCommitPush(settings, issue.Title);
@@ -120,7 +120,7 @@ public sealed class CreateCommand(IFleeceService fleeceService, ISettingsService
         }
         catch (ArgumentException ex) when (ex.ParamName == "workingBranchId")
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+            console.MarkupLine($"[red]Error:[/] {ex.Message}");
             return 1;
         }
     }
@@ -139,14 +139,14 @@ public sealed class CreateCommand(IFleeceService fleeceService, ISettingsService
 
         if (!gitResult.Success)
         {
-            AnsiConsole.MarkupLine($"[yellow]Warning:[/] Issue created but git operation failed: {gitResult.ErrorMessage}");
+            console.MarkupLine($"[yellow]Warning:[/] Issue created but git operation failed: {gitResult.ErrorMessage}");
         }
         else
         {
-            AnsiConsole.MarkupLine("[dim]Changes committed to git[/]");
+            console.MarkupLine("[dim]Changes committed to git[/]");
             if (settings.Push)
             {
-                AnsiConsole.MarkupLine("[dim]Pushed to remote[/]");
+                console.MarkupLine("[dim]Pushed to remote[/]");
             }
         }
     }

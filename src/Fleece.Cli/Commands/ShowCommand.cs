@@ -7,7 +7,11 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class ShowCommand(IFleeceService fleeceService, ISettingsService settingsService, IGitConfigService gitConfigService) : AsyncCommand<ShowSettings>
+public sealed class ShowCommand(
+    IFleeceService fleeceService,
+    ISettingsService settingsService,
+    IGitConfigService gitConfigService,
+    IAnsiConsole console) : AsyncCommand<ShowSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ShowSettings settings)
     {
@@ -20,7 +24,7 @@ public sealed class ShowCommand(IFleeceService fleeceService, ISettingsService s
         var (hasMultiple, message) = await fleece.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
@@ -28,14 +32,14 @@ public sealed class ShowCommand(IFleeceService fleeceService, ISettingsService s
 
         if (matches.Count == 0)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
+            console.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
             return 1;
         }
 
         if (matches.Count > 1)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.Id}':");
-            TableFormatter.RenderIssues(matches);
+            console.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.Id}':");
+            TableFormatter.RenderIssues(console, matches);
             return 1;
         }
 
@@ -47,7 +51,6 @@ public sealed class ShowCommand(IFleeceService fleeceService, ISettingsService s
         }
         else
         {
-            // Build hierarchy context for enriched output
             var allIssues = await fleece.GetAllAsync();
             var showContext = IssueHierarchyHelper.BuildShowContext(issue, allIssues);
 
@@ -57,7 +60,7 @@ public sealed class ShowCommand(IFleeceService fleeceService, ISettingsService s
             }
             else
             {
-                TableFormatter.RenderIssue(issue, showContext);
+                TableFormatter.RenderIssue(console, issue, showContext);
             }
         }
 

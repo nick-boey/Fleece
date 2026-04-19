@@ -6,8 +6,8 @@ using FluentAssertions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
-using Spectre.Console;
 using Spectre.Console.Cli;
+using Spectre.Console.Testing;
 
 namespace Fleece.Cli.Tests.Commands;
 
@@ -17,34 +17,32 @@ public class ConfigCommandTests
     private ISettingsService _settingsService = null!;
     private ConfigCommand _command = null!;
     private CommandContext _context = null!;
+    private TestConsole _console = null!;
     private StringWriter _consoleOutput = null!;
     private TextWriter _originalConsole = null!;
-    private IAnsiConsole _originalAnsiConsole = null!;
 
     [SetUp]
     public void SetUp()
     {
         _settingsService = Substitute.For<ISettingsService>();
-        _command = new ConfigCommand(_settingsService);
+        _console = new TestConsole();
+        _command = new ConfigCommand(_settingsService, _console);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "config", null);
 
         _originalConsole = Console.Out;
-        _originalAnsiConsole = AnsiConsole.Console;
         _consoleOutput = new StringWriter();
         Console.SetOut(_consoleOutput);
-        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Out = new AnsiConsoleOutput(_consoleOutput)
-        });
     }
 
     [TearDown]
     public void TearDown()
     {
-        AnsiConsole.Console = _originalAnsiConsole;
         Console.SetOut(_originalConsole);
         _consoleOutput.Dispose();
+        _console.Dispose();
     }
+
+    private string CombinedOutput() => _console.Output + _consoleOutput.ToString();
 
     [Test]
     public async Task ExecuteAsync_Path_ShowsLocalPath()
@@ -92,7 +90,7 @@ public class ConfigCommandTests
         var result = await _command.ExecuteAsync(_context, settings);
 
         result.Should().Be(0);
-        var output = _consoleOutput.ToString();
+        var output = CombinedOutput();
         output.Should().Contain("autoMerge");
         output.Should().Contain("true");
         output.Should().Contain("identity");
@@ -121,7 +119,7 @@ public class ConfigCommandTests
         var result = await _command.ExecuteAsync(_context, settings);
 
         result.Should().Be(0);
-        var output = _consoleOutput.ToString();
+        var output = CombinedOutput();
         output.Should().Contain("\"autoMerge\"");
         output.Should().Contain("\"identity\"");
         output.Should().Contain("\"syncBranch\"");
@@ -200,7 +198,7 @@ public class ConfigCommandTests
         var result = await _command.ExecuteAsync(_context, settings);
 
         result.Should().Be(1);
-        _consoleOutput.ToString().Should().Contain("Unknown setting");
+        CombinedOutput().Should().Contain("Unknown setting");
     }
 
     [Test]
@@ -230,7 +228,7 @@ public class ConfigCommandTests
         var result = await _command.ExecuteAsync(_context, settings);
 
         result.Should().Be(1);
-        _consoleOutput.ToString().Should().Contain("Invalid format");
+        CombinedOutput().Should().Contain("Invalid format");
     }
 
     [Test]
@@ -244,7 +242,7 @@ public class ConfigCommandTests
         var result = await _command.ExecuteAsync(_context, settings);
 
         result.Should().Be(1);
-        _consoleOutput.ToString().Should().Contain("Unknown setting");
+        CombinedOutput().Should().Contain("Unknown setting");
     }
 
     [Test]
@@ -254,7 +252,7 @@ public class ConfigCommandTests
         var result = await _command.ExecuteAsync(_context, settings);
 
         result.Should().Be(0);
-        var output = _consoleOutput.ToString();
+        var output = CombinedOutput();
         output.Should().Contain("Usage:");
         output.Should().Contain("--list");
         output.Should().Contain("--get");

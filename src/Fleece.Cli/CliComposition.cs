@@ -1,6 +1,8 @@
+using System.IO.Abstractions;
 using Fleece.Cli.Commands;
 using Fleece.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
 
 namespace Fleece.Cli;
 
@@ -34,10 +36,11 @@ public static class CliComposition
         ("closed",     typeof(ClosedCommand)),
     };
 
-    public static IServiceCollection BuildServices(string? basePath = null)
+    public static IServiceCollection BuildServices(string? basePath = null, IFileSystem? fileSystem = null)
     {
         var services = new ServiceCollection();
-        services.AddFleeceInMemoryService(basePath);
+        services.AddFleeceInMemoryService(basePath, fileSystem);
+        services.AddSingleton<IAnsiConsole>(_ => AnsiConsole.Console);
         return services;
     }
 }

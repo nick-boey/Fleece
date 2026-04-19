@@ -10,18 +10,17 @@ namespace Fleece.Cli.Commands;
 /// <summary>
 /// Command to find issues that can be worked on next based on dependencies and execution mode.
 /// </summary>
-public sealed class NextCommand(IFleeceService fleeceService) : AsyncCommand<NextSettings>
+public sealed class NextCommand(IFleeceService fleeceService, IAnsiConsole console) : AsyncCommand<NextSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, NextSettings settings)
     {
         var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
-        // Resolve parent ID if provided
         string? resolvedParentId = null;
         if (!string.IsNullOrWhiteSpace(settings.Parent))
         {
@@ -29,28 +28,26 @@ public sealed class NextCommand(IFleeceService fleeceService) : AsyncCommand<Nex
 
             if (matches.Count == 0)
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Parent issue '{settings.Parent}' not found");
+                console.MarkupLine($"[red]Error:[/] Parent issue '{settings.Parent}' not found");
                 return 1;
             }
 
             if (matches.Count > 1)
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.Parent}':");
-                TableFormatter.RenderIssues(matches);
+                console.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.Parent}':");
+                TableFormatter.RenderIssues(console, matches);
                 return 1;
             }
 
             resolvedParentId = matches[0].Id;
         }
 
-        // Validate mutually exclusive options
         if (settings.OneLine && (settings.Json || settings.JsonVerbose))
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] --one-line cannot be used with --json or --json-verbose");
+            console.MarkupLine("[red]Error:[/] --one-line cannot be used with --json or --json-verbose");
             return 1;
         }
 
-        // Parse sort configuration
         GraphSortConfig? sortConfig = null;
         if (!string.IsNullOrWhiteSpace(settings.Sort))
         {
@@ -60,7 +57,7 @@ public sealed class NextCommand(IFleeceService fleeceService) : AsyncCommand<Nex
             }
             catch (ArgumentException ex)
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+                console.MarkupLine($"[red]Error:[/] {ex.Message}");
                 return 1;
             }
         }
@@ -79,12 +76,12 @@ public sealed class NextCommand(IFleeceService fleeceService) : AsyncCommand<Nex
         {
             if (issues.Count == 0)
             {
-                AnsiConsole.MarkupLine("[dim]No actionable issues found.[/]");
+                console.MarkupLine("[dim]No actionable issues found.[/]");
             }
             else
             {
-                AnsiConsole.MarkupLine($"[bold]Actionable issues ({issues.Count}):[/]");
-                TableFormatter.RenderIssues(issues);
+                console.MarkupLine($"[bold]Actionable issues ({issues.Count}):[/]");
+                TableFormatter.RenderIssues(console, issues);
             }
         }
 

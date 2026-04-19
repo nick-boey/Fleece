@@ -90,7 +90,8 @@ public sealed class AutoMergeInterceptor : ICommandInterceptor
         // Show one-liner output if merge occurred
         if (mergedCount > 0)
         {
-            AnsiConsole.MarkupLine($"[dim]Auto-merged {mergedCount} issue(s)[/]");
+            var console = ServiceProvider.GetRequiredService<IAnsiConsole>();
+            console.MarkupLine($"[dim]Auto-merged {mergedCount} issue(s)[/]");
         }
     }
 }

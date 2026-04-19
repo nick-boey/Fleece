@@ -7,6 +7,7 @@ using NSubstitute;
 using NUnit.Framework;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Spectre.Console.Testing;
 
 namespace Fleece.Cli.Tests.Interceptors;
 
@@ -17,40 +18,28 @@ public class AutoMergeInterceptorTests
     private IFleeceService _fleeceService = null!;
     private IServiceProvider _serviceProvider = null!;
     private AutoMergeInterceptor _interceptor = null!;
-    private StringWriter _consoleOutput = null!;
-    private TextWriter _originalConsole = null!;
-    private IAnsiConsole _originalAnsiConsole = null!;
+    private TestConsole _console = null!;
 
     [SetUp]
     public void SetUp()
     {
         _settingsService = Substitute.For<ISettingsService>();
         _fleeceService = Substitute.For<IFleeceService>();
+        _console = new TestConsole();
 
         var services = new ServiceCollection();
         services.AddSingleton(_settingsService);
         services.AddSingleton(_fleeceService);
+        services.AddSingleton<IAnsiConsole>(_console);
         _serviceProvider = services.BuildServiceProvider();
 
         _interceptor = new AutoMergeInterceptor(() => _serviceProvider);
-
-        // Capture console output
-        _originalConsole = Console.Out;
-        _originalAnsiConsole = AnsiConsole.Console;
-        _consoleOutput = new StringWriter();
-        Console.SetOut(_consoleOutput);
-        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Out = new AnsiConsoleOutput(_consoleOutput)
-        });
     }
 
     [TearDown]
     public void TearDown()
     {
-        AnsiConsole.Console = _originalAnsiConsole;
-        Console.SetOut(_originalConsole);
-        _consoleOutput.Dispose();
+        _console.Dispose();
     }
 
     private CommandContext CreateContext(string commandName)
@@ -169,8 +158,7 @@ public class AutoMergeInterceptorTests
 
         _interceptor.Intercept(context, settings);
 
-        var output = _consoleOutput.ToString();
-        output.Should().Contain("Auto-merged 10 issue(s)");
+        _console.Output.Should().Contain("Auto-merged 10 issue(s)");
     }
 
     [Test]
@@ -200,8 +188,7 @@ public class AutoMergeInterceptorTests
 
         _interceptor.Intercept(context, settings);
 
-        var output = _consoleOutput.ToString();
-        output.Should().BeEmpty();
+        _console.Output.Should().BeEmpty();
     }
 
     [TestCase("merge")]

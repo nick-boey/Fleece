@@ -3,36 +3,25 @@ using Fleece.Core.Models;
 using Fleece.Core.Tests.TestHelpers;
 using FluentAssertions;
 using NUnit.Framework;
-using Spectre.Console;
+using Spectre.Console.Testing;
 
 namespace Fleece.Cli.Tests.Output;
 
 [TestFixture]
 public class TableFormatterTests
 {
-    private StringWriter _consoleOutput = null!;
-    private TextWriter _originalConsole = null!;
-    private IAnsiConsole _originalAnsiConsole = null!;
+    private TestConsole _console = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _originalConsole = Console.Out;
-        _originalAnsiConsole = AnsiConsole.Console;
-        _consoleOutput = new StringWriter();
-        Console.SetOut(_consoleOutput);
-        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Out = new AnsiConsoleOutput(_consoleOutput)
-        });
+        _console = new TestConsole();
     }
 
     [TearDown]
     public void TearDown()
     {
-        AnsiConsole.Console = _originalAnsiConsole;
-        Console.SetOut(_originalConsole);
-        _consoleOutput.Dispose();
+        _console.Dispose();
     }
 
     [Test]
@@ -72,27 +61,18 @@ public class TableFormatterTests
         var allIssues = new List<Issue> { parent, child1, child2, child3 };
         var showContext = IssueHierarchyHelper.BuildShowContext(child2, allIssues);
 
-        TableFormatter.RenderIssue(child2, showContext);
+        TableFormatter.RenderIssue(_console, child2, showContext);
 
-        var output = _consoleOutput.ToString();
+        var output = _console.Output;
 
-        // Should show parent issue section
         output.Should().Contain("Parent Issues");
         output.Should().Contain("parent1");
         output.Should().Contain("Parent Task");
-
-        // Should show execution mode
         output.Should().Contain("series");
-
-        // Should show position (2 of 3)
         output.Should().Contain("2 of 3");
-
-        // Should show previous sibling
         output.Should().Contain("Previous");
         output.Should().Contain("child1");
         output.Should().Contain("First Child");
-
-        // Should show next sibling
         output.Should().Contain("Next");
         output.Should().Contain("child3");
         output.Should().Contain("Third Child");
@@ -116,15 +96,14 @@ public class TableFormatterTests
         var allIssues = new List<Issue> { parent, child };
         var showContext = IssueHierarchyHelper.BuildShowContext(child, allIssues);
 
-        TableFormatter.RenderIssue(child, showContext);
+        TableFormatter.RenderIssue(_console, child, showContext);
 
-        var output = _consoleOutput.ToString();
+        var output = _console.Output;
 
         output.Should().Contain("Parent Issues");
         output.Should().Contain("parent1");
         output.Should().Contain("parallel");
 
-        // Should NOT show position or previous/next for parallel mode
         output.Should().NotContain("Position");
         output.Should().NotContain("Previous");
         output.Should().NotContain("Next");
@@ -158,9 +137,9 @@ public class TableFormatterTests
         var allIssues = new List<Issue> { parent, child1, child2 };
         var showContext = IssueHierarchyHelper.BuildShowContext(parent, allIssues);
 
-        TableFormatter.RenderIssue(parent, showContext);
+        TableFormatter.RenderIssue(_console, parent, showContext);
 
-        var output = _consoleOutput.ToString();
+        var output = _console.Output;
 
         output.Should().Contain("Children");
         output.Should().Contain("series");
@@ -194,11 +173,10 @@ public class TableFormatterTests
         var allIssues = new List<Issue> { parent, child1, child2 };
         var showContext = IssueHierarchyHelper.BuildShowContext(parent, allIssues);
 
-        TableFormatter.RenderIssue(parent, showContext);
+        TableFormatter.RenderIssue(_console, parent, showContext);
 
-        var output = _consoleOutput.ToString();
+        var output = _console.Output;
 
-        // Series mode should use numbered prefixes
         output.Should().Contain("1.");
         output.Should().Contain("2.");
     }
@@ -213,14 +191,13 @@ public class TableFormatterTests
             .WithType(IssueType.Task)
             .Build();
 
-        TableFormatter.RenderIssue(issue);
+        TableFormatter.RenderIssue(_console, issue);
 
-        var output = _consoleOutput.ToString();
+        var output = _console.Output;
 
         output.Should().Contain("abc123");
         output.Should().Contain("Standalone issue");
         output.Should().NotContain("Children");
-        // "Parent Issues" label should not appear if no parents and no context
         output.Should().NotContain("Parent Issues");
     }
 
@@ -248,9 +225,9 @@ public class TableFormatterTests
         var allIssues = new List<Issue> { parent, child1, child2 };
         var showContext = IssueHierarchyHelper.BuildShowContext(child1, allIssues);
 
-        TableFormatter.RenderIssue(child1, showContext);
+        TableFormatter.RenderIssue(_console, child1, showContext);
 
-        var output = _consoleOutput.ToString();
+        var output = _console.Output;
 
         output.Should().Contain("1 of 2");
         output.Should().NotContain("Previous");
@@ -282,9 +259,9 @@ public class TableFormatterTests
         var allIssues = new List<Issue> { parent, child1, child2 };
         var showContext = IssueHierarchyHelper.BuildShowContext(child2, allIssues);
 
-        TableFormatter.RenderIssue(child2, showContext);
+        TableFormatter.RenderIssue(_console, child2, showContext);
 
-        var output = _consoleOutput.ToString();
+        var output = _console.Output;
 
         output.Should().Contain("2 of 2");
         output.Should().Contain("Previous");

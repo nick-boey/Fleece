@@ -7,20 +7,20 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class CleanCommand(IFleeceService fleeceService) : AsyncCommand<CleanSettings>
+public sealed class CleanCommand(IFleeceService fleeceService, IAnsiConsole console) : AsyncCommand<CleanSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, CleanSettings settings)
     {
         var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
         if (settings.DryRun)
         {
-            AnsiConsole.MarkupLine("[yellow]Dry run mode - no changes will be made[/]");
+            console.MarkupLine("[yellow]Dry run mode - no changes will be made[/]");
         }
 
         var result = await fleeceService.CleanAsync(
@@ -38,7 +38,7 @@ public sealed class CleanCommand(IFleeceService fleeceService) : AsyncCommand<Cl
             }
             else
             {
-                AnsiConsole.MarkupLine("[green]No issues to clean.[/]");
+                console.MarkupLine("[green]No issues to clean.[/]");
             }
             return 0;
         }
@@ -49,8 +49,8 @@ public sealed class CleanCommand(IFleeceService fleeceService) : AsyncCommand<Cl
         }
         else
         {
-            AnsiConsole.MarkupLine($"[yellow]Cleaned {result.CleanedTombstones.Count} issue(s)[/]");
-            AnsiConsole.WriteLine();
+            console.MarkupLine($"[yellow]Cleaned {result.CleanedTombstones.Count} issue(s)[/]");
+            console.WriteLine();
 
             var table = new Table();
             table.Border(TableBorder.Rounded);
@@ -66,12 +66,12 @@ public sealed class CleanCommand(IFleeceService fleeceService) : AsyncCommand<Cl
                     Markup.Escape(tombstone.CleanedBy));
             }
 
-            AnsiConsole.Write(table);
+            console.Write(table);
 
             if (result.StrippedReferences.Count > 0)
             {
-                AnsiConsole.WriteLine();
-                AnsiConsole.MarkupLine($"[yellow]Stripped {result.StrippedReferences.Count} dangling reference(s)[/]");
+                console.WriteLine();
+                console.MarkupLine($"[yellow]Stripped {result.StrippedReferences.Count} dangling reference(s)[/]");
 
                 var refTable = new Table();
                 refTable.Border(TableBorder.Simple);
@@ -84,13 +84,13 @@ public sealed class CleanCommand(IFleeceService fleeceService) : AsyncCommand<Cl
                     refTable.AddRow(reference.IssueId, reference.ReferencingIssueId, reference.ReferenceType);
                 }
 
-                AnsiConsole.Write(refTable);
+                console.Write(refTable);
             }
 
             if (!settings.DryRun)
             {
-                AnsiConsole.WriteLine();
-                AnsiConsole.MarkupLine("[green]Clean complete! Tombstone records created.[/]");
+                console.WriteLine();
+                console.MarkupLine("[green]Clean complete! Tombstone records created.[/]");
             }
         }
 

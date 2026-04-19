@@ -10,69 +10,65 @@ namespace Fleece.Cli.Commands;
 
 public sealed class ListCommand(
     IFleeceService fleeceService,
-    ISettingsService settingsService) : AsyncCommand<ListSettings>
+    ISettingsService settingsService,
+    IAnsiConsole console) : AsyncCommand<ListSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ListSettings settings)
     {
         var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
-        // --tree-root implies --tree
         var isTree = settings.Tree || !string.IsNullOrWhiteSpace(settings.TreeRoot);
 
-        // Validate mutually exclusive options
         if (isTree && settings.Next)
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] --tree and --next cannot be used together");
+            console.MarkupLine("[red]Error:[/] --tree and --next cannot be used together");
             return 1;
         }
 
         if ((isTree || settings.Next) && settings.OneLine)
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] --tree/--next cannot be used with --one-line");
+            console.MarkupLine("[red]Error:[/] --tree/--next cannot be used with --one-line");
             return 1;
         }
 
         if (settings.Next && settings.Json)
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] --next and --json cannot be used together");
+            console.MarkupLine("[red]Error:[/] --next and --json cannot be used together");
             return 1;
         }
 
-        // Validate --parents and --children flags
         if (settings.ParentsOnly && settings.ChildrenOnly)
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] --parents and --children cannot be used together");
+            console.MarkupLine("[red]Error:[/] --parents and --children cannot be used together");
             return 1;
         }
 
         if ((settings.ParentsOnly || settings.ChildrenOnly) && string.IsNullOrWhiteSpace(settings.IssueId))
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] --parents and --children require an issue ID to be specified");
+            console.MarkupLine("[red]Error:[/] --parents and --children require an issue ID to be specified");
             return 1;
         }
 
-        // Warn about deprecated --tree-root when <id> is also specified
         if (!string.IsNullOrWhiteSpace(settings.IssueId) && !string.IsNullOrWhiteSpace(settings.TreeRoot))
         {
-            AnsiConsole.MarkupLine("[yellow]Warning:[/] --tree-root is deprecated and ignored when an issue ID is specified. Use '<id> --children' instead.");
+            console.MarkupLine("[yellow]Warning:[/] --tree-root is deprecated and ignored when an issue ID is specified. Use '<id> --children' instead.");
         }
         else if (!string.IsNullOrWhiteSpace(settings.TreeRoot))
         {
-            AnsiConsole.MarkupLine("[yellow]Warning:[/] --tree-root is deprecated. Use '<id> --children' instead.");
+            console.MarkupLine("[yellow]Warning:[/] --tree-root is deprecated. Use '<id> --children' instead.");
         }
 
-        // Parse status and type early as they're needed for both --next and list modes
         IssueStatus? status = null;
         if (!string.IsNullOrWhiteSpace(settings.Status))
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out var parsedStatus))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: draft, open, progress, review, complete, archived, closed");
+                console.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: draft, open, progress, review, complete, archived, closed");
                 return 1;
             }
             status = parsedStatus;
@@ -83,36 +79,32 @@ public sealed class ListCommand(
         {
             if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var parsedType))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea, verify");
+                console.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea, verify");
                 return 1;
             }
             type = parsedType;
         }
 
-        // --- Next mode ---
         if (settings.Next)
         {
-            // Validate --me and --assigned are mutually exclusive
             if (settings.Me && !string.IsNullOrWhiteSpace(settings.AssignedTo))
             {
-                AnsiConsole.MarkupLine("[red]Error:[/] --me and --assigned cannot be used together");
+                console.MarkupLine("[red]Error:[/] --me and --assigned cannot be used together");
                 return 1;
             }
 
-            // Resolve assignee for --me filter
             string? assignedTo = settings.AssignedTo;
             if (settings.Me)
             {
                 var effectiveSettings = await settingsService.GetEffectiveSettingsAsync();
                 if (string.IsNullOrWhiteSpace(effectiveSettings.Identity))
                 {
-                    AnsiConsole.MarkupLine("[red]Error:[/] No identity configured. Run 'fleece config --set identity=<name>' or set git user.name");
+                    console.MarkupLine("[red]Error:[/] No identity configured. Run 'fleece config --set identity=<name>' or set git user.name");
                     return 1;
                 }
                 assignedTo = effectiveSettings.Identity;
             }
 
-            // Parse sort configuration
             GraphSortConfig? sortConfig = null;
             if (!string.IsNullOrWhiteSpace(settings.Sort))
             {
@@ -122,12 +114,11 @@ public sealed class ListCommand(
                 }
                 catch (ArgumentException ex)
                 {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+                    console.MarkupLine($"[red]Error:[/] {ex.Message}");
                     return 1;
                 }
             }
 
-            // Resolve issue ID for hierarchy filtering in --next mode
             HashSet<string>? nextHierarchyIds = null;
             if (!string.IsNullOrWhiteSpace(settings.IssueId))
             {
@@ -135,23 +126,22 @@ public sealed class ListCommand(
 
                 if (matches.Count == 0)
                 {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.IssueId}' not found");
+                    console.MarkupLine($"[red]Error:[/] Issue '{settings.IssueId}' not found");
                     return 1;
                 }
 
                 if (matches.Count > 1)
                 {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.IssueId}':");
+                    console.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.IssueId}':");
                     foreach (var match in matches)
                     {
-                        AnsiConsole.MarkupLine($"  {match.Id} {Markup.Escape(match.Title)}");
+                        console.MarkupLine($"  {match.Id} {Markup.Escape(match.Title)}");
                     }
                     return 1;
                 }
 
                 var targetIssue = matches[0];
 
-                // Get hierarchy-filtered issues
                 var hierarchyIssues = await fleeceService.GetIssueHierarchyAsync(
                     targetIssue.Id,
                     includeParents: !settings.ChildrenOnly,
@@ -162,7 +152,6 @@ public sealed class ListCommand(
                     StringComparer.OrdinalIgnoreCase);
             }
 
-            // Parse inactive visibility mode
             var inactiveVisibility = InactiveVisibility.Hide;
             if (settings.All)
             {
@@ -175,12 +164,12 @@ public sealed class ListCommand(
                     "hide" => InactiveVisibility.Hide,
                     "if-active-children" => InactiveVisibility.IfHasActiveDescendants,
                     "always" => InactiveVisibility.Always,
-                    _ => InactiveVisibility.Hide // validated below
+                    _ => InactiveVisibility.Hide
                 };
 
                 if (settings.ShowInactive.ToLowerInvariant() is not ("hide" or "if-active-children" or "always"))
                 {
-                    AnsiConsole.MarkupLine($"[red]Error:[/] Invalid --show-inactive value '{settings.ShowInactive}'. Use: hide, if-active-children, always");
+                    console.MarkupLine($"[red]Error:[/] Invalid --show-inactive value '{settings.ShowInactive}'. Use: hide, if-active-children, always");
                     return 1;
                 }
             }
@@ -188,7 +177,6 @@ public sealed class ListCommand(
             TaskGraph graph;
             if (!string.IsNullOrWhiteSpace(settings.Search))
             {
-                // Build filtered graph with search
                 var query = fleeceService.ParseSearchQuery(settings.Search);
                 var searchResult = await fleeceService.SearchWithContextAsync(
                     query,
@@ -202,18 +190,17 @@ public sealed class ListCommand(
 
                 if (searchResult.MatchedIssues.Count == 0)
                 {
-                    AnsiConsole.MarkupLine("[dim]No issues found matching search[/]");
+                    console.MarkupLine("[dim]No issues found matching search[/]");
                     return 0;
                 }
 
-                // Combine with hierarchy filter if specified
                 var matchedIds = nextHierarchyIds is not null
                     ? new HashSet<string>(searchResult.MatchedIds.Where(id => nextHierarchyIds.Contains(id)), StringComparer.OrdinalIgnoreCase)
                     : searchResult.MatchedIds;
 
                 if (matchedIds.Count == 0)
                 {
-                    AnsiConsole.MarkupLine("[dim]No issues found matching search within hierarchy[/]");
+                    console.MarkupLine("[dim]No issues found matching search within hierarchy[/]");
                     return 0;
                 }
 
@@ -221,7 +208,6 @@ public sealed class ListCommand(
             }
             else if (nextHierarchyIds is not null)
             {
-                // Use hierarchy filter for --next mode
                 graph = await fleeceService.BuildFilteredTaskGraphLayoutAsync(nextHierarchyIds, sortConfig: sortConfig);
             }
             else
@@ -232,31 +218,25 @@ public sealed class ListCommand(
                     sortConfig: sortConfig);
             }
 
-            TaskGraphRenderer.Render(graph);
+            TaskGraphRenderer.Render(console, graph);
             return 0;
         }
 
-        // --- Tree mode and default list mode share filtering/diagnostics ---
-
-        // Load issues with diagnostics (only for non-next modes)
         var loadResult = await fleeceService.LoadIssuesWithDiagnosticsAsync();
-        var hasWarnings = DiagnosticFormatter.RenderDiagnostics(loadResult.Diagnostics);
+        var hasWarnings = DiagnosticFormatter.RenderDiagnostics(console, loadResult.Diagnostics);
 
-        // Fail early in strict mode if there are warnings
         if (settings.Strict && hasWarnings)
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] Schema warnings detected in strict mode.");
+            console.MarkupLine("[red]Error:[/] Schema warnings detected in strict mode.");
             return 1;
         }
 
-        // Validate mutually exclusive output options
         if (settings.OneLine && (settings.Json || settings.JsonVerbose))
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] --one-line cannot be used with --json or --json-verbose");
+            console.MarkupLine("[red]Error:[/] --one-line cannot be used with --json or --json-verbose");
             return 1;
         }
 
-        // Resolve optional issue ID for hierarchy filtering
         HashSet<string>? hierarchyIds = null;
         if (!string.IsNullOrWhiteSpace(settings.IssueId))
         {
@@ -264,16 +244,16 @@ public sealed class ListCommand(
 
             if (matches.Count == 0)
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.IssueId}' not found");
+                console.MarkupLine($"[red]Error:[/] Issue '{settings.IssueId}' not found");
                 return 1;
             }
 
             if (matches.Count > 1)
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.IssueId}':");
+                console.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.IssueId}':");
                 foreach (var match in matches)
                 {
-                    AnsiConsole.MarkupLine($"  {match.Id} {Markup.Escape(match.Title)}");
+                    console.MarkupLine($"  {match.Id} {Markup.Escape(match.Title)}");
                 }
                 return 1;
             }
@@ -326,14 +306,11 @@ public sealed class ListCommand(
             issues = issues.Where(i => hierarchyIds.Contains(i.Id)).ToList();
         }
 
-        // --- Tree mode ---
         if (isTree)
         {
-            return await ExecuteTreeMode(fleeceService, issues.ToList(), settings);
+            return await ExecuteTreeMode(issues.ToList(), settings);
         }
 
-        // --- Default list mode ---
-        // Get sync statuses if requested
         IReadOnlyDictionary<string, SyncStatus>? syncStatuses = null;
         if (settings.SyncStatus)
         {
@@ -350,19 +327,16 @@ public sealed class ListCommand(
         }
         else
         {
-            TableFormatter.RenderIssues(issues, syncStatuses);
+            TableFormatter.RenderIssues(console, issues, syncStatuses);
         }
 
         return 0;
     }
 
-    private static async Task<int> ExecuteTreeMode(
-        IFleeceService fleeceService,
+    private async Task<int> ExecuteTreeMode(
         List<Issue> issueList,
         ListSettings settings)
     {
-        // Resolve optional root issue ID (deprecated --tree-root)
-        // Only apply if no IssueId is specified (hierarchy filtering handles that case)
         Issue? rootIssue = null;
         if (string.IsNullOrWhiteSpace(settings.IssueId) && !string.IsNullOrWhiteSpace(settings.TreeRoot))
         {
@@ -370,16 +344,16 @@ public sealed class ListCommand(
 
             if (matches.Count == 0)
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.TreeRoot}' not found");
+                console.MarkupLine($"[red]Error:[/] Issue '{settings.TreeRoot}' not found");
                 return 1;
             }
 
             if (matches.Count > 1)
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.TreeRoot}':");
+                console.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.TreeRoot}':");
                 foreach (var match in matches)
                 {
-                    AnsiConsole.MarkupLine($"  {match.Id} {Markup.Escape(match.Title)}");
+                    console.MarkupLine($"  {match.Id} {Markup.Escape(match.Title)}");
                 }
                 return 1;
             }
@@ -387,8 +361,6 @@ public sealed class ListCommand(
             rootIssue = matches[0];
         }
 
-        // When a tree-root is specified (deprecated), constrain to the root + its transitive descendants
-        // Note: When IssueId is specified, hierarchy filtering is already applied before this method
         if (rootIssue is not null)
         {
             issueList = TreeRenderer.ScopeToDescendants(rootIssue, issueList);
@@ -400,17 +372,17 @@ public sealed class ListCommand(
         }
         else
         {
-            TreeRenderer.RenderTree(issueList);
+            TreeRenderer.RenderTree(console, issueList);
         }
 
         return 0;
     }
 
-    private static void RenderOneLine(IReadOnlyList<Issue> issues, IReadOnlyDictionary<string, SyncStatus>? syncStatuses)
+    private void RenderOneLine(IReadOnlyList<Issue> issues, IReadOnlyDictionary<string, SyncStatus>? syncStatuses)
     {
         if (issues.Count == 0)
         {
-            AnsiConsole.MarkupLine("[dim]No issues found[/]");
+            console.MarkupLine("[dim]No issues found[/]");
             return;
         }
 

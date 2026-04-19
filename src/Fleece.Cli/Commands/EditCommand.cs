@@ -8,7 +8,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class EditCommand(IFleeceService fleeceService, ISettingsService settingsService, IGitConfigService gitConfigService) : AsyncCommand<EditSettings>
+public sealed class EditCommand(IFleeceService fleeceService, ISettingsService settingsService, IGitConfigService gitConfigService, IAnsiConsole console) : AsyncCommand<EditSettings>
 {
     private IFleeceService _fleece = fleeceService;
 
@@ -22,7 +22,7 @@ public sealed class EditCommand(IFleeceService fleeceService, ISettingsService s
         var (hasMultiple, message) = await _fleece.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
@@ -30,14 +30,14 @@ public sealed class EditCommand(IFleeceService fleeceService, ISettingsService s
 
         if (matches.Count == 0)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
+            console.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
             return 1;
         }
 
         if (matches.Count > 1)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.Id}':");
-            TableFormatter.RenderIssues(matches);
+            console.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.Id}':");
+            TableFormatter.RenderIssues(console, matches);
             return 1;
         }
 
@@ -45,7 +45,7 @@ public sealed class EditCommand(IFleeceService fleeceService, ISettingsService s
 
         if (!HasAnyFieldFlag(settings))
         {
-            AnsiConsole.MarkupLine(
+            console.MarkupLine(
                 "[red]Error:[/] edit requires at least one field flag " +
                 "(--title, --description, --status, --type, --priority, --linked-issues, " +
                 "--linked-pr, --assign, --tags, --working-branch, --execution-mode). " +
@@ -58,7 +58,7 @@ public sealed class EditCommand(IFleeceService fleeceService, ISettingsService s
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out var parsedStatus))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: draft, open, progress, review, complete, archived, closed");
+                console.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: draft, open, progress, review, complete, archived, closed");
                 return 1;
             }
             status = parsedStatus;
@@ -69,7 +69,7 @@ public sealed class EditCommand(IFleeceService fleeceService, ISettingsService s
         {
             if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var parsedType))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea, verify");
+                console.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea, verify");
                 return 1;
             }
             type = parsedType;
@@ -92,7 +92,7 @@ public sealed class EditCommand(IFleeceService fleeceService, ISettingsService s
         {
             if (!Enum.TryParse<ExecutionMode>(settings.ExecutionMode, ignoreCase: true, out var parsedMode))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid execution mode '{settings.ExecutionMode}'. Use: series, parallel");
+                console.MarkupLine($"[red]Error:[/] Invalid execution mode '{settings.ExecutionMode}'. Use: series, parallel");
                 return 1;
             }
             executionMode = parsedMode;
@@ -120,20 +120,20 @@ public sealed class EditCommand(IFleeceService fleeceService, ISettingsService s
             }
             else
             {
-                AnsiConsole.MarkupLine($"[green]Updated issue[/] [bold]{issue.Id}[/]");
-                TableFormatter.RenderIssue(issue);
+                console.MarkupLine($"[green]Updated issue[/] [bold]{issue.Id}[/]");
+                TableFormatter.RenderIssue(console, issue);
             }
 
             return 0;
         }
         catch (KeyNotFoundException)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
+            console.MarkupLine($"[red]Error:[/] Issue '{settings.Id}' not found");
             return 1;
         }
         catch (ArgumentException ex) when (ex.ParamName == "workingBranchId")
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+            console.MarkupLine($"[red]Error:[/] {ex.Message}");
             return 1;
         }
     }

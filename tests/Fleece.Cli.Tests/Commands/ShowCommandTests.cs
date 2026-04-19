@@ -6,8 +6,8 @@ using Fleece.Core.Tests.TestHelpers;
 using FluentAssertions;
 using NSubstitute;
 using NUnit.Framework;
-using Spectre.Console;
 using Spectre.Console.Cli;
+using Spectre.Console.Testing;
 
 namespace Fleece.Cli.Tests.Commands;
 
@@ -19,9 +19,9 @@ public class ShowCommandTests
     private IGitConfigService _gitConfigService = null!;
     private ShowCommand _command = null!;
     private CommandContext _context = null!;
+    private TestConsole _console = null!;
     private StringWriter _consoleOutput = null!;
     private TextWriter _originalConsole = null!;
-    private IAnsiConsole _originalAnsiConsole = null!;
 
     [SetUp]
     public void SetUp()
@@ -32,27 +32,25 @@ public class ShowCommandTests
 
         _settingsService = Substitute.For<ISettingsService>();
         _gitConfigService = Substitute.For<IGitConfigService>();
+        _console = new TestConsole();
 
-        _command = new ShowCommand(_fleeceService, _settingsService, _gitConfigService);
+        _command = new ShowCommand(_fleeceService, _settingsService, _gitConfigService, _console);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "show", null);
 
         _originalConsole = Console.Out;
-        _originalAnsiConsole = AnsiConsole.Console;
         _consoleOutput = new StringWriter();
         Console.SetOut(_consoleOutput);
-        AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Out = new AnsiConsoleOutput(_consoleOutput)
-        });
     }
 
     [TearDown]
     public void TearDown()
     {
-        AnsiConsole.Console = _originalAnsiConsole;
         Console.SetOut(_originalConsole);
         _consoleOutput.Dispose();
+        _console.Dispose();
     }
+
+    private string CombinedOutput() => _console.Output + _consoleOutput.ToString();
 
     [Test]
     public async Task ExecuteAsync_WithSeriesParent_TableOutputShowsPositionAndPrevNext()
@@ -101,15 +99,13 @@ public class ShowCommandTests
 
         result.Should().Be(0);
 
-        var output = _consoleOutput.ToString();
+        var output = CombinedOutput();
 
-        // Should show parent info and position
         output.Should().Contain("parent1");
         output.Should().Contain("Parent Task");
         output.Should().Contain("series");
         output.Should().Contain("2 of 3");
 
-        // Should show previous and next siblings
         output.Should().Contain("child1");
         output.Should().Contain("First Child");
         output.Should().Contain("child3");
@@ -148,7 +144,6 @@ public class ShowCommandTests
 
         var output = _consoleOutput.ToString().Trim();
 
-        // Should be valid JSON with hierarchy
         var doc = System.Text.Json.JsonDocument.Parse(output);
         var root = doc.RootElement;
 
@@ -223,7 +218,6 @@ public class ShowCommandTests
             .WithParentIssueIdAndOrder("parent1", "aaa")
             .Build();
 
-        // Note: with --json-verbose, GetAllAsync should NOT be called
         _fleeceService.ResolveByPartialIdAsync("child1", Arg.Any<CancellationToken>())
             .Returns(new List<Issue> { child });
 
@@ -237,7 +231,6 @@ public class ShowCommandTests
         var doc = System.Text.Json.JsonDocument.Parse(output);
         var root = doc.RootElement;
 
-        // Should be raw Issue model
         root.GetProperty("id").GetString().Should().Be("child1");
         root.GetProperty("title").GetString().Should().Be("Child Task");
         root.GetProperty("status").GetString().Should().Be("Progress");
@@ -245,19 +238,15 @@ public class ShowCommandTests
         root.GetProperty("priority").GetInt32().Should().Be(2);
         root.GetProperty("description").GetString().Should().Be("Detailed description");
 
-        // Should have raw metadata fields (verbose mode)
         root.TryGetProperty("titleLastUpdate", out _).Should().BeTrue();
         root.TryGetProperty("statusLastUpdate", out _).Should().BeTrue();
 
-        // Should NOT have hierarchy context (no parents/children wrapper)
         root.TryGetProperty("parents", out _).Should().BeFalse();
         root.TryGetProperty("children", out _).Should().BeFalse();
 
-        // But should have the raw parentIssues field
         root.TryGetProperty("parentIssues", out var parentIssues).Should().BeTrue();
         parentIssues.GetArrayLength().Should().Be(1);
 
-        // GetAllAsync should not be called in verbose mode
         await _fleeceService.DidNotReceive().GetAllAsync(Arg.Any<CancellationToken>());
     }
 }

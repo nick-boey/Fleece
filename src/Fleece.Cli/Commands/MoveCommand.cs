@@ -7,7 +7,7 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class MoveCommand(IFleeceService fleeceService)
+public sealed class MoveCommand(IFleeceService fleeceService, IAnsiConsole console)
     : AsyncCommand<MoveSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, MoveSettings settings)
@@ -15,7 +15,7 @@ public sealed class MoveCommand(IFleeceService fleeceService)
         var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
@@ -52,7 +52,7 @@ public sealed class MoveCommand(IFleeceService fleeceService)
                 }
                 else
                 {
-                    AnsiConsole.MarkupLine($"[yellow]{result.Message}[/]");
+                    console.MarkupLine($"[yellow]{result.Message}[/]");
                 }
                 return 1;
             }
@@ -64,21 +64,21 @@ public sealed class MoveCommand(IFleeceService fleeceService)
             else
             {
                 var direction = result.Outcome == MoveOutcome.MovedUp ? "up" : "down";
-                AnsiConsole.MarkupLine(
+                console.MarkupLine(
                     $"[green]Moved[/] [bold]{result.UpdatedIssue!.Id}[/] {direction} within [bold]{parentId}[/]");
-                TableFormatter.RenderIssue(result.UpdatedIssue);
+                TableFormatter.RenderIssue(console, result.UpdatedIssue);
             }
 
             return 0;
         }
         catch (KeyNotFoundException ex)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+            console.MarkupLine($"[red]Error:[/] {ex.Message}");
             return 1;
         }
         catch (InvalidOperationException ex)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+            console.MarkupLine($"[red]Error:[/] {ex.Message}");
             return 1;
         }
     }

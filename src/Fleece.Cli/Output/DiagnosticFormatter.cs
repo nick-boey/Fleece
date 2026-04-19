@@ -10,7 +10,7 @@ public static class DiagnosticFormatter
     /// </summary>
     /// <param name="diagnostics">The diagnostics to render.</param>
     /// <returns>True if any warnings were rendered.</returns>
-    public static bool RenderDiagnostics(IReadOnlyList<ParseDiagnostic> diagnostics)
+    public static bool RenderDiagnostics(IAnsiConsole console, IReadOnlyList<ParseDiagnostic> diagnostics)
     {
         var hasWarnings = false;
 
@@ -24,48 +24,44 @@ public static class DiagnosticFormatter
             hasWarnings = true;
             var fileName = Path.GetFileName(diagnostic.FilePath);
 
-            // Report row count mismatch
             if (diagnostic.SkippedRows > 0)
             {
-                AnsiConsole.MarkupLine(
+                console.MarkupLine(
                     $"[yellow]Warning:[/] Found {diagnostic.TotalRows} rows in {Markup.Escape(fileName)} " +
                     $"but only {diagnostic.ParsedRows} could be parsed.");
             }
 
-            // Report unknown properties
             if (diagnostic.UnknownProperties.Count > 0)
             {
                 var properties = string.Join(", ", diagnostic.UnknownProperties.OrderBy(p => p));
                 if (diagnostic.SkippedRows == 0)
                 {
-                    // Show warning prefix when no row mismatch was reported
-                    AnsiConsole.MarkupLine($"[yellow]Warning:[/] {Markup.Escape(fileName)} contains unknown properties: {Markup.Escape(properties)}");
+                    console.MarkupLine($"[yellow]Warning:[/] {Markup.Escape(fileName)} contains unknown properties: {Markup.Escape(properties)}");
                 }
                 else
                 {
-                    AnsiConsole.MarkupLine($"  [dim]Unknown properties:[/] {Markup.Escape(properties)}");
+                    console.MarkupLine($"  [dim]Unknown properties:[/] {Markup.Escape(properties)}");
                 }
             }
 
-            // Report parse errors (first few only)
             if (diagnostic.ParseErrors.Count > 0)
             {
                 var errorsToShow = diagnostic.ParseErrors.Take(3).ToList();
                 foreach (var error in errorsToShow)
                 {
-                    AnsiConsole.MarkupLine($"  [red]Parse error:[/] {Markup.Escape(error)}");
+                    console.MarkupLine($"  [red]Parse error:[/] {Markup.Escape(error)}");
                 }
 
                 if (diagnostic.ParseErrors.Count > 3)
                 {
-                    AnsiConsole.MarkupLine($"  [dim]... and {diagnostic.ParseErrors.Count - 3} more error(s)[/]");
+                    console.MarkupLine($"  [dim]... and {diagnostic.ParseErrors.Count - 3} more error(s)[/]");
                 }
             }
         }
 
         if (hasWarnings)
         {
-            AnsiConsole.WriteLine();
+            console.WriteLine();
         }
 
         return hasWarnings;

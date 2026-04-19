@@ -6,5 +6,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Fleece.Core.Tests/Fleece.Core.Tests.csproj" />
     <Project Path="tests/Fleece.Cli.Tests/Fleece.Cli.Tests.csproj" />
+    <Project Path="tests/Fleece.Cli.E2E.Tests/Fleece.Cli.E2E.Tests.csproj" />
+    <Project Path="tests/Fleece.Cli.Integration.Tests/Fleece.Cli.Integration.Tests.csproj" />
   </Folder>
 </Solution>

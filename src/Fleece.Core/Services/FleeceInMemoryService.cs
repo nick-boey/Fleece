@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Fleece.Core.Models;
 using Fleece.Core.Services.Interfaces;
+using System.IO.Abstractions;
 
 #pragma warning disable CS0618 // Type or member is obsolete - Internal service uses obsolete linkedPr param intentionally
 
@@ -21,12 +22,13 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
     private readonly IFleeceService _fleeceService;
     private readonly IIssueSerializationQueue _serializationQueue;
     private readonly string _basePath;
+    private readonly IFileSystem _fileSystem;
 
     private readonly ConcurrentDictionary<string, Issue> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ReaderWriterLockSlim _cacheLock = new();
     private readonly SemaphoreSlim _loadLock = new(1, 1);
 
-    private FileSystemWatcher? _watcher;
+    private IFileSystemWatcher? _watcher;
     private Timer? _debounceTimer;
     private volatile bool _isLoaded;
     private bool _disposed;
@@ -37,14 +39,17 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
     /// <param name="fleeceService">The underlying fleece service for CRUD operations.</param>
     /// <param name="serializationQueue">The queue for asynchronous disk persistence.</param>
     /// <param name="basePath">The project base path containing the <c>.fleece/</c> directory.</param>
+    /// <param name="fileSystem">The filesystem abstraction (real or mock).</param>
     public FleeceInMemoryService(
         IFleeceService fleeceService,
         IIssueSerializationQueue serializationQueue,
-        string basePath)
+        string basePath,
+        IFileSystem? fileSystem = null)
     {
         _fleeceService = fleeceService;
         _serializationQueue = serializationQueue;
         _basePath = basePath;
+        _fileSystem = fileSystem ?? new Testably.Abstractions.RealFileSystem();
 
         InitializeFileWatcher();
     }
@@ -526,24 +531,22 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
     /// </summary>
     private void InitializeFileWatcher()
     {
-        var fleecePath = Path.Combine(_basePath, FleeceDirectory);
+        var fleecePath = _fileSystem.Path.Combine(_basePath, FleeceDirectory);
 
         // Don't start watching if the directory doesn't exist yet;
         // we'll create it lazily when the first write happens.
-        if (!Directory.Exists(fleecePath))
+        if (!_fileSystem.Directory.Exists(fleecePath))
         {
             return;
         }
 
         try
         {
-            _watcher = new FileSystemWatcher(fleecePath, IssuesFileFilter)
-            {
-                NotifyFilter = NotifyFilters.FileName
-                               | NotifyFilters.LastWrite
-                               | NotifyFilters.Size,
-                EnableRaisingEvents = true
-            };
+            _watcher = _fileSystem.FileSystemWatcher.New(fleecePath, IssuesFileFilter);
+            _watcher.NotifyFilter = NotifyFilters.FileName
+                                    | NotifyFilters.LastWrite
+                                    | NotifyFilters.Size;
+            _watcher.EnableRaisingEvents = true;
 
             _watcher.Changed += OnFileChanged;
             _watcher.Created += OnFileChanged;

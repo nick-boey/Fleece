@@ -7,29 +7,26 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public abstract class StatusCommandBase(IFleeceService fleeceService)
+public abstract class StatusCommandBase(IFleeceService fleeceService, IAnsiConsole console)
     : AsyncCommand<StatusSettings>
 {
     protected abstract IssueStatus TargetStatus { get; }
 
     public override async Task<int> ExecuteAsync(CommandContext context, StatusSettings settings)
     {
-        // Validate at least one ID provided
         if (settings.Ids.Length == 0)
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] At least one issue ID is required");
+            console.MarkupLine("[red]Error:[/] At least one issue ID is required");
             return 1;
         }
 
-        // Check for unmerged files
         var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
-        // Phase 1: Resolve ALL partial IDs first, collecting any errors
         var resolutionErrors = new List<string>();
         var resolvedIds = new List<string>();
 
@@ -52,17 +49,15 @@ public abstract class StatusCommandBase(IFleeceService fleeceService)
             }
         }
 
-        // If any validation errors, report ALL errors and exit
         if (resolutionErrors.Count > 0)
         {
             foreach (var error in resolutionErrors)
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] {error}");
+                console.MarkupLine($"[red]Error:[/] {error}");
             }
             return 1;
         }
 
-        // Phase 2: Update all issues, collect results
         var updatedIssues = new List<Issue>();
         foreach (var resolvedId in resolvedIds)
         {
@@ -75,13 +70,11 @@ public abstract class StatusCommandBase(IFleeceService fleeceService)
             }
             catch (KeyNotFoundException)
             {
-                // Should not happen since we validated above, but handle gracefully
-                AnsiConsole.MarkupLine($"[red]Error:[/] Issue '{resolvedId}' not found during update");
+                console.MarkupLine($"[red]Error:[/] Issue '{resolvedId}' not found during update");
                 return 1;
             }
         }
 
-        // Output table or JSON depending on flags
         if (settings.Json || settings.JsonVerbose)
         {
             JsonFormatter.RenderIssues(updatedIssues, verbose: settings.JsonVerbose);
@@ -89,8 +82,8 @@ public abstract class StatusCommandBase(IFleeceService fleeceService)
         else
         {
             var statusName = TargetStatus.ToString().ToLowerInvariant();
-            AnsiConsole.MarkupLine($"[green]Updated {updatedIssues.Count} issue(s) to status '{statusName}'[/]");
-            TableFormatter.RenderIssues(updatedIssues);
+            console.MarkupLine($"[green]Updated {updatedIssues.Count} issue(s) to status '{statusName}'[/]");
+            TableFormatter.RenderIssues(console, updatedIssues);
         }
 
         return 0;

@@ -6,14 +6,14 @@ using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class MigrateCommand(IFleeceService fleeceService) : AsyncCommand<MigrateSettings>
+public sealed class MigrateCommand(IFleeceService fleeceService, IAnsiConsole console) : AsyncCommand<MigrateSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, MigrateSettings settings)
     {
         var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
         if (hasMultiple)
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {message}");
+            console.MarkupLine($"[red]Error:[/] {message}");
             return 1;
         }
 
@@ -27,11 +27,11 @@ public sealed class MigrateCommand(IFleeceService fleeceService) : AsyncCommand<
             }
             else if (needed)
             {
-                AnsiConsole.MarkupLine("[yellow]Migration is needed. Run 'fleece migrate' to migrate issues.[/]");
+                console.MarkupLine("[yellow]Migration is needed. Run 'fleece migrate' to migrate issues.[/]");
             }
             else
             {
-                AnsiConsole.MarkupLine("[green]No migration needed. All issues are up to date.[/]");
+                console.MarkupLine("[green]No migration needed. All issues are up to date.[/]");
             }
 
             return 0;
@@ -52,20 +52,20 @@ public sealed class MigrateCommand(IFleeceService fleeceService) : AsyncCommand<
         }
         else if (result.WasMigrationNeeded)
         {
-            AnsiConsole.MarkupLine($"[green]Migration complete![/]");
-            AnsiConsole.MarkupLine($"  Total issues: {result.TotalIssues}");
-            AnsiConsole.MarkupLine($"  Migrated: {result.MigratedIssues}");
-            AnsiConsole.MarkupLine($"  Already migrated: {result.AlreadyMigratedIssues}");
+            console.MarkupLine($"[green]Migration complete![/]");
+            console.MarkupLine($"  Total issues: {result.TotalIssues}");
+            console.MarkupLine($"  Migrated: {result.MigratedIssues}");
+            console.MarkupLine($"  Already migrated: {result.AlreadyMigratedIssues}");
 
             if (result.UnknownPropertiesDeleted.Count > 0)
             {
                 var properties = string.Join(", ", result.UnknownPropertiesDeleted.OrderBy(p => p));
-                AnsiConsole.MarkupLine($"  Unknown properties removed: {Markup.Escape(properties)}");
+                console.MarkupLine($"  Unknown properties removed: {Markup.Escape(properties)}");
             }
         }
         else
         {
-            AnsiConsole.MarkupLine("[green]No migration needed. All issues are up to date.[/]");
+            console.MarkupLine("[green]No migration needed. All issues are up to date.[/]");
         }
 
         return 0;
