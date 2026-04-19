@@ -10,7 +10,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/nick-boey/Fleece</PackageProjectUrl>
     <!-- Default version for local builds; overridden by -p:Version= during release -->
-    <Version>2.2.0</Version>
+    <Version>2.2.1</Version>
     <!-- Generate XML documentation for DocFX API reference -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- Suppress missing/incomplete XML comment warnings until full documentation coverage -->
