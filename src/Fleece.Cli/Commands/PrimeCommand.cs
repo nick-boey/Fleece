@@ -14,7 +14,8 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         ["json"] = JsonContent,
         ["next"] = NextContent,
         ["tree"] = TreeContent,
-        ["merge"] = MergeContent
+        ["merge"] = MergeContent,
+        ["openspec"] = OpenSpecContent
     };
 
     public override int Execute(CommandContext context, PrimeSettings settings)
@@ -26,9 +27,21 @@ public sealed class PrimeCommand : Command<PrimeSettings>
             return 0;
         }
 
+        var openspecDirectoryPath = Path.Combine(Directory.GetCurrentDirectory(), "openspec");
+        var hasOpenSpec = Directory.Exists(openspecDirectoryPath);
+
         if (string.IsNullOrWhiteSpace(settings.Topic))
         {
-            Console.WriteLine(OverviewContent);
+            if (hasOpenSpec)
+            {
+                Console.WriteLine(OverviewContent);
+                Console.WriteLine();
+                Console.WriteLine(OpenSpecContent);
+            }
+            else
+            {
+                Console.WriteLine(OverviewContent);
+            }
             return 0;
         }
 
@@ -134,6 +147,7 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `next`
         - `tree`
         - `merge`
+        - `openspec`
 
         Any command when run with `-h` will provide additional information on the command usage.
         """;
@@ -417,5 +431,71 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - Using git checkout --ours/--theirs
 
         ALWAYS use `fleece merge` which preserves data from both branches.
+        """;
+
+    private const string OpenSpecContent = """
+        # OpenSpec Integration
+
+        This repository uses OpenSpec (in `openspec/`) alongside Fleece. Fleece tracks
+        *who/when* work happens; OpenSpec tracks *what* is being built. Link them so
+        both stories stay aligned.
+
+        ## Linking a Fleece issue to an OpenSpec change
+
+        Use the keyed tag `openspec={change-name}` on the issue:
+
+        ```
+        fleece edit <id> --tags "openspec=my-change-name"
+        ```
+
+        Filter: `fleece list --tag openspec=my-change-name` (exact) or
+        `fleece list --tag openspec` (any change).
+
+        Multiple `openspec=` tags on one issue ARE permitted but discouraged — prefer
+        one issue per change.
+
+        ## Single-change session: which issue to link
+
+        When proposing one new OpenSpec change, pick the Fleece issue to link using
+        this decision tree:
+
+        ```
+        branch name ends in `+<id>` ?
+        ├─ yes → look up issue <id>
+        │        ├─ open AND no existing openspec= tag AND relevant to this change
+        │        │    → link it (add openspec={change-name})
+        │        └─ otherwise → fall through
+        └─ no  → scan open issues for an unlinked, relevant match
+                 ├─ one obvious candidate → link it
+                 ├─ ambiguous             → ask the user which to link
+                 └─ none                  → create a new issue as a last resort
+        ```
+
+        - "Relevant" means the issue's title/description matches the scope of the
+          proposed change.
+        - "Unlinked" means the issue has no existing `openspec=` tag.
+        - Creating a new issue is the last resort, not the default.
+
+        ## Multi-change session: hierarchy
+
+        When one session proposes multiple OpenSpec changes, create exactly ONE Fleece
+        issue per change and organise them using Fleece hierarchy features:
+
+        - **One issue per change** — never more, never fewer.
+        - **Flat fan-out is the default** — attach all per-change issues directly to
+          the session's root issue with
+          `fleece create ... --parent-issues <root-id>:<lex-order>`.
+        - **Intermediate grouping parents** only when the hierarchy genuinely requires
+          them (e.g. two changes that must complete before a third).
+        - Use lex-order (e.g. `aaa`, `aab`) to sequence siblings and
+          `fleece edit <root-id> --execution-order series|parallel` to signal whether
+          the per-change issues must be sequenced.
+
+        ## Never create issues per task or per phase
+
+        An OpenSpec change already owns its own task list (`tasks.md`) and phase
+        structure. Do NOT mirror those as Fleece issues. One Fleece issue per OpenSpec
+        change is the correct granularity — never one per task, per phase, or per
+        spec requirement.
         """;
 }
