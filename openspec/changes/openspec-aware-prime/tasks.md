@@ -34,4 +34,4 @@
 ## 5. Follow-up hygiene
 
 - [x] 5.1 Link the Fleece issue tracking this change to the change via the `openspec=openspec-aware-prime` tag (per the new convention this change introduces) before opening the PR.
-- [ ] 5.2 Move the Fleece issue to `review` with `--linked-pr <pr>` when the PR is opened.
+- [x] 5.2 Move the Fleece issue to `review` with `--linked-pr <pr>` when the PR is opened.
