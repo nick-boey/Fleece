@@ -207,19 +207,11 @@ public class GraphLayoutServiceTests
     }
 
     [Test]
-    public void NormalTreeMode_ThrowsNotImplemented()
+    public void NormalTreeMode_EmptyInput_ReturnsEmptyLayout()
     {
-        var engine = new GraphLayoutService();
-        var request = new GraphLayoutRequest<TestNode>
-        {
-            AllNodes = Array.Empty<TestNode>(),
-            RootFinder = _ => Array.Empty<TestNode>(),
-            ChildIterator = _ => Array.Empty<TestNode>(),
-            Mode = LayoutMode.NormalTree
-        };
-
-        var act = () => engine.Layout(request);
-        act.Should().Throw<NotImplementedException>()
-            .WithMessage("*LayoutMode.NormalTree*");
+        var (engine, request) = MakeRequest(Array.Empty<TestNode>(), Array.Empty<TestNode>(), LayoutMode.NormalTree);
+        var result = engine.Layout(request);
+        var success = (GraphLayoutResult<TestNode>.Success)result;
+        success.Layout.Nodes.Should().BeEmpty();
     }
 }

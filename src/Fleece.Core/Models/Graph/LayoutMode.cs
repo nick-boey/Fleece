@@ -11,7 +11,10 @@ public enum LayoutMode
     IssueGraph,
 
     /// <summary>
-    /// Reserved for the follow-up change <c>add-normal-tree-layout-mode</c>; not yet implemented.
+    /// Parent-first row order with depth-from-root lane assignment. Roots sit at lane 0, every
+    /// child is placed at <c>parent.lane + 1</c>, and siblings share their parent's child-lane —
+    /// they are separated only by row order so subtrees naturally don't collide horizontally.
+    /// Mirrors <see cref="IssueGraph"/> over the row axis: the natural shape for top-down trees.
     /// </summary>
     NormalTree
 }

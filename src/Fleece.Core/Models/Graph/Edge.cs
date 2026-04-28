@@ -18,6 +18,12 @@ public sealed record Edge<TNode> where TNode : IGraphNode
     /// (e.g. <see cref="EdgeKind.SeriesSibling"/>, where the pivot lane equals <see cref="Start"/>'s lane).
     /// </summary>
     public int? PivotLane { get; init; }
+
+    /// <summary>Visual side of the source node where this edge attaches.</summary>
+    public required EdgeAttachSide SourceAttach { get; init; }
+
+    /// <summary>Visual side of the target node where this edge attaches.</summary>
+    public required EdgeAttachSide TargetAttach { get; init; }
 }
 
 /// <summary>
@@ -33,4 +39,16 @@ public enum EdgeKind
 
     /// <summary>Connects a parallel child rightward to the parent's lane, then down to the parent.</summary>
     ParallelChildToSpine
+}
+
+/// <summary>
+/// The side of a node where an edge visually attaches. Populated by the layout engine per
+/// (mode, kind) so renderers can draw without re-deriving sides from row/lane arithmetic.
+/// </summary>
+public enum EdgeAttachSide
+{
+    Top,
+    Bottom,
+    Left,
+    Right
 }

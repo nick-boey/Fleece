@@ -4,21 +4,16 @@ using Fleece.Core.Services.Interfaces;
 namespace Fleece.Core.Services.GraphLayout;
 
 /// <summary>
-/// Generic graph layout engine. Reproduces Fleece's leaves-first lane assignment for
-/// <see cref="LayoutMode.IssueGraph"/>; reserves <see cref="LayoutMode.NormalTree"/> for a
-/// follow-up change.
+/// Generic graph layout engine. Supports two strategies keyed on <see cref="LayoutMode"/>:
+/// <see cref="LayoutMode.IssueGraph"/> (leaves-first row order, leaf-upward lane assignment)
+/// and <see cref="LayoutMode.NormalTree"/> (parent-first row order, depth-from-root lane assignment).
+/// Cycle detection, multi-parent fan-in, and occupancy assembly are shared across modes.
 /// </summary>
 public sealed class GraphLayoutService : IGraphLayoutService
 {
     public GraphLayoutResult<TNode> Layout<TNode>(GraphLayoutRequest<TNode> request) where TNode : IGraphNode
     {
-        if (request.Mode == LayoutMode.NormalTree)
-        {
-            throw new NotImplementedException(
-                "LayoutMode.NormalTree is reserved; see openspec change add-normal-tree-layout-mode");
-        }
-
-        if (request.Mode != LayoutMode.IssueGraph)
+        if (request.Mode != LayoutMode.IssueGraph && request.Mode != LayoutMode.NormalTree)
         {
             throw new NotSupportedException($"Unsupported LayoutMode: {request.Mode}");
         }
@@ -32,16 +27,37 @@ public sealed class GraphLayoutService : IGraphLayoutService
         }
 
         int maxLane = 0;
-        foreach (var root in roots)
+        if (request.Mode == LayoutMode.IssueGraph)
         {
-            var rootMax = LayoutSubtree(root, 0, ctx);
-            if (ctx.DetectedCycle != null)
+            foreach (var root in roots)
             {
-                return new GraphLayoutResult<TNode>.CycleDetected(ctx.DetectedCycle);
+                var rootMax = LayoutSubtreeIssueGraph(root, 0, ctx);
+                if (ctx.DetectedCycle != null)
+                {
+                    return new GraphLayoutResult<TNode>.CycleDetected(ctx.DetectedCycle);
+                }
+                if (rootMax > maxLane)
+                {
+                    maxLane = rootMax;
+                }
             }
-            if (rootMax > maxLane)
+        }
+        else
+        {
+            foreach (var root in roots)
             {
-                maxLane = rootMax;
+                LayoutSubtreeNormalTree(root, 0, ctx, siblingEntries: null);
+                if (ctx.DetectedCycle != null)
+                {
+                    return new GraphLayoutResult<TNode>.CycleDetected(ctx.DetectedCycle);
+                }
+            }
+            foreach (var entry in ctx.Emitted)
+            {
+                if (entry.Lane > maxLane)
+                {
+                    maxLane = entry.Lane;
+                }
             }
         }
 
@@ -66,7 +82,7 @@ public sealed class GraphLayoutService : IGraphLayoutService
         });
     }
 
-    private static int LayoutSubtree<TNode>(TNode node, int startLane, LayoutContext<TNode> ctx)
+    private static int LayoutSubtreeIssueGraph<TNode>(TNode node, int startLane, LayoutContext<TNode> ctx)
         where TNode : IGraphNode
     {
         if (PathContains(ctx.PathStack, node.Id))
@@ -103,7 +119,7 @@ public sealed class GraphLayoutService : IGraphLayoutService
             {
                 bool emitAsLeaf = IsLeafEmission(child, ctx);
                 int childStart = emitAsLeaf || isFirst ? currentLane : currentLane + 1;
-                int childMax = LayoutSubtree(child, childStart, ctx);
+                int childMax = LayoutSubtreeIssueGraph(child, childStart, ctx);
                 if (ctx.DetectedCycle != null)
                 {
                     ctx.PathStack.Pop();
@@ -123,7 +139,7 @@ public sealed class GraphLayoutService : IGraphLayoutService
             int max = startLane;
             foreach (var child in children)
             {
-                int childMax = LayoutSubtree(child, startLane, ctx);
+                int childMax = LayoutSubtreeIssueGraph(child, startLane, ctx);
                 if (ctx.DetectedCycle != null)
                 {
                     ctx.PathStack.Pop();
@@ -141,10 +157,58 @@ public sealed class GraphLayoutService : IGraphLayoutService
         int parentLane = maxChildLane + 1;
         var parentEntry = Emit(node, parentLane, ctx);
 
-        EmitEdges(node, node.ChildSequencing, subtreeRoots, parentEntry, ctx);
+        EmitIssueGraphEdges(node, node.ChildSequencing, subtreeRoots, parentEntry, ctx);
 
         ctx.PathStack.Pop();
         return parentLane;
+    }
+
+    private static void LayoutSubtreeNormalTree<TNode>(
+        TNode node,
+        int lane,
+        LayoutContext<TNode> ctx,
+        List<PositionedEntry<TNode>>? siblingEntries)
+        where TNode : IGraphNode
+    {
+        if (PathContains(ctx.PathStack, node.Id))
+        {
+            ctx.DetectedCycle = ExtractCycle(ctx.PathStack, node.Id);
+            return;
+        }
+
+        bool isDuplicate = ctx.AppearanceCounts.ContainsKey(node.Id);
+
+        var entry = Emit(node, lane, ctx);
+        siblingEntries?.Add(entry);
+
+        if (isDuplicate)
+        {
+            return;
+        }
+
+        ctx.PathStack.Push(node.Id);
+
+        var children = ctx.Request.ChildIterator(node).ToList();
+        if (children.Count == 0)
+        {
+            ctx.PathStack.Pop();
+            return;
+        }
+
+        var childEntries = new List<PositionedEntry<TNode>>(children.Count);
+        foreach (var child in children)
+        {
+            LayoutSubtreeNormalTree(child, lane + 1, ctx, childEntries);
+            if (ctx.DetectedCycle != null)
+            {
+                ctx.PathStack.Pop();
+                return;
+            }
+        }
+
+        EmitNormalTreeEdges(node, entry, childEntries, node.ChildSequencing, ctx);
+
+        ctx.PathStack.Pop();
     }
 
     private static PositionedEntry<TNode> Emit<TNode>(TNode node, int lane, LayoutContext<TNode> ctx)
@@ -162,7 +226,7 @@ public sealed class GraphLayoutService : IGraphLayoutService
         return entry;
     }
 
-    private static void EmitEdges<TNode>(
+    private static void EmitIssueGraphEdges<TNode>(
         TNode parent,
         ChildSequencing sequencing,
         List<PositionedEntry<TNode>> subtreeRoots,
@@ -189,7 +253,9 @@ public sealed class GraphLayoutService : IGraphLayoutService
                     Kind = EdgeKind.SeriesSibling,
                     Start = new GridPosition(prev.Row, prev.Lane),
                     End = new GridPosition(curr.Row, curr.Lane),
-                    PivotLane = null
+                    PivotLane = null,
+                    SourceAttach = EdgeAttachSide.Bottom,
+                    TargetAttach = EdgeAttachSide.Top
                 });
             }
 
@@ -202,7 +268,9 @@ public sealed class GraphLayoutService : IGraphLayoutService
                 Kind = EdgeKind.SeriesCornerToParent,
                 Start = new GridPosition(last.Row, last.Lane),
                 End = new GridPosition(parentEntry.Row, parentEntry.Lane),
-                PivotLane = last.Lane
+                PivotLane = last.Lane,
+                SourceAttach = EdgeAttachSide.Bottom,
+                TargetAttach = EdgeAttachSide.Left
             });
         }
         else
@@ -217,7 +285,76 @@ public sealed class GraphLayoutService : IGraphLayoutService
                     Kind = EdgeKind.ParallelChildToSpine,
                     Start = new GridPosition(child.Row, child.Lane),
                     End = new GridPosition(parentEntry.Row, parentEntry.Lane),
-                    PivotLane = parentEntry.Lane
+                    PivotLane = parentEntry.Lane,
+                    SourceAttach = EdgeAttachSide.Right,
+                    TargetAttach = EdgeAttachSide.Top
+                });
+            }
+        }
+    }
+
+    private static void EmitNormalTreeEdges<TNode>(
+        TNode parent,
+        PositionedEntry<TNode> parentEntry,
+        List<PositionedEntry<TNode>> childEntries,
+        ChildSequencing sequencing,
+        LayoutContext<TNode> ctx)
+        where TNode : IGraphNode
+    {
+        if (childEntries.Count == 0)
+        {
+            return;
+        }
+
+        if (sequencing == ChildSequencing.Series)
+        {
+            var first = childEntries[0];
+            ctx.Edges.Add(new Edge<TNode>
+            {
+                Id = $"{parent.Id}->{first.Node.Id}:{EdgeKind.SeriesCornerToParent}#{ctx.Edges.Count}",
+                From = parent,
+                To = first.Node,
+                Kind = EdgeKind.SeriesCornerToParent,
+                Start = new GridPosition(parentEntry.Row, parentEntry.Lane),
+                End = new GridPosition(first.Row, first.Lane),
+                PivotLane = parentEntry.Lane,
+                SourceAttach = EdgeAttachSide.Bottom,
+                TargetAttach = EdgeAttachSide.Left
+            });
+
+            for (int i = 1; i < childEntries.Count; i++)
+            {
+                var prev = childEntries[i - 1];
+                var curr = childEntries[i];
+                ctx.Edges.Add(new Edge<TNode>
+                {
+                    Id = $"{prev.Node.Id}->{curr.Node.Id}:{EdgeKind.SeriesSibling}#{ctx.Edges.Count}",
+                    From = prev.Node,
+                    To = curr.Node,
+                    Kind = EdgeKind.SeriesSibling,
+                    Start = new GridPosition(prev.Row, prev.Lane),
+                    End = new GridPosition(curr.Row, curr.Lane),
+                    PivotLane = null,
+                    SourceAttach = EdgeAttachSide.Bottom,
+                    TargetAttach = EdgeAttachSide.Top
+                });
+            }
+        }
+        else
+        {
+            foreach (var child in childEntries)
+            {
+                ctx.Edges.Add(new Edge<TNode>
+                {
+                    Id = $"{parent.Id}->{child.Node.Id}:{EdgeKind.ParallelChildToSpine}#{ctx.Edges.Count}",
+                    From = parent,
+                    To = child.Node,
+                    Kind = EdgeKind.ParallelChildToSpine,
+                    Start = new GridPosition(parentEntry.Row, parentEntry.Lane),
+                    End = new GridPosition(child.Row, child.Lane),
+                    PivotLane = parentEntry.Lane,
+                    SourceAttach = EdgeAttachSide.Bottom,
+                    TargetAttach = EdgeAttachSide.Left
                 });
             }
         }
@@ -312,66 +449,61 @@ public sealed class GraphLayoutService : IGraphLayoutService
         var e = edge.End;
         var id = edge.Id;
 
-        switch (edge.Kind)
+        bool verticalFirst = edge.SourceAttach is EdgeAttachSide.Top or EdgeAttachSide.Bottom;
+
+        if (verticalFirst)
         {
-            case EdgeKind.SeriesSibling:
-            case EdgeKind.SeriesCornerToParent:
+            int pivotLane = s.Lane;
+
+            add(s.Row, s.Lane, id, EdgeSegmentKind.Vertical);
+            for (int r = s.Row + 1; r < e.Row; r++)
             {
-                int pivotLane = s.Lane;
-
-                add(s.Row, s.Lane, id, EdgeSegmentKind.Vertical);
-                for (int r = s.Row + 1; r < e.Row; r++)
-                {
-                    add(r, pivotLane, id, EdgeSegmentKind.Vertical);
-                }
-
-                if (e.Lane == pivotLane)
-                {
-                    if (e.Row != s.Row)
-                    {
-                        add(e.Row, e.Lane, id, EdgeSegmentKind.Vertical);
-                    }
-                    break;
-                }
-
-                add(e.Row, pivotLane, id, EdgeSegmentKind.Horizontal);
-                int step = e.Lane > pivotLane ? 1 : -1;
-                for (int l = pivotLane + step; l != e.Lane; l += step)
-                {
-                    add(e.Row, l, id, EdgeSegmentKind.Horizontal);
-                }
-                add(e.Row, e.Lane, id, EdgeSegmentKind.Horizontal);
-                break;
+                add(r, pivotLane, id, EdgeSegmentKind.Vertical);
             }
 
-            case EdgeKind.ParallelChildToSpine:
+            if (e.Lane == pivotLane)
             {
-                int pivotLane = e.Lane;
-
-                if (s.Lane == pivotLane)
-                {
-                    add(s.Row, s.Lane, id, EdgeSegmentKind.Vertical);
-                }
-                else
-                {
-                    add(s.Row, s.Lane, id, EdgeSegmentKind.Horizontal);
-                    int step = pivotLane > s.Lane ? 1 : -1;
-                    for (int l = s.Lane + step; l != pivotLane; l += step)
-                    {
-                        add(s.Row, l, id, EdgeSegmentKind.Horizontal);
-                    }
-                    add(s.Row, pivotLane, id, EdgeSegmentKind.Vertical);
-                }
-
-                for (int r = s.Row + 1; r < e.Row; r++)
-                {
-                    add(r, pivotLane, id, EdgeSegmentKind.Vertical);
-                }
                 if (e.Row != s.Row)
                 {
-                    add(e.Row, pivotLane, id, EdgeSegmentKind.Vertical);
+                    add(e.Row, e.Lane, id, EdgeSegmentKind.Vertical);
                 }
-                break;
+                return;
+            }
+
+            add(e.Row, pivotLane, id, EdgeSegmentKind.Horizontal);
+            int laneStep = e.Lane > pivotLane ? 1 : -1;
+            for (int l = pivotLane + laneStep; l != e.Lane; l += laneStep)
+            {
+                add(e.Row, l, id, EdgeSegmentKind.Horizontal);
+            }
+            add(e.Row, e.Lane, id, EdgeSegmentKind.Horizontal);
+        }
+        else
+        {
+            int pivotLane = e.Lane;
+
+            if (s.Lane == pivotLane)
+            {
+                add(s.Row, s.Lane, id, EdgeSegmentKind.Vertical);
+            }
+            else
+            {
+                add(s.Row, s.Lane, id, EdgeSegmentKind.Horizontal);
+                int step = pivotLane > s.Lane ? 1 : -1;
+                for (int l = s.Lane + step; l != pivotLane; l += step)
+                {
+                    add(s.Row, l, id, EdgeSegmentKind.Horizontal);
+                }
+                add(s.Row, pivotLane, id, EdgeSegmentKind.Vertical);
+            }
+
+            for (int r = s.Row + 1; r < e.Row; r++)
+            {
+                add(r, pivotLane, id, EdgeSegmentKind.Vertical);
+            }
+            if (e.Row != s.Row)
+            {
+                add(e.Row, pivotLane, id, EdgeSegmentKind.Vertical);
             }
         }
     }

@@ -55,6 +55,14 @@ public class EdgeConstructionTests
         var corner = layout.Edges.Single(e => e.Kind == EdgeKind.SeriesCornerToParent && e.To.Id == "P");
         corner.From.Id.Should().Be("C");
         corner.PivotLane.Should().Be(corner.Start.Lane);
+
+        siblingEdges.Should().AllSatisfy(e =>
+        {
+            e.SourceAttach.Should().Be(EdgeAttachSide.Bottom);
+            e.TargetAttach.Should().Be(EdgeAttachSide.Top);
+        });
+        corner.SourceAttach.Should().Be(EdgeAttachSide.Bottom);
+        corner.TargetAttach.Should().Be(EdgeAttachSide.Left);
     }
 
     [Test]
@@ -78,6 +86,8 @@ public class EdgeConstructionTests
         {
             e.PivotLane.Should().Be(parentLane);
             e.End.Lane.Should().Be(parentLane);
+            e.SourceAttach.Should().Be(EdgeAttachSide.Right);
+            e.TargetAttach.Should().Be(EdgeAttachSide.Top);
         });
 
         spine.Select(e => e.From.Id).Should().BeEquivalentTo(new[] { "X", "Y", "Z" });
