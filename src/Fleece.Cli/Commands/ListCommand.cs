@@ -1,6 +1,8 @@
 using Fleece.Cli.Output;
 using Fleece.Cli.Settings;
+using Fleece.Core.FunctionalCore;
 using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
 using Fleece.Core.Search;
 using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
@@ -10,6 +12,7 @@ namespace Fleece.Cli.Commands;
 
 public sealed class ListCommand(
     IFleeceService fleeceService,
+    IIssueLayoutService issueLayoutService,
     ISettingsService settingsService,
     IAnsiConsole console) : AsyncCommand<ListSettings>
 {
@@ -174,7 +177,11 @@ public sealed class ListCommand(
                 }
             }
 
-            TaskGraph graph;
+            var loadResultForGraph = await fleeceService.LoadIssuesWithDiagnosticsAsync();
+            var allIssues = loadResultForGraph.Issues;
+
+            GraphLayout<Issue> graph;
+            IReadOnlySet<string>? graphMatchedIds = null;
             if (!string.IsNullOrWhiteSpace(settings.Search))
             {
                 var query = fleeceService.ParseSearchQuery(settings.Search);
@@ -204,21 +211,25 @@ public sealed class ListCommand(
                     return 0;
                 }
 
-                graph = await fleeceService.BuildFilteredTaskGraphLayoutAsync(matchedIds, sortConfig: sortConfig);
+                graph = issueLayoutService.LayoutForNext(allIssues, matchedIds, sort: sortConfig);
+                graphMatchedIds = matchedIds;
             }
             else if (nextHierarchyIds is not null)
             {
-                graph = await fleeceService.BuildFilteredTaskGraphLayoutAsync(nextHierarchyIds, sortConfig: sortConfig);
+                graph = issueLayoutService.LayoutForNext(allIssues, nextHierarchyIds, sort: sortConfig);
+                graphMatchedIds = nextHierarchyIds;
             }
             else
             {
-                graph = await fleeceService.BuildTaskGraphLayoutAsync(
-                    inactiveVisibility: inactiveVisibility,
+                graph = issueLayoutService.LayoutForTree(
+                    allIssues,
+                    visibility: inactiveVisibility,
                     assignedTo: assignedTo,
-                    sortConfig: sortConfig);
+                    sort: sortConfig);
             }
 
-            TaskGraphRenderer.Render(console, graph);
+            var actionableIds = ComputeActionableIds(allIssues);
+            TaskGraphRenderer.Render(console, graph, actionableIds, graphMatchedIds);
             return 0;
         }
 
@@ -376,6 +387,14 @@ public sealed class ListCommand(
         }
 
         return 0;
+    }
+
+    private static IReadOnlySet<string> ComputeActionableIds(IReadOnlyList<Issue> issues)
+    {
+        var graph = Issues.BuildGraph(issues);
+        return new HashSet<string>(
+            graph.Nodes.Values.Where(Issues.IsActionable).Select(n => n.Issue.Id),
+            StringComparer.OrdinalIgnoreCase);
     }
 
     private void RenderOneLine(IReadOnlyList<Issue> issues, IReadOnlyDictionary<string, SyncStatus>? syncStatuses)

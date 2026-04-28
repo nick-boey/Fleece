@@ -142,23 +142,6 @@ public interface IFleeceService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Builds a task graph layout for display with lane assignments.
-    /// </summary>
-    Task<TaskGraph> BuildTaskGraphLayoutAsync(
-        InactiveVisibility inactiveVisibility = InactiveVisibility.Hide,
-        string? assignedTo = null,
-        GraphSortConfig? sortConfig = null,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Builds a task graph layout filtered to highlight search result matches.
-    /// </summary>
-    Task<TaskGraph> BuildFilteredTaskGraphLayoutAsync(
-        IReadOnlySet<string> matchedIds,
-        GraphSortConfig? sortConfig = null,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Gets the next actionable issues based on dependency ordering.
     /// </summary>
     Task<IReadOnlyList<Issue>> GetNextIssuesAsync(

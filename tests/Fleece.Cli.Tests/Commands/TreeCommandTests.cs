@@ -1,6 +1,7 @@
 using Fleece.Cli.Commands;
 using Fleece.Cli.Settings;
 using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
 using Fleece.Core.Search;
 using Fleece.Core.Services.Interfaces;
 using Fleece.Core.Tests.TestHelpers;
@@ -16,12 +17,35 @@ namespace Fleece.Cli.Tests.Commands;
 public class TreeCommandTests
 {
     private IFleeceService _fleeceService = null!;
+    private IIssueLayoutService _issueLayoutService = null!;
     private ISettingsService _settingsService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
     private TestConsole _console = null!;
     private StringWriter _consoleOutput = null!;
     private TextWriter _originalConsole = null!;
+
+    private static GraphLayout<Issue> SingleNodeLayout(Issue issue)
+    {
+        var positioned = new PositionedNode<Issue>
+        {
+            Node = issue,
+            Row = 0,
+            Lane = 0,
+            AppearanceIndex = 1,
+            TotalAppearances = 1
+        };
+        var occupancy = new OccupancyCell[1, 1];
+        occupancy[0, 0] = new OccupancyCell { Edges = Array.Empty<EdgeOccupancy>() };
+        return new GraphLayout<Issue>
+        {
+            Nodes = new[] { positioned },
+            Edges = Array.Empty<Edge<Issue>>(),
+            Occupancy = occupancy,
+            TotalRows = 1,
+            TotalLanes = 1
+        };
+    }
 
     [SetUp]
     public void SetUp()
@@ -49,8 +73,10 @@ public class TreeCommandTests
                 }
             });
 
+        _issueLayoutService = Substitute.For<IIssueLayoutService>();
+
         _console = new TestConsole();
-        _command = new ListCommand(_fleeceService, _settingsService, _console);
+        _command = new ListCommand(_fleeceService, _issueLayoutService, _settingsService, _console);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;
@@ -209,12 +235,12 @@ public class TreeCommandTests
             .WithType(IssueType.Task)
             .Build();
 
-        _fleeceService.BuildTaskGraphLayoutAsync(Arg.Any<InactiveVisibility>(), Arg.Any<string?>(), Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>())
-            .Returns(new TaskGraph
-            {
-                Nodes = [new TaskGraphNode { Issue = issue, Row = 0, Lane = 0, IsActionable = true }],
-                TotalLanes = 1
-            });
+        _issueLayoutService.LayoutForTree(
+                Arg.Any<IReadOnlyList<Issue>>(),
+                Arg.Any<InactiveVisibility>(),
+                Arg.Any<string?>(),
+                Arg.Any<GraphSortConfig?>())
+            .Returns(SingleNodeLayout(issue));
 
         var settings = new ListSettings { Next = true };
 
@@ -267,18 +293,13 @@ public class TreeCommandTests
                 Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(searchResult);
 
-        var taskGraph = new TaskGraph
-        {
-            Nodes = new List<TaskGraphNode>
-            {
-                new() { Issue = issue, Row = 0, Lane = 0, IsActionable = true }
-            },
-            TotalLanes = 1,
-            MatchedIds = matchedIds
-        };
-
-        _fleeceService.BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>())
-            .Returns(taskGraph);
+        _issueLayoutService.LayoutForNext(
+                Arg.Any<IReadOnlyList<Issue>>(),
+                Arg.Is<IReadOnlySet<string>?>(ids => ids != null && ids.SetEquals(matchedIds)),
+                Arg.Any<InactiveVisibility>(),
+                Arg.Any<string?>(),
+                Arg.Any<GraphSortConfig?>())
+            .Returns(SingleNodeLayout(issue));
 
         var settings = new ListSettings { Next = true, Search = "login" };
 
@@ -293,7 +314,12 @@ public class TreeCommandTests
             Arg.Any<string?>(), Arg.Any<IReadOnlyList<string>?>(), Arg.Any<int?>(),
             Arg.Any<bool>(), Arg.Any<CancellationToken>());
 
-        await _fleeceService.Received(1).BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>());
+        _issueLayoutService.Received(1).LayoutForNext(
+            Arg.Any<IReadOnlyList<Issue>>(),
+            Arg.Is<IReadOnlySet<string>?>(ids => ids != null && ids.SetEquals(matchedIds)),
+            Arg.Any<InactiveVisibility>(),
+            Arg.Any<string?>(),
+            Arg.Any<GraphSortConfig?>());
     }
 
     [Test]
@@ -356,18 +382,13 @@ public class TreeCommandTests
                 Arg.Any<CancellationToken>())
             .Returns(searchResult);
 
-        var taskGraph = new TaskGraph
-        {
-            Nodes = new List<TaskGraphNode>
-            {
-                new() { Issue = issue, Row = 0, Lane = 0, IsActionable = true }
-            },
-            TotalLanes = 1,
-            MatchedIds = matchedIds
-        };
-
-        _fleeceService.BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>())
-            .Returns(taskGraph);
+        _issueLayoutService.LayoutForNext(
+                Arg.Any<IReadOnlyList<Issue>>(),
+                Arg.Is<IReadOnlySet<string>?>(ids => ids != null && ids.SetEquals(matchedIds)),
+                Arg.Any<InactiveVisibility>(),
+                Arg.Any<string?>(),
+                Arg.Any<GraphSortConfig?>())
+            .Returns(SingleNodeLayout(issue));
 
         var settings = new ListSettings { Next = true, Search = "type:bug", Status = "open" };
 
@@ -388,7 +409,7 @@ public class TreeCommandTests
     }
 
     [Test]
-    public async Task ExecuteAsync_NextWithoutSearch_CallsBuildTaskGraphLayoutAsync()
+    public async Task ExecuteAsync_NextWithoutSearch_CallsLayoutForTree()
     {
         var issue = new IssueBuilder()
             .WithId("abc123")
@@ -397,17 +418,12 @@ public class TreeCommandTests
             .WithType(IssueType.Task)
             .Build();
 
-        var taskGraph = new TaskGraph
-        {
-            Nodes = new List<TaskGraphNode>
-            {
-                new() { Issue = issue, Row = 0, Lane = 0, IsActionable = true }
-            },
-            TotalLanes = 1
-        };
-
-        _fleeceService.BuildTaskGraphLayoutAsync(Arg.Any<InactiveVisibility>(), Arg.Any<string?>(), Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>())
-            .Returns(taskGraph);
+        _issueLayoutService.LayoutForTree(
+                Arg.Any<IReadOnlyList<Issue>>(),
+                Arg.Any<InactiveVisibility>(),
+                Arg.Any<string?>(),
+                Arg.Any<GraphSortConfig?>())
+            .Returns(SingleNodeLayout(issue));
 
         var settings = new ListSettings { Next = true };
 
@@ -415,7 +431,11 @@ public class TreeCommandTests
 
         result.Should().Be(0);
 
-        await _fleeceService.Received(1).BuildTaskGraphLayoutAsync(Arg.Any<InactiveVisibility>(), Arg.Any<string?>(), Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>());
+        _issueLayoutService.Received(1).LayoutForTree(
+            Arg.Any<IReadOnlyList<Issue>>(),
+            Arg.Any<InactiveVisibility>(),
+            Arg.Any<string?>(),
+            Arg.Any<GraphSortConfig?>());
 
         _fleeceService.DidNotReceive().ParseSearchQuery(Arg.Any<string?>());
     }
@@ -447,18 +467,13 @@ public class TreeCommandTests
                 Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(searchResult);
 
-        var taskGraph = new TaskGraph
-        {
-            Nodes = new List<TaskGraphNode>
-            {
-                new() { Issue = issue, Row = 0, Lane = 0, IsActionable = true }
-            },
-            TotalLanes = 1,
-            MatchedIds = matchedIds
-        };
-
-        _fleeceService.BuildFilteredTaskGraphLayoutAsync(matchedIds, Arg.Any<GraphSortConfig?>(), Arg.Any<CancellationToken>())
-            .Returns(taskGraph);
+        _issueLayoutService.LayoutForNext(
+                Arg.Any<IReadOnlyList<Issue>>(),
+                Arg.Is<IReadOnlySet<string>?>(ids => ids != null && ids.SetEquals(matchedIds)),
+                Arg.Any<InactiveVisibility>(),
+                Arg.Any<string?>(),
+                Arg.Any<GraphSortConfig?>())
+            .Returns(SingleNodeLayout(issue));
 
         var settings = new ListSettings { Next = true, Search = "login" };
 

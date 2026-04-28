@@ -416,25 +416,6 @@ public sealed partial class FleeceService : IFleeceService
         return Issues.QueryGraph(allIssues, query, sortConfig);
     }
 
-    public async Task<TaskGraph> BuildTaskGraphLayoutAsync(
-        InactiveVisibility inactiveVisibility = InactiveVisibility.Hide,
-        string? assignedTo = null,
-        GraphSortConfig? sortConfig = null,
-        CancellationToken cancellationToken = default)
-    {
-        var allIssues = await LoadAndNormalizeAsync(cancellationToken);
-        return Issues.BuildTaskGraphLayout(allIssues, inactiveVisibility, assignedTo, sortConfig);
-    }
-
-    public async Task<TaskGraph> BuildFilteredTaskGraphLayoutAsync(
-        IReadOnlySet<string> matchedIds,
-        GraphSortConfig? sortConfig = null,
-        CancellationToken cancellationToken = default)
-    {
-        var allIssues = await LoadAndNormalizeAsync(cancellationToken);
-        return Issues.BuildFilteredTaskGraphLayout(allIssues, matchedIds, sortConfig);
-    }
-
     public async Task<IReadOnlyList<Issue>> GetNextIssuesAsync(
         string? parentId = null,
         GraphSortConfig? sortConfig = null,

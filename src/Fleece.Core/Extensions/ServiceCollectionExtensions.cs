@@ -1,5 +1,6 @@
 using Fleece.Core.Serialization;
 using Fleece.Core.Services;
+using Fleece.Core.Services.GraphLayout;
 using Fleece.Core.Services.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using System.IO.Abstractions;
@@ -58,6 +59,10 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<IGitConfigService>(),
                 sp.GetRequiredService<ISettingsService>(),
                 sp.GetRequiredService<SyncStatusService>()));
+
+        // Graph layout: generic engine + Fleece-specific issue adapter
+        services.AddSingleton<IGraphLayoutService, GraphLayoutService>();
+        services.AddSingleton<IIssueLayoutService, IssueLayoutService>();
 
         return services;
     }
