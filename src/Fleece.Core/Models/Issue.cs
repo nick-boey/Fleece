@@ -1,8 +1,9 @@
 using System.Text.Json.Serialization;
+using Fleece.Core.Models.Graph;
 
 namespace Fleece.Core.Models;
 
-public sealed record Issue
+public sealed record Issue : IGraphNode
 {
     public required string Id { get; init; }
 
@@ -58,6 +59,10 @@ public sealed record Issue
     public ExecutionMode ExecutionMode { get; init; } = ExecutionMode.Series;
     public DateTimeOffset? ExecutionModeLastUpdate { get; init; }
     public string? ExecutionModeModifiedBy { get; init; }
+
+    [JsonIgnore]
+    ChildSequencing IGraphNode.ChildSequencing =>
+        ExecutionMode == ExecutionMode.Series ? ChildSequencing.Series : ChildSequencing.Parallel;
 
     public string? CreatedBy { get; init; }
     public DateTimeOffset? CreatedByLastUpdate { get; init; }

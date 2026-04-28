@@ -1,36 +1,37 @@
 using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
 using Spectre.Console;
 
 namespace Fleece.Cli.Output;
 
 /// <summary>
-/// Renders a task graph to the console using Unicode box-drawing characters.
+/// Renders a <see cref="GraphLayout{Issue}"/> to the console using Unicode box-drawing characters.
+/// Walks the engine-provided occupancy matrix; does not infer edges from positions.
 /// </summary>
 public static class TaskGraphRenderer
 {
-    // Box-drawing characters
-    private const char Vertical = '\u2502';   // │
-    private const char Horizontal = '\u2500'; // ─
-    private const char TopLeft = '\u250C';    // ┌
-    private const char TopRight = '\u2510';   // ┐
-    private const char BottomLeft = '\u2514'; // └
-    private const char BottomRight = '\u2518';// ┘
-    private const char TeeRight = '\u251C';   // ├
-    private const char TeeLeft = '\u2524';    // ┤
-    private const char TeeDown = '\u252C';    // ┬
-    private const char TeeUp = '\u2534';      // ┴
-    private const char Cross = '\u253C';      // ┼
+    private const char Vertical = '│';
+    private const char Horizontal = '─';
+    private const char TopLeft = '┌';
+    private const char TopRight = '┐';
+    private const char BottomLeft = '└';
+    private const char BottomRight = '┘';
+    private const char TeeRight = '├';
+    private const char TeeLeft = '┤';
+    private const char TeeDown = '┬';
+    private const char TeeUp = '┴';
+    private const char Cross = '┼';
 
-    // Node markers
-    private const char ActionableMarker = '\u25CB';  // ○ open and up next
-    private const char OpenMarker = '\u25CC';        // ◌ open but not next
-    private const char CompleteMarker = '\u25CF';    // ● complete
-    private const char ClosedMarker = '\u2298';      // ⊘ deleted/archived
+    private const char ActionableMarker = '○';
+    private const char OpenMarker = '◌';
+    private const char CompleteMarker = '●';
+    private const char ClosedMarker = '⊘';
 
-    /// <summary>
-    /// Renders a task graph to the console.
-    /// </summary>
-    public static void Render(IAnsiConsole console, TaskGraph graph)
+    public static void Render(
+        IAnsiConsole console,
+        GraphLayout<Issue> graph,
+        IReadOnlySet<string>? actionableIds = null,
+        IReadOnlySet<string>? matchedIds = null)
     {
         if (graph.Nodes.Count == 0)
         {
@@ -38,119 +39,56 @@ public static class TaskGraphRenderer
             return;
         }
 
-        // Build lookup structures (first occurrence wins for parent connection resolution)
-        var nodeLookup = new Dictionary<string, TaskGraphNode>(StringComparer.OrdinalIgnoreCase);
-        foreach (var n in graph.Nodes)
-        {
-            nodeLookup.TryAdd(n.Issue.Id, n);
-        }
+        actionableIds ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Determine grid dimensions
         int totalNodeRows = graph.Nodes.Count;
-        int totalGridRows = totalNodeRows * 2 - 1; // node rows + connector rows between them
-        int totalGridCols = graph.TotalLanes * 2;   // each lane is 2 cols wide
+        int totalGridRows = totalNodeRows * 2 - 1;
+        int totalGridCols = graph.TotalLanes * 2;
 
-        // Initialize grid with spaces
-        var grid = new char[totalGridRows, totalGridCols];
+        var displayGrid = new char[totalGridRows, totalGridCols];
         for (int r = 0; r < totalGridRows; r++)
         {
             for (int c = 0; c < totalGridCols; c++)
             {
-                grid[r, c] = ' ';
+                displayGrid[r, c] = ' ';
             }
         }
 
-        // Track connections at each cell for junction resolution
-        // Each cell has flags: top, bottom, left, right
-        var connections = new bool[totalGridRows, totalGridCols, 4]; // 0=top, 1=bottom, 2=left, 3=right
+        var connections = new bool[totalGridRows, totalGridCols, 4]; // top, bottom, left, right
 
-        // Place node markers and compute edges
+        foreach (var edge in graph.Edges)
+        {
+            DrawEdge(displayGrid, connections, edge);
+        }
+
+        ResolveJunctions(displayGrid, connections, totalGridRows, totalGridCols);
+
+        // Place node markers (override any junction at node cells)
         for (int i = 0; i < graph.Nodes.Count; i++)
         {
             var node = graph.Nodes[i];
-            int gridRow = i * 2;
+            int gridRow = node.Row * 2;
             int gridCol = node.Lane * 2;
-
-            // Place marker
-            grid[gridRow, gridCol] = GetNodeMarker(node);
+            displayGrid[gridRow, gridCol] = GetNodeMarker(node, actionableIds);
         }
 
-        // Find parent node for each node and draw connectors
-        for (int i = 0; i < graph.Nodes.Count; i++)
-        {
-            var node = graph.Nodes[i];
-            var parentNode = FindParentNodeInGraph(node, nodeLookup);
-
-            if (parentNode == null)
-            {
-                continue;
-            }
-
-            int childGridRow = i * 2;
-            int childCol = node.Lane * 2;
-            int parentGridRow = parentNode.Row * 2;
-            int parentCol = parentNode.Lane * 2;
-
-            if (childCol == parentCol)
-            {
-                // Same lane: vertical connector (both modes)
-                DrawVerticalSegment(grid, connections, childCol, childGridRow, parentGridRow);
-            }
-            else if (childCol < parentCol)
-            {
-                if (node.ParentExecutionMode == ExecutionMode.Series)
-                {
-                    // Series: vertical down from child, then horizontal to parent
-                    DrawVerticalSegment(grid, connections, childCol, childGridRow, parentGridRow);
-                    DrawHorizontalSegment(grid, connections, parentGridRow, childCol, parentCol);
-                }
-                else // Parallel (or null, default to parallel-style for root children)
-                {
-                    // Parallel: horizontal right from child, then vertical down to parent
-                    DrawHorizontalSegment(grid, connections, childGridRow, childCol, parentCol);
-                    DrawVerticalSegment(grid, connections, parentCol, childGridRow, parentGridRow);
-                }
-            }
-            else // childCol > parentCol (cascading: child is to the RIGHT of parent)
-            {
-                // Cascading series flow: vertical down from parent column, then horizontal to child at child's row
-                DrawVerticalSegment(grid, connections, parentCol, childGridRow, parentGridRow);
-                DrawHorizontalSegment(grid, connections, childGridRow, parentCol, childCol);
-            }
-        }
-
-        // Resolve junction characters
-        ResolveJunctions(grid, connections, totalGridRows, totalGridCols);
-
-        // Re-place node markers (they take priority over junctions)
-        for (int i = 0; i < graph.Nodes.Count; i++)
-        {
-            var node = graph.Nodes[i];
-            int gridRow = i * 2;
-            int gridCol = node.Lane * 2;
-            grid[gridRow, gridCol] = GetNodeMarker(node);
-        }
-
-        // Output the grid with issue titles
         for (int r = 0; r < totalGridRows; r++)
         {
-            var graphPart = ExtractRow(grid, r, totalGridCols);
+            var graphPart = ExtractRow(displayGrid, r, totalGridCols);
 
             if (r % 2 == 0)
             {
-                // Node row - append issue title
                 int nodeIndex = r / 2;
                 var node = graph.Nodes[nodeIndex];
-                var id = Markup.Escape(node.Issue.Id);
-                var title = Markup.Escape(node.Issue.Title);
+                var id = Markup.Escape(node.Node.Id);
+                var title = Markup.Escape(node.Node.Title);
                 var appearanceSuffix = node.TotalAppearances > 1
                     ? $" ({node.AppearanceIndex}/{node.TotalAppearances})"
                     : "";
 
-                // Determine color: matched issues get status color, context issues are dimmed
-                bool isContextOnly = graph.MatchedIds is not null &&
-                                    graph.MatchedIds.Count > 0 &&
-                                    !graph.MatchedIds.Contains(node.Issue.Id);
+                bool isContextOnly = matchedIds is not null &&
+                                     matchedIds.Count > 0 &&
+                                     !matchedIds.Contains(node.Node.Id);
 
                 if (isContextOnly)
                 {
@@ -158,7 +96,7 @@ public static class TaskGraphRenderer
                 }
                 else
                 {
-                    var statusColor = GetStatusColor(node.Issue.Status);
+                    var statusColor = GetStatusColor(node.Node.Status);
                     var suffix = appearanceSuffix.Length > 0 ? $" [dim]{appearanceSuffix}[/]" : "";
                     console.MarkupLine($"{graphPart}  [{statusColor}]{id} {title}[/]{suffix}");
                 }
@@ -170,68 +108,59 @@ public static class TaskGraphRenderer
         }
     }
 
-    /// <summary>
-    /// Finds the parent node of the given node within the graph.
-    /// First checks for an explicit RenderingParentId (used for cascading series flow),
-    /// then falls back to finding the best actual parent from ParentIssues.
-    /// </summary>
-    private static TaskGraphNode? FindParentNodeInGraph(
-        TaskGraphNode node,
-        Dictionary<string, TaskGraphNode> nodeLookup)
+    private static void DrawEdge(char[,] grid, bool[,,] connections, Edge<Issue> edge)
     {
-        // Use explicit rendering parent if specified (for cascading series)
-        if (!string.IsNullOrEmpty(node.RenderingParentId))
+        int startGridRow = edge.Start.Row * 2;
+        int startGridCol = edge.Start.Lane * 2;
+        int endGridRow = edge.End.Row * 2;
+        int endGridCol = edge.End.Lane * 2;
+
+        switch (edge.Kind)
         {
-            if (nodeLookup.TryGetValue(node.RenderingParentId, out var explicitParent))
+            case EdgeKind.SeriesSibling:
+            case EdgeKind.SeriesCornerToParent:
             {
-                return explicitParent;
-            }
-        }
-
-        // Fall back to existing actual parent lookup
-        if (node.Issue.ActiveParentIssues.Count == 0)
-        {
-            return null;
-        }
-
-        TaskGraphNode? bestParent = null;
-
-        foreach (var parentRef in node.Issue.ActiveParentIssues)
-        {
-            if (nodeLookup.TryGetValue(parentRef.ParentIssue, out var parentNode))
-            {
-                // Prefer the parent that appears later (higher row = further down the graph)
-                if (bestParent == null || parentNode.Row > bestParent.Row)
+                // vertical down, then horizontal across
+                int pivotCol = startGridCol;
+                if (endGridRow > startGridRow)
                 {
-                    bestParent = parentNode;
+                    DrawVerticalSegment(grid, connections, pivotCol, startGridRow, endGridRow);
                 }
+                if (endGridCol != pivotCol)
+                {
+                    int loCol = Math.Min(pivotCol, endGridCol);
+                    int hiCol = Math.Max(pivotCol, endGridCol);
+                    DrawHorizontalSegment(grid, connections, endGridRow, loCol, hiCol);
+                }
+                break;
+            }
+            case EdgeKind.ParallelChildToSpine:
+            {
+                // horizontal across, then vertical down
+                int pivotCol = endGridCol;
+                if (pivotCol != startGridCol)
+                {
+                    int loCol = Math.Min(pivotCol, startGridCol);
+                    int hiCol = Math.Max(pivotCol, startGridCol);
+                    DrawHorizontalSegment(grid, connections, startGridRow, loCol, hiCol);
+                }
+                if (endGridRow > startGridRow)
+                {
+                    DrawVerticalSegment(grid, connections, pivotCol, startGridRow, endGridRow);
+                }
+                break;
             }
         }
-
-        return bestParent;
     }
 
-    /// <summary>
-    /// Draws a vertical segment between two rows at the given column.
-    /// </summary>
-    private static void DrawVerticalSegment(
-        char[,] grid,
-        bool[,,] connections,
-        int col,
-        int startRow,
-        int endRow)
+    private static void DrawVerticalSegment(char[,] grid, bool[,,] connections, int col, int startRow, int endRow)
     {
-        // Mark connection going down from start
-        connections[startRow, col, 1] = true; // bottom
-
-        // Mark connection going up to end
-        connections[endRow, col, 0] = true; // top
-
-        // Fill intermediate rows
+        connections[startRow, col, 1] = true;
+        connections[endRow, col, 0] = true;
         for (int r = startRow + 1; r < endRow; r++)
         {
-            connections[r, col, 0] = true; // top
-            connections[r, col, 1] = true; // bottom
+            connections[r, col, 0] = true;
+            connections[r, col, 1] = true;
             if (grid[r, col] == ' ')
             {
                 grid[r, col] = Vertical;
@@ -239,27 +168,14 @@ public static class TaskGraphRenderer
         }
     }
 
-    /// <summary>
-    /// Draws a horizontal segment between two columns on the given row.
-    /// </summary>
-    private static void DrawHorizontalSegment(
-        char[,] grid,
-        bool[,,] connections,
-        int row,
-        int startCol,
-        int endCol)
+    private static void DrawHorizontalSegment(char[,] grid, bool[,,] connections, int row, int startCol, int endCol)
     {
-        // Mark connection going right from start
-        connections[row, startCol, 3] = true; // right
-
-        // Mark connection going left to end
-        connections[row, endCol, 2] = true; // left
-
-        // Fill intermediate columns
+        connections[row, startCol, 3] = true;
+        connections[row, endCol, 2] = true;
         for (int c = startCol + 1; c < endCol; c++)
         {
-            connections[row, c, 2] = true; // left
-            connections[row, c, 3] = true; // right
+            connections[row, c, 2] = true;
+            connections[row, c, 3] = true;
             if (grid[row, c] == ' ')
             {
                 grid[row, c] = Horizontal;
@@ -267,14 +183,7 @@ public static class TaskGraphRenderer
         }
     }
 
-    /// <summary>
-    /// Resolves junction characters at cells where multiple connections meet.
-    /// </summary>
-    private static void ResolveJunctions(
-        char[,] grid,
-        bool[,,] connections,
-        int totalRows,
-        int totalCols)
+    private static void ResolveJunctions(char[,] grid, bool[,,] connections, int totalRows, int totalCols)
     {
         for (int r = 0; r < totalRows; r++)
         {
@@ -288,7 +197,7 @@ public static class TaskGraphRenderer
                 int count = (top ? 1 : 0) + (bottom ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
                 if (count < 2)
                 {
-                    continue; // Single-direction connections are already drawn
+                    continue;
                 }
 
                 grid[r, c] = (top, bottom, left, right) switch
@@ -310,9 +219,6 @@ public static class TaskGraphRenderer
         }
     }
 
-    /// <summary>
-    /// Extracts a row from the grid as a trimmed string.
-    /// </summary>
     private static string ExtractRow(char[,] grid, int row, int totalCols)
     {
         var chars = new char[totalCols];
@@ -320,26 +226,19 @@ public static class TaskGraphRenderer
         {
             chars[c] = grid[row, c];
         }
-
         return new string(chars).TrimEnd();
     }
 
-    /// <summary>
-    /// Gets the marker character for a task graph node based on its status and actionability.
-    /// </summary>
-    private static char GetNodeMarker(TaskGraphNode node)
+    private static char GetNodeMarker(PositionedNode<Issue> node, IReadOnlySet<string> actionableIds)
     {
-        return node.Issue.Status switch
+        return node.Node.Status switch
         {
             IssueStatus.Complete => CompleteMarker,
             IssueStatus.Deleted or IssueStatus.Archived or IssueStatus.Closed => ClosedMarker,
-            _ => node.IsActionable ? ActionableMarker : OpenMarker
+            _ => actionableIds.Contains(node.Node.Id) ? ActionableMarker : OpenMarker
         };
     }
 
-    /// <summary>
-    /// Gets the Spectre.Console color name for an issue status.
-    /// </summary>
     private static string GetStatusColor(IssueStatus status)
     {
         return status switch

@@ -17,6 +17,7 @@ namespace Fleece.Cli.Tests.Commands;
 public class ListCommandTests
 {
     private IFleeceService _fleeceService = null!;
+    private IIssueLayoutService _issueLayoutService = null!;
     private ISettingsService _settingsService = null!;
     private ListCommand _command = null!;
     private CommandContext _context = null!;
@@ -51,8 +52,10 @@ public class ListCommandTests
                 }
             });
 
+        _issueLayoutService = Substitute.For<IIssueLayoutService>();
+
         _console = new TestConsole();
-        _command = new ListCommand(_fleeceService, _settingsService, _console);
+        _command = new ListCommand(_fleeceService, _issueLayoutService, _settingsService, _console);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "list", null);
 
         _originalConsole = Console.Out;
