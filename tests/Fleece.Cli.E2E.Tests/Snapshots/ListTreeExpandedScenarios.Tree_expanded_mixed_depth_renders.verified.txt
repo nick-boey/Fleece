@@ -1,0 +1,11 @@
+﻿◌  <id-1> Mixed Root
+│
+└─◌  <id-2> Series Child
+  │
+  ├─○  <id-3> Series Grand
+  │
+  ◌─┐  <id-4> Parallel Child
+    │
+    ○  <id-5> Parallel Grand A
+    │
+    ○  <id-6> Parallel Grand B

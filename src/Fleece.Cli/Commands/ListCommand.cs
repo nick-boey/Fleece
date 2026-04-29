@@ -45,6 +45,24 @@ public sealed class ListCommand(
             return 1;
         }
 
+        if (settings.Expanded && settings.Next)
+        {
+            console.MarkupLine("[red]Error:[/] --expanded cannot be used with --next");
+            return 1;
+        }
+
+        if (settings.Expanded && !isTree)
+        {
+            console.MarkupLine("[red]Error:[/] --expanded requires --tree");
+            return 1;
+        }
+
+        if (settings.Expanded && (settings.Json || settings.JsonVerbose))
+        {
+            console.MarkupLine("[red]Error:[/] --tree --expanded cannot be used with --json or --json-verbose");
+            return 1;
+        }
+
         if (settings.ParentsOnly && settings.ChildrenOnly)
         {
             console.MarkupLine("[red]Error:[/] --parents and --children cannot be used together");
@@ -86,6 +104,11 @@ public sealed class ListCommand(
                 return 1;
             }
             type = parsedType;
+        }
+
+        if (settings.Tree && settings.Expanded)
+        {
+            return await ExecuteExpandedTreeMode(settings, status, type);
         }
 
         if (settings.Next)
@@ -341,6 +364,162 @@ public sealed class ListCommand(
             TableFormatter.RenderIssues(console, issues, syncStatuses);
         }
 
+        return 0;
+    }
+
+    private async Task<int> ExecuteExpandedTreeMode(
+        ListSettings settings,
+        IssueStatus? status,
+        IssueType? type)
+    {
+        if (settings.Me && !string.IsNullOrWhiteSpace(settings.AssignedTo))
+        {
+            console.MarkupLine("[red]Error:[/] --me and --assigned cannot be used together");
+            return 1;
+        }
+
+        string? assignedTo = settings.AssignedTo;
+        if (settings.Me)
+        {
+            var effectiveSettings = await settingsService.GetEffectiveSettingsAsync();
+            if (string.IsNullOrWhiteSpace(effectiveSettings.Identity))
+            {
+                console.MarkupLine("[red]Error:[/] No identity configured. Run 'fleece config --set identity=<name>' or set git user.name");
+                return 1;
+            }
+            assignedTo = effectiveSettings.Identity;
+        }
+
+        GraphSortConfig? sortConfig = null;
+        if (!string.IsNullOrWhiteSpace(settings.Sort))
+        {
+            try
+            {
+                sortConfig = GraphSortConfig.Parse(settings.Sort);
+            }
+            catch (ArgumentException ex)
+            {
+                console.MarkupLine($"[red]Error:[/] {ex.Message}");
+                return 1;
+            }
+        }
+
+        HashSet<string>? hierarchyIds = null;
+        if (!string.IsNullOrWhiteSpace(settings.IssueId))
+        {
+            var matches = await fleeceService.ResolveByPartialIdAsync(settings.IssueId);
+
+            if (matches.Count == 0)
+            {
+                console.MarkupLine($"[red]Error:[/] Issue '{settings.IssueId}' not found");
+                return 1;
+            }
+
+            if (matches.Count > 1)
+            {
+                console.MarkupLine($"[red]Error:[/] Multiple issues match '{settings.IssueId}':");
+                foreach (var match in matches)
+                {
+                    console.MarkupLine($"  {match.Id} {Markup.Escape(match.Title)}");
+                }
+                return 1;
+            }
+
+            var targetIssue = matches[0];
+
+            var hierarchyIssues = await fleeceService.GetIssueHierarchyAsync(
+                targetIssue.Id,
+                includeParents: !settings.ChildrenOnly,
+                includeChildren: !settings.ParentsOnly);
+
+            hierarchyIds = new HashSet<string>(
+                hierarchyIssues.Select(i => i.Id),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        var inactiveVisibility = InactiveVisibility.Hide;
+        if (settings.All)
+        {
+            inactiveVisibility = InactiveVisibility.Always;
+        }
+        if (!string.IsNullOrWhiteSpace(settings.ShowInactive))
+        {
+            if (settings.ShowInactive.ToLowerInvariant() is not ("hide" or "if-active-children" or "always"))
+            {
+                console.MarkupLine($"[red]Error:[/] Invalid --show-inactive value '{settings.ShowInactive}'. Use: hide, if-active-children, always");
+                return 1;
+            }
+            inactiveVisibility = settings.ShowInactive.ToLowerInvariant() switch
+            {
+                "hide" => InactiveVisibility.Hide,
+                "if-active-children" => InactiveVisibility.IfHasActiveDescendants,
+                "always" => InactiveVisibility.Always,
+                _ => InactiveVisibility.Hide
+            };
+        }
+
+        var loadResult = await fleeceService.LoadIssuesWithDiagnosticsAsync();
+        var hasWarnings = DiagnosticFormatter.RenderDiagnostics(console, loadResult.Diagnostics);
+        if (settings.Strict && hasWarnings)
+        {
+            console.MarkupLine("[red]Error:[/] Schema warnings detected in strict mode.");
+            return 1;
+        }
+
+        // Include terminal-status issues from the upstream filter when visibility is not
+        // Hide; LayoutForTree applies the visibility rule (Always / IfHasActiveDescendants)
+        // and needs access to terminal nodes to fold them in correctly.
+        var includeTerminalUpstream = inactiveVisibility != InactiveVisibility.Hide;
+
+        IReadOnlyList<Issue> issues;
+        if (!string.IsNullOrWhiteSpace(settings.Search))
+        {
+            var query = fleeceService.ParseSearchQuery(settings.Search);
+            issues = await fleeceService.SearchWithFiltersAsync(
+                query,
+                status,
+                type,
+                settings.Priority,
+                settings.AssignedTo,
+                settings.Tags,
+                settings.LinkedPr,
+                includeTerminalUpstream);
+        }
+        else
+        {
+            issues = await fleeceService.FilterAsync(
+                status,
+                type,
+                settings.Priority,
+                settings.AssignedTo,
+                settings.Tags,
+                settings.LinkedPr,
+                includeTerminalUpstream);
+        }
+
+        if (hierarchyIds is not null)
+        {
+            issues = issues.Where(i => hierarchyIds.Contains(i.Id)).ToList();
+        }
+
+        GraphLayout<Issue> graph;
+        try
+        {
+            graph = issueLayoutService.LayoutForTree(
+                issues,
+                visibility: inactiveVisibility,
+                assignedTo: assignedTo,
+                sort: sortConfig,
+                mode: LayoutMode.NormalTree);
+        }
+        catch (InvalidGraphException ex)
+        {
+            console.MarkupLine($"[red]Error:[/] Cycle detected in issue parent graph: {string.Join(" -> ", ex.Cycle.Select(Markup.Escape))}");
+            return 1;
+        }
+
+        var actionableIds = ComputeActionableIds(loadResult.Issues);
+        TaskGraphRenderer.Render(console, graph, actionableIds, matchedIds: null);
         return 0;
     }
 

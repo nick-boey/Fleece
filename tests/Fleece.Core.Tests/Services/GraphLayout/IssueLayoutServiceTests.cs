@@ -366,4 +366,56 @@ public class IssueLayoutServiceTests
         var act = () => svc.LayoutForTree(new[] { a, b });
         act.Should().Throw<InvalidGraphException>();
     }
+
+    [Test]
+    public void LayoutForTree_DefaultMode_ProducesIssueGraphLayout()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithTitle("Parent")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var c1 = new IssueBuilder().WithId("child1").WithTitle("Child 1")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var c2 = new IssueBuilder().WithId("child2").WithTitle("Child 2")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
+
+        var result = NewService().LayoutForTree(new[] { parent, c1, c2 });
+
+        var byId = result.Nodes.ToDictionary(n => n.Node.Id);
+        var maxChildLane = Math.Max(byId["child1"].Lane, byId["child2"].Lane);
+        byId["parent"].Lane.Should().Be(maxChildLane + 1);
+        result.Nodes.Select(n => n.Node.Id).Should().ContainInOrder("child1", "child2", "parent");
+    }
+
+    [Test]
+    public void LayoutForTree_NormalTreeMode_ProducesParentFirstLayout()
+    {
+        var parent = new IssueBuilder().WithId("parent").WithTitle("Parent")
+            .WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Series).Build();
+        var c1 = new IssueBuilder().WithId("child1").WithTitle("Child 1")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "aaa").Build();
+        var c2 = new IssueBuilder().WithId("child2").WithTitle("Child 2")
+            .WithStatus(IssueStatus.Open).WithParentIssueIdAndOrder("parent", "bbb").Build();
+
+        var result = NewService().LayoutForTree(
+            new[] { parent, c1, c2 },
+            mode: LayoutMode.NormalTree);
+
+        var byId = result.Nodes.ToDictionary(n => n.Node.Id);
+        byId["parent"].Lane.Should().Be(0);
+        byId["child1"].Lane.Should().Be(byId["parent"].Lane + 1);
+        byId["child2"].Lane.Should().Be(byId["parent"].Lane + 1);
+        result.Nodes.Select(n => n.Node.Id).Should().ContainInOrder("parent", "child1", "child2");
+    }
+
+    [Test]
+    public void LayoutForTree_NormalTreeMode_CycleStillThrowsInvalidGraphException()
+    {
+        var a = new IssueBuilder().WithId("A").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("B", "aaa").Build();
+        var b = new IssueBuilder().WithId("B").WithStatus(IssueStatus.Open)
+            .WithParentIssueIdAndOrder("A", "aaa").Build();
+
+        var svc = NewService();
+        var act = () => svc.LayoutForTree(new[] { a, b }, mode: LayoutMode.NormalTree);
+        act.Should().Throw<InvalidGraphException>();
+    }
 }
