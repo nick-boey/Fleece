@@ -136,17 +136,39 @@ public static class TaskGraphRenderer
             }
             case EdgeKind.ParallelChildToSpine:
             {
-                // horizontal across, then vertical down
-                int pivotCol = endGridCol;
-                if (pivotCol != startGridCol)
+                // The same edge kind appears in two layout modes with opposite
+                // geometry: in IssueGraph the source is a child branching right to
+                // a parent spine (horizontal-then-vertical), while in NormalTree
+                // the source is a parent branching down to each child via its own
+                // corner (vertical-then-horizontal). SourceAttach disambiguates —
+                // Bottom means the edge leaves the source going down.
+                if (edge.SourceAttach == EdgeAttachSide.Bottom)
                 {
-                    int loCol = Math.Min(pivotCol, startGridCol);
-                    int hiCol = Math.Max(pivotCol, startGridCol);
-                    DrawHorizontalSegment(grid, connections, startGridRow, loCol, hiCol);
+                    int pivotCol = startGridCol;
+                    if (endGridRow > startGridRow)
+                    {
+                        DrawVerticalSegment(grid, connections, pivotCol, startGridRow, endGridRow);
+                    }
+                    if (endGridCol != pivotCol)
+                    {
+                        int loCol = Math.Min(pivotCol, endGridCol);
+                        int hiCol = Math.Max(pivotCol, endGridCol);
+                        DrawHorizontalSegment(grid, connections, endGridRow, loCol, hiCol);
+                    }
                 }
-                if (endGridRow > startGridRow)
+                else
                 {
-                    DrawVerticalSegment(grid, connections, pivotCol, startGridRow, endGridRow);
+                    int pivotCol = endGridCol;
+                    if (pivotCol != startGridCol)
+                    {
+                        int loCol = Math.Min(pivotCol, startGridCol);
+                        int hiCol = Math.Max(pivotCol, startGridCol);
+                        DrawHorizontalSegment(grid, connections, startGridRow, loCol, hiCol);
+                    }
+                    if (endGridRow > startGridRow)
+                    {
+                        DrawVerticalSegment(grid, connections, pivotCol, startGridRow, endGridRow);
+                    }
                 }
                 break;
             }
