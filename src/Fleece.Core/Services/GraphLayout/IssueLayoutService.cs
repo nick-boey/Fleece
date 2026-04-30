@@ -23,7 +23,8 @@ public sealed class IssueLayoutService : IIssueLayoutService
         IReadOnlyList<Issue> issues,
         InactiveVisibility visibility = InactiveVisibility.Hide,
         string? assignedTo = null,
-        GraphSortConfig? sort = null)
+        GraphSortConfig? sort = null,
+        LayoutMode mode = LayoutMode.IssueGraph)
     {
         if (issues.Count == 0)
         {
@@ -49,7 +50,7 @@ public sealed class IssueLayoutService : IIssueLayoutService
         }
 
         var displayList = CollectIssuesToDisplay(activeIssues, fullLookup);
-        return RunEngine(displayList, sort);
+        return RunEngine(displayList, sort, mode);
     }
 
     public GraphLayout<Issue> LayoutForNext(
@@ -88,7 +89,10 @@ public sealed class IssueLayoutService : IIssueLayoutService
         return RunEngine(displayList, sort);
     }
 
-    private GraphLayout<Issue> RunEngine(List<Issue> displayList, GraphSortConfig? sort)
+    private GraphLayout<Issue> RunEngine(
+        List<Issue> displayList,
+        GraphSortConfig? sort,
+        LayoutMode mode = LayoutMode.IssueGraph)
     {
         var displayLookup = displayList.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
         var childrenOf = Issues.BuildChildrenLookup(displayList, displayLookup);
@@ -120,7 +124,7 @@ public sealed class IssueLayoutService : IIssueLayoutService
             AllNodes = displayList,
             RootFinder = _ => rootIssues,
             ChildIterator = parent => GetIncompleteChildrenForLayout(parent, childrenOf),
-            Mode = LayoutMode.IssueGraph
+            Mode = mode
         };
 
         var result = _engine.Layout(request);

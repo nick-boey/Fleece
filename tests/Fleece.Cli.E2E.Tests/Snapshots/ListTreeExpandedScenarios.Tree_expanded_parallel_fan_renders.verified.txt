@@ -1,0 +1,7 @@
+﻿◌─┐  <id-1> Parallel Root
+  │
+  ○  <id-2> Child A
+  │
+  ○  <id-3> Child B
+  │
+  ○  <id-4> Child C

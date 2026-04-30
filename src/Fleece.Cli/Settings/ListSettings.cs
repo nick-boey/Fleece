@@ -73,6 +73,10 @@ public sealed class ListSettings : FleeceCommandSettings
     [Description("Display issues in a tree view based on parent-child relationships")]
     public bool Tree { get; init; }
 
+    [CommandOption("--expanded")]
+    [Description("Render --tree through the graph layout engine in NormalTree mode (one issue per node row, gap rows between nodes). Only valid combined with --tree; not compatible with --json.")]
+    public bool Expanded { get; init; }
+
     [CommandOption("--tree-root <ID>")]
     [Description("(Deprecated: Use '<id> --children' instead) Scope tree view to descendants of this issue ID (implies --tree)")]
     public string? TreeRoot { get; init; }

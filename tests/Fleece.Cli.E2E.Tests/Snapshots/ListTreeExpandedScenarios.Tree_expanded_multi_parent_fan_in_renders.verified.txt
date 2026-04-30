@@ -1,0 +1,7 @@
+﻿◌  <id-1> Parent A
+│
+└─○  <id-3> Shared Child  (1/2)
+
+◌  <id-2> Parent B
+│
+└─○  <id-3> Shared Child  (2/2)
