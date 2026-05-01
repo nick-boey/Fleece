@@ -16,7 +16,8 @@ Migrating to an event-sourced model — a single projected `issues.jsonl` snapsh
 - Rewrite all read paths (`list`, `show`, `next`, `tree`, etc.) to load the snapshot, replay all change files in topo order, and answer queries against the in-memory result. The snapshot is no longer the source of truth — the snapshot + events are.
 - Rewrite all write paths (`create`, `edit`, `delete`, `move`, `dependency`, etc.) to append events to the active change file rather than rewriting issue files.
 - Extend `fleece install` to install a pre-commit git hook that stages the active change file, and to write a daily GitHub Action template that runs `fleece project`.
-- Add a one-time migration command that converts legacy `issues_{hash}.jsonl` + `tombstones_{hash}.jsonl` into the new `issues.jsonl` + `tombstones.jsonl`. Migration is lossy: per-property timestamps and modifier history are dropped (they remain in git history if anyone needs them).
+- Extend the existing `fleece migrate` command to convert legacy `issues_{hash}.jsonl` + `tombstones_{hash}.jsonl` into the new `issues.jsonl` + `tombstones.jsonl` as the final stage of a pipeline that *first* runs the pre-3.0.0 intra-shape fixups (timestamp backfill, `LinkedPR` → `Tags` fold-in, parent-ref `LastUpdated` backfill, unknown-property strip) on the legacy data before cross-file merging and projection to the lean shape. `fleece migrate` remains the single user-facing command for "bring my data up to the current schema." Migration is lossy: per-property timestamps and modifier history are dropped during projection to the lean shape (they remain in git history if anyone needs them).
+- **BREAKING (interface)**: Remove `MigrateAsync` and `IsMigrationNeededAsync` from `IFleeceService`. After this change `IFleeceService` no longer participates in migration; the migration concern lives entirely on the migration service consumed by `MigrateCommand`.
 - **BREAKING**: Move today's `Issue` model (with all `*LastUpdate`/`*ModifiedBy` fields) into a `Fleece.Core.Models.Legacy` namespace, used only by the migration command. The new `Fleece.Core.Models.Issue` is the lean form.
 - Deprecate `fleece merge` (the property-level timestamp-based merger). It emits a notice pointing at `fleece project`. `IssueMerger` is removed once migration is rolled out.
 
@@ -42,8 +43,9 @@ Migrating to an event-sourced model — a single projected `issues.jsonl` snapsh
 - `src/Fleece.Core/Services/FleeceService.cs` and `FleeceInMemoryService.cs` — updated to drive event emission on writes and replay on reads.
 - `src/Fleece.Cli/Commands/InstallCommand.cs` — extended with git hook + GH Action template installation.
 - `src/Fleece.Cli/Commands/MergeCommand.cs` — becomes a deprecation shim pointing at `fleece project`.
-- `src/Fleece.Cli/Commands/MigrateCommand.cs` — extended (or paired with a new sibling command) for the event-sourcing migration.
+- `src/Fleece.Cli/Commands/MigrateCommand.cs` — extended to drive the unified migration pipeline (pre-3.0.0 fixups → cross-file merge → projection → event-sourced write). No new sibling command.
 - New `src/Fleece.Cli/Commands/ProjectCommand.cs` for `fleece project`.
+- `src/Fleece.Core/Services/Interfaces/IFleeceService.cs` — `MigrateAsync` and `IsMigrationNeededAsync` removed. `FleeceService` and `FleeceInMemoryService` lose their no-op stubs.
 
 **On-disk format (BREAKING):**
 - All existing `.fleece/issues_{hash}.jsonl` and `.fleece/tombstones_{hash}.jsonl` files are deleted by the migration; new `.fleece/issues.jsonl`, `.fleece/tombstones.jsonl`, and `.fleece/changes/` directory take their place.

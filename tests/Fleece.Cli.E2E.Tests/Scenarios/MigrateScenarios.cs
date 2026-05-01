@@ -3,8 +3,8 @@ using System.Text;
 namespace Fleece.Cli.E2E.Tests.Scenarios;
 
 [TestFixture]
-[Category("migrate-events")]
-public class MigrateEventsScenarios : CliScenarioTestBase
+[Category("migrate")]
+public class MigrateScenarios : CliScenarioTestBase
 {
     private void WriteLegacyIssuesFile(string hash, params string[] jsonLines)
     {
@@ -20,12 +20,12 @@ public class MigrateEventsScenarios : CliScenarioTestBase
         """;
 
     [Test]
-    public async Task Migrate_events_converts_legacy_files_into_new_layout()
+    public async Task Migrate_converts_legacy_files_into_new_layout()
     {
         WriteLegacyIssuesFile("aaa", LegacyIssueJson("i1", "First"), LegacyIssueJson("i2", "Second"));
         WriteLegacyIssuesFile("bbb", LegacyIssueJson("i3", "Third"));
 
-        var exit = await RunAsync("migrate-events");
+        var exit = await RunAsync("migrate");
         exit.Should().Be(0);
 
         var fleeceDir = Path.Combine(BasePath, ".fleece");
@@ -35,21 +35,21 @@ public class MigrateEventsScenarios : CliScenarioTestBase
     }
 
     [Test]
-    public async Task Migrate_events_is_idempotent_on_already_migrated_repo()
+    public async Task Migrate_is_idempotent_on_already_migrated_repo()
     {
         var fleeceDir = Path.Combine(BasePath, ".fleece");
         Fs.Directory.CreateDirectory(fleeceDir);
         await Fs.File.WriteAllTextAsync(Path.Combine(fleeceDir, "issues.jsonl"), "");
 
-        (await RunAsync("migrate-events")).Should().Be(0);
+        (await RunAsync("migrate")).Should().Be(0);
     }
 
     [Test]
-    public async Task Migrate_events_adds_gitignore_entries()
+    public async Task Migrate_adds_gitignore_entries()
     {
         WriteLegacyIssuesFile("aaa", LegacyIssueJson("i1", "Hello"));
 
-        await RunAsync("migrate-events");
+        await RunAsync("migrate");
 
         var gitignore = await Fs.File.ReadAllTextAsync(Path.Combine(BasePath, ".gitignore"));
         gitignore.Should().Contain(".fleece/.active-change");
@@ -57,11 +57,11 @@ public class MigrateEventsScenarios : CliScenarioTestBase
     }
 
     [Test]
-    public async Task Migrate_events_strips_per_property_timestamps_from_snapshot()
+    public async Task Migrate_strips_per_property_timestamps_from_snapshot()
     {
         WriteLegacyIssuesFile("aaa", LegacyIssueJson("i1", "Hello"));
 
-        await RunAsync("migrate-events");
+        await RunAsync("migrate");
 
         var content = await Fs.File.ReadAllTextAsync(Path.Combine(BasePath, ".fleece", "issues.jsonl"));
         content.Should().NotContain("titleLastUpdate");
@@ -70,7 +70,7 @@ public class MigrateEventsScenarios : CliScenarioTestBase
     }
 
     [Test]
-    public async Task Migrate_events_unions_tombstones()
+    public async Task Migrate_unions_tombstones()
     {
         var fleeceDir = Path.Combine(BasePath, ".fleece");
         Fs.Directory.CreateDirectory(fleeceDir);
@@ -80,12 +80,19 @@ public class MigrateEventsScenarios : CliScenarioTestBase
             """{"issueId":"t2","originalTitle":"Gone B","cleanedAt":"2026-04-02T10:00:00Z","cleanedBy":"bob"}""" + "\n");
         WriteLegacyIssuesFile("aaa", LegacyIssueJson("i1", "Stays"));
 
-        await RunAsync("migrate-events");
+        await RunAsync("migrate");
 
         var content = await Fs.File.ReadAllTextAsync(Path.Combine(fleeceDir, "tombstones.jsonl"));
         content.Should().Contain("t1");
         content.Should().Contain("t2");
         Fs.File.Exists(Path.Combine(fleeceDir, "tombstones_aaa.jsonl")).Should().BeFalse();
         Fs.File.Exists(Path.Combine(fleeceDir, "tombstones_bbb.jsonl")).Should().BeFalse();
+    }
+
+    [Test]
+    public async Task Migrate_events_subcommand_is_not_recognised()
+    {
+        var exit = await RunAsync("migrate-events");
+        exit.Should().NotBe(0);
     }
 }

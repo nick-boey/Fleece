@@ -282,7 +282,7 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         ## Setup
 
         - `fleece install` - Install Claude Code hooks, pre-commit hook, gitignore entries, and GitHub Action template
-        - `fleece migrate-events` - One-shot migration from the legacy hashed layout to event-sourced storage
+        - `fleece migrate` - Bring fleece data up to the current schema (handles legacy hashed-layout → event-sourced storage and any future schema migrations)
         """;
 
     private const string StatusesContent = """
@@ -425,9 +425,13 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         ## Migration from the legacy hashed layout
 
-        `fleece migrate-events` is a one-shot migration from the legacy
-        `.fleece/issues_{hash}.jsonl` + `.fleece/tombstones_{hash}.jsonl` layout to the
-        event-sourced layout. Run once per repo; it is idempotent on subsequent runs.
+        `fleece migrate` is the canonical "bring my data up to the current schema"
+        command. It runs a pipeline that applies pre-3.0.0 intra-shape fixups
+        (timestamp backfill, `LinkedPR` → `hsp-linked-pr` tag fold-in, parent-ref
+        backfill, unknown-property strip), cross-file-merges legacy
+        `.fleece/issues_{hash}.jsonl` + `.fleece/tombstones_{hash}.jsonl`, projects
+        to the lean `Issue` shape, and writes the event-sourced layout. Idempotent
+        on subsequent runs.
 
         ## IMPORTANT
 

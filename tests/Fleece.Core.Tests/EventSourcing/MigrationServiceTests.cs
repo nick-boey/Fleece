@@ -8,11 +8,11 @@ using Testably.Abstractions.Testing;
 namespace Fleece.Core.Tests.EventSourcing;
 
 [TestFixture]
-public sealed class EventMigrationServiceTests
+public sealed class MigrationServiceTests
 {
     private MockFileSystem _fs = null!;
     private string _basePath = null!;
-    private EventMigrationService _sut = null!;
+    private MigrationService _sut = null!;
 
     [SetUp]
     public void SetUp()
@@ -20,7 +20,7 @@ public sealed class EventMigrationServiceTests
         _fs = new MockFileSystem();
         _basePath = "/repo";
         _fs.Directory.CreateDirectory(_basePath);
-        _sut = new EventMigrationService(_basePath, _fs);
+        _sut = new MigrationService(_basePath, _fs);
     }
 
     private string FleeceDir => Path.Combine(_basePath, ".fleece");
@@ -170,5 +170,24 @@ public sealed class EventMigrationServiceTests
         result.WasMigrationNeeded.Should().BeTrue();
         result.IssuesWritten.Should().Be(0);
         result.TombstonesWritten.Should().Be(1);
+    }
+
+    [Test]
+    public async Task Migrate_folds_pre_3_0_0_LinkedPR_scalar_into_Tags_keyed_tag()
+    {
+        // Pre-3.0.0 issue: scalar LinkedPR set, no linked-pr keyed-tag in Tags,
+        // and per-property LastUpdate timestamps zeroed (a fresh-from-old-fleece shape).
+        WriteLegacyIssuesFile("aaa",
+            """{"id":"i1","title":"Old","status":"open","type":"task","linkedPR":42,"createdAt":"2026-03-01T10:00:00Z","lastUpdate":"2026-03-01T10:00:00Z"}""");
+
+        var result = await _sut.MigrateAsync();
+        result.WasMigrationNeeded.Should().BeTrue();
+        result.IssuesWritten.Should().Be(1);
+
+        var snapshot = await _fs.File.ReadAllTextAsync(Path.Combine(FleeceDir, "issues.jsonl"));
+        snapshot.Should().Contain($"{KeyedTag.LinkedPrKey}=42",
+            "the LinkedPR scalar should be folded into Tags as a keyed-tag entry");
+        snapshot.Should().NotContain("\"linkedPR\":42",
+            "the scalar LinkedPR field must be cleared after fold-in");
     }
 }

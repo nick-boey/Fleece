@@ -180,17 +180,45 @@ The migration command reads legacy `issues_{hash}.jsonl` files using `Fleece.Cor
 ## Migration Plan
 
 1. **Land foundation in parallel-write mode** (preserve back-compat): new event DTOs, storage service, replay engine, all wired up but not yet primary.
-2. **Add `fleece migrate-events`** that reads legacy files and writes the new format. The legacy files are deleted only after successful write of the new files.
+2. **Extend `fleece migrate`** with a pipeline (see "Schema Migration Pipeline" below) that runs pre-3.0.0 intra-shape fixups, then cross-file merges legacy hashed files, projects them to the lean shape, and writes the event-sourced layout. Legacy files are deleted only after successful write of the new files. `fleece migrate` remains the single user-facing command for "bring my data up to the current schema."
 3. **Switch read paths** to the new replay-based storage. Legacy files no longer read.
 4. **Switch write paths** to event emission. Legacy files no longer written.
 5. **Add `fleece project`** with main-branch protection.
 6. **Update `fleece install`** to write the pre-commit hook and the GitHub Action template.
 7. **Deprecate `fleece merge`** with a notice pointing at `fleece project`.
-8. **Run `fleece migrate-events` on this repository** as part of the same change (commit the new files, delete the legacy ones).
+8. **Run `fleece migrate` on this repository** as part of the same change (commit the new files, delete the legacy ones).
 9. **Follow-up release:** delete `Fleece.Core.Models.Legacy` and `IssueMerger` once all consumers have migrated.
 
 **Rollback:** the migration commit is a single git commit. Reverting it restores the legacy files. Any change events produced after migration on a branch would be lost on revert; this is the standard cost of reverting a data-shape migration and is acceptable for a tool of this size.
 
+## Schema Migration Pipeline
+
+`fleece migrate` is the evergreen "bring my data up to the current schema" command. The contract has always been: the user types `fleece migrate` after upgrading; whatever steps need to run, run. Splitting that contract by introducing a separately-named command (e.g. `migrate-events`) for each new schema would violate it — users would have to learn the per-version naming, and the existing `migrate` command would silently lie ("no migration needed") in the presence of unconverted data.
+
+Instead, `MigrateCommand` orchestrates a pipeline. For the event-sourcing change, the pipeline is:
+
+| Step | Input | Output | Logic |
+|------|-------|--------|-------|
+| **A. Pre-3.0.0 intra-shape fixups** | `LegacyIssue[]` (raw, possibly missing per-property timestamps, possibly carrying `LinkedPR` scalar) | `LegacyIssue[]` (timestamps backfilled from `LastUpdate`, `LinkedPR` folded into `Tags` keyed-tag, parent-ref `LastUpdated` backfilled) | `LegacyMigration.Migrate` (existing static in `FunctionalCore/Legacy/`) |
+| **B. Cross-file merge** | `LegacyIssue[]` per legacy hashed file | Single consolidated `LegacyIssue[]` | `LegacyMerging.Plan` + `Apply` (uses per-property timestamps from Step A to resolve conflicts) |
+| **C. Projection** | `LegacyIssue[]` | Lean `Issue[]` (no `*LastUpdate`/`*ModifiedBy` fields) | `EventMigrationService.ToLeanIssue` |
+| **D. Write event-sourced layout** | Lean `Issue[]`, tombstones | `.fleece/issues.jsonl`, `.fleece/tombstones.jsonl`, `.fleece/changes/`, gitignore entries; legacy files deleted | `EventMigrationService.MigrateAsync` tail |
+
+Step A is critical and was missing in the original implementation. Without it:
+- `LinkedPR` scalars survive into the lean Issue (instead of folding into `Tags`).
+- Default-zeroed `*LastUpdate` timestamps give the cross-file merger no signal to resolve conflicts; ordering becomes arbitrary.
+- Default-zeroed parent-ref `LastUpdated` has the same problem during merge.
+
+If a future lean-shape migration is needed (e.g. renaming a field on the lean `Issue`), it slots in as Step E (post-D). The user-facing command name does not change.
+
+**Idempotency.** When no legacy files exist and no lean-shape migration is pending, `fleece migrate` exits cleanly with "no migration needed."
+
+**`IFleeceService.MigrateAsync` is removed.** Pre-event-sourcing it ran intra-shape fixups against the legacy storage layer. Post-event-sourcing it is a no-op stub. The pre-3.0.0 fixup logic continues to live as a pure static (`LegacyMigration.Migrate`) and is invoked from Step A of the pipeline. `MigrateCommand` depends only on the migration service (which owns the pipeline); `IFleeceService` no longer participates in migration.
+
 ## Open Questions
 
 None — all design questions raised during exploration have been resolved. If implementation surfaces something new, it will be captured here as the change progresses.
+
+## Revision Note (2026-05-01)
+
+The original implementation introduced a separate `fleece migrate-events` command (decision recorded in tasks 12.1 and design Migration Plan §2/§8). That decision has been reversed: `fleece migrate` is the single canonical "bring my data up to the current schema" command, and the event-sourcing migration is the final stage of its pipeline rather than a sibling command. See the new "Schema Migration Pipeline" section above. Task 12.1 has been amended; tasks 12.10–12.12 cover the unification work. The on-disk migration of this repository (already performed under the old command) does not need to be re-run — the resulting `.fleece/` state is byte-equivalent for the data this repo contained (no `LinkedPR` scalars, all timestamps already populated). The code-level fold-up is the only remaining work.

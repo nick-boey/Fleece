@@ -70,14 +70,10 @@ public static class CliApp
                 .WithExample("project", "--json");
 
             config.AddCommand<MigrateCommand>("migrate")
-                .WithDescription("Migrate issues to property-level timestamps format")
+                .WithDescription("Bring fleece data up to the current schema (e.g. legacy hashed files → event-sourced layout).")
                 .WithExample("migrate")
-                .WithExample("migrate", "--dry-run");
-
-            config.AddCommand<MigrateEventsCommand>("migrate-events")
-                .WithDescription("Migrate legacy hashed .fleece/issues_*.jsonl files into the event-sourced layout (one-shot).")
-                .WithExample("migrate-events")
-                .WithExample("migrate-events", "--json");
+                .WithExample("migrate", "--dry-run")
+                .WithExample("migrate", "--json");
 
             config.AddCommand<InstallCommand>("install")
                 .WithDescription("Install Claude Code hooks");

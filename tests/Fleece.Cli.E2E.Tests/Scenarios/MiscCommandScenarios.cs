@@ -5,7 +5,6 @@ namespace Fleece.Cli.E2E.Tests.Scenarios;
 [Category("next")]
 [Category("move")]
 [Category("merge")]
-[Category("migrate")]
 [Category("prime")]
 [Category("diff")]
 [Category("commit")]
@@ -52,16 +51,6 @@ public class MiscCommandScenarios : CliScenarioTestBase
         var exit = await RunAsync("merge");
         exit.Should().Be(0);
         Console.Output.Should().Contain("No duplicates");
-    }
-
-    [Test]
-    public async Task Migrate_dry_run_reports_status()
-    {
-        await RunAsync("create", "-t", "issue", "-y", "task", "-d", "b");
-
-        var exit = await RunAsync("migrate", "--dry-run", "--json");
-        exit.Should().Be(0);
-        ParseJsonOutput().GetProperty("migrationNeeded").ValueKind.ToString().Should().BeOneOf("True", "False");
     }
 
     [Test]

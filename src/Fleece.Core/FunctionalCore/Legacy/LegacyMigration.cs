@@ -35,7 +35,7 @@ public static class LegacyMigration
 
         var needsLinkedPrMigration = issue.LinkedPR.HasValue;
 
-        var needsParentRefTimestampMigration = issue.ParentIssues.Any(p => p.LastUpdated == default);
+        var needsParentRefTimestampMigration = issue.ParentIssues?.Any(p => p.LastUpdated == default) ?? false;
 
         return needsTimestampMigration || needsLinkedPrMigration || needsParentRefTimestampMigration;
     }
@@ -60,7 +60,7 @@ public static class LegacyMigration
                 PriorityLastUpdate = issue.Priority is not null ? timestamp : null,
                 LinkedPRLastUpdate = issue.LinkedPR is not null ? timestamp : null,
                 LinkedIssuesLastUpdate = timestamp,
-                ParentIssues = issue.ParentIssues.Select(p =>
+                ParentIssues = (issue.ParentIssues ?? []).Select(p =>
                     p.LastUpdated == default
                         ? p with { LastUpdated = timestamp, Active = true }
                         : p).ToList(),
@@ -74,7 +74,7 @@ public static class LegacyMigration
         }
 
         // Migrate parent refs that lack per-parent timestamps
-        if (result.ParentIssues.Any(p => p.LastUpdated == default))
+        if (result.ParentIssues?.Any(p => p.LastUpdated == default) == true)
         {
             var fallbackTimestamp = result.LastUpdate;
             result = result with

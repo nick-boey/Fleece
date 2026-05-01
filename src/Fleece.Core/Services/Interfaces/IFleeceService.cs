@@ -209,16 +209,6 @@ public interface IFleeceService
     Task<int> MergeAsync(bool dryRun = false, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Runs migrations on issue data (timestamp addition, linkedPR-to-tags, unknown property cleanup).
-    /// </summary>
-    Task<MigrationResult> MigrateAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Checks whether any migrations are needed.
-    /// </summary>
-    Task<bool> IsMigrationNeededAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Validates that there are no cyclic dependencies in the issue graph.
     /// </summary>
     Task<DependencyValidationResult> ValidateDependenciesAsync(CancellationToken cancellationToken = default);

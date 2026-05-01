@@ -6,8 +6,8 @@ namespace Fleece.Core.Serialization.Legacy;
 
 /// <summary>
 /// Source-generated JSON context for the legacy issue and parent-ref shapes.
-/// Used only by the one-shot migrate-events path; production reads/writes go
-/// through <see cref="FleeceJsonContext"/>.
+/// Used only by the legacy-to-event-sourced migration pipeline (`fleece migrate`);
+/// production reads/writes go through <see cref="FleeceJsonContext"/>.
 /// </summary>
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

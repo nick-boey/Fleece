@@ -638,22 +638,6 @@ public sealed partial class FleeceService : IFleeceService
         return Task.FromResult(0);
     }
 
-    public Task<MigrationResult> MigrateAsync(CancellationToken cancellationToken = default)
-    {
-        // Event-sourced storage has no per-property timestamp migration — Migration is legacy-only.
-        return Task.FromResult(new MigrationResult
-        {
-            TotalIssues = 0,
-            MigratedIssues = 0,
-            AlreadyMigratedIssues = 0
-        });
-    }
-
-    public Task<bool> IsMigrationNeededAsync(CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(false);
-    }
-
     public async Task<DependencyValidationResult> ValidateDependenciesAsync(CancellationToken cancellationToken = default)
     {
         var issues = await LoadAndNormalizeAsync(cancellationToken);

@@ -102,9 +102,16 @@ Compacts events into the snapshot. Refuses to run anywhere except the configured
 
 Prints a deprecation notice on stderr pointing at `fleece project`. Existing behavior is preserved for one release cycle and will be removed.
 
-#### `fleece migrate-events`
+#### `fleece migrate`
 
-One-shot migration from the legacy hashed `.fleece/issues_{hash}.jsonl` + `.fleece/tombstones_{hash}.jsonl` layout into the new event-sourced layout. Idempotent: a second run on an already-migrated repo exits cleanly. The legacy `*LastUpdate`/`*ModifiedBy` metadata is dropped on the floor (it survives in git history if anyone needs it).
+The canonical "bring my data up to the current schema" command. Runs a pipeline of schema migrations end-to-end:
+
+1. **Pre-3.0.0 intra-shape fixups** on each parsed legacy issue (`LegacyMigration.Migrate`): timestamp backfill, `LinkedPR` scalar → `hsp-linked-pr=<n>` keyed-tag fold-in, parent-ref `LastUpdated` backfill, unknown-property strip.
+2. **Cross-file merge** of legacy hashed files via `LegacyMerging` (uses the per-property timestamps populated in step 1 to resolve conflicts).
+3. **Projection** to the lean `Issue` shape — drops `*LastUpdate`/`*ModifiedBy` metadata (it survives in git history if anyone needs it).
+4. **Write event-sourced layout** — `.fleece/issues.jsonl`, `.fleece/tombstones.jsonl`, `.fleece/changes/`, gitignore entries; legacy `issues_{hash}.jsonl` and `tombstones_{hash}.jsonl` deleted.
+
+Idempotent: a second run on an already-migrated repo exits cleanly with "no migration needed." Future schema migrations on the lean `Issue` extend this pipeline rather than introducing new commands.
 
 ### Clean Command and Tombstones
 

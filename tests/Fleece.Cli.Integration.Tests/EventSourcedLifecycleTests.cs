@@ -200,7 +200,7 @@ public class EventSourcedLifecycleTests : GitTempRepoFixture
     [Test]
     public async Task Migrate_then_create_then_project_round_trip_stays_consistent()
     {
-        // Plant legacy hashed files manually, run migrate-events, then exercise the new path.
+        // Plant legacy hashed files manually, run migrate, then exercise the new path.
         var fleeceDir = Path.Combine(TempDir, ".fleece");
         Directory.CreateDirectory(fleeceDir);
         await File.WriteAllTextAsync(
@@ -208,7 +208,7 @@ public class EventSourcedLifecycleTests : GitTempRepoFixture
             """{"id":"old1","title":"Legacy","titleLastUpdate":"2026-04-01T10:00:00Z","status":"open","statusLastUpdate":"2026-04-01T10:00:00Z","type":"task","typeLastUpdate":"2026-04-01T10:00:00Z","createdAt":"2026-03-01T10:00:00Z","lastUpdate":"2026-04-01T10:00:00Z"}""" + "\n",
             Encoding.UTF8);
 
-        (await RunCliAsync("migrate-events")).Should().Be(0);
+        (await RunCliAsync("migrate")).Should().Be(0);
 
         var afterMigrate = await ReadIssuesAsync();
         afterMigrate.Single().Title.Should().Be("Legacy");
