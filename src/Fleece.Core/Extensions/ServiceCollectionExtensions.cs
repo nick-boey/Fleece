@@ -1,3 +1,5 @@
+using Fleece.Core.EventSourcing.Services;
+using Fleece.Core.EventSourcing.Services.Interfaces;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services;
 using Fleece.Core.Services.GraphLayout;
@@ -30,11 +32,32 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IJsonlSerializer, JsonlSerializer>();
         services.AddSingleton<ISchemaValidator, SchemaValidator>();
         services.AddSingleton<IIdGenerator, GuidIdGenerator>();
+
+        // Event-sourced storage stack (snapshot + change files + replay).
+        services.AddSingleton<ISnapshotStore>(sp =>
+            new SnapshotStore(basePath, sp.GetRequiredService<IFileSystem>()));
+        services.AddSingleton<IEventStore>(sp =>
+            new EventStore(basePath, sp.GetRequiredService<IFileSystem>()));
+        services.AddSingleton<IEventGitContext>(_ => NullEventGitContext.Instance);
+        services.AddSingleton<IReplayEngine, ReplayEngine>();
+        services.AddSingleton<IReplayCache>(sp =>
+            new ReplayCache(basePath, sp.GetRequiredService<IFileSystem>()));
+        services.AddSingleton<IEventSourcedStorageService>(sp =>
+            new EventSourcedStorageService(
+                sp.GetRequiredService<ISnapshotStore>(),
+                sp.GetRequiredService<IEventStore>(),
+                sp.GetRequiredService<IReplayEngine>(),
+                sp.GetRequiredService<IReplayCache>(),
+                sp.GetRequiredService<IEventGitContext>()));
+
+        // Legacy IStorageService surface, satisfied by the event-sourced adapter.
+        // Reads come from snapshot+replay; writes are diffed and emitted as events.
         services.AddSingleton<IStorageService>(sp =>
-            new JsonlStorageService(
+            new EventSourcedStorageAdapter(
+                sp.GetRequiredService<IEventSourcedStorageService>(),
+                sp.GetRequiredService<ISnapshotStore>(),
+                sp.GetRequiredService<IGitConfigService>(),
                 basePath,
-                sp.GetRequiredService<IJsonlSerializer>(),
-                sp.GetRequiredService<ISchemaValidator>(),
                 sp.GetRequiredService<IFileSystem>()));
 
         // DiffService (standalone utility for file comparison)

@@ -4,7 +4,7 @@
   "title": "Fleece Issue",
   "description": "A single issue record in a Fleece issues JSONL file",
   "type": "object",
-  "required": ["id", "title", "status", "type", "lastUpdate"],
+  "required": ["id", "title", "status", "type", "createdAt", "lastUpdate"],
   "additionalProperties": false,
   "properties": {
     "id": {
@@ -17,80 +17,26 @@
       "description": "Issue title",
       "minLength": 1
     },
-    "titleLastUpdate": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Timestamp when title was last modified (ISO 8601)"
-    },
-    "titleModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified the title"
-    },
     "description": {
       "type": ["string", "null"],
       "description": "Detailed description of the issue"
     },
-    "descriptionLastUpdate": {
-      "type": ["string", "null"],
-      "format": "date-time",
-      "description": "Timestamp when description was last modified"
-    },
-    "descriptionModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified the description"
-    },
     "status": {
       "$ref": "#/$defs/issueStatus"
     },
-    "statusLastUpdate": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Timestamp when status was last modified"
-    },
-    "statusModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified the status"
-    },
     "type": {
       "$ref": "#/$defs/issueType"
-    },
-    "typeLastUpdate": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Timestamp when type was last modified"
-    },
-    "typeModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified the type"
     },
     "linkedPR": {
       "type": ["integer", "null"],
       "description": "Associated pull request number",
       "minimum": 1
     },
-    "linkedPRLastUpdate": {
-      "type": ["string", "null"],
-      "format": "date-time",
-      "description": "Timestamp when linkedPR was last modified"
-    },
-    "linkedPRModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified linkedPR"
-    },
     "linkedIssues": {
       "type": "array",
       "items": { "type": "string" },
       "default": [],
       "description": "IDs of related issues"
-    },
-    "linkedIssuesLastUpdate": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Timestamp when linkedIssues was last modified"
-    },
-    "linkedIssuesModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified linkedIssues"
     },
     "parentIssues": {
       "type": "array",
@@ -102,27 +48,9 @@
       "type": ["integer", "null"],
       "description": "Priority level (lower number = higher priority)"
     },
-    "priorityLastUpdate": {
-      "type": ["string", "null"],
-      "format": "date-time",
-      "description": "Timestamp when priority was last modified"
-    },
-    "priorityModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified priority"
-    },
     "assignedTo": {
       "type": ["string", "null"],
       "description": "Username of the assigned user"
-    },
-    "assignedToLastUpdate": {
-      "type": ["string", "null"],
-      "format": "date-time",
-      "description": "Timestamp when assignedTo was last modified"
-    },
-    "assignedToModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified assignedTo"
     },
     "tags": {
       "type": "array",
@@ -130,58 +58,26 @@
       "default": [],
       "description": "Arbitrary tags for categorization"
     },
-    "tagsLastUpdate": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Timestamp when tags was last modified"
-    },
-    "tagsModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified tags"
-    },
     "workingBranchId": {
       "type": ["string", "null"],
       "description": "ID of the working branch for this issue"
     },
-    "workingBranchIdLastUpdate": {
-      "type": ["string", "null"],
-      "format": "date-time",
-      "description": "Timestamp when workingBranchId was last modified"
-    },
-    "workingBranchIdModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified workingBranchId"
-    },
     "executionMode": {
       "$ref": "#/$defs/executionMode"
-    },
-    "executionModeLastUpdate": {
-      "type": ["string", "null"],
-      "format": "date-time",
-      "description": "Timestamp when executionMode was last modified"
-    },
-    "executionModeModifiedBy": {
-      "type": ["string", "null"],
-      "description": "Username who last modified executionMode"
     },
     "createdBy": {
       "type": ["string", "null"],
       "description": "Username who created the issue"
     },
-    "createdByLastUpdate": {
-      "type": ["string", "null"],
+    "createdAt": {
+      "type": "string",
       "format": "date-time",
-      "description": "Timestamp when createdBy was last modified"
+      "description": "Issue creation timestamp"
     },
     "lastUpdate": {
       "type": "string",
       "format": "date-time",
       "description": "Overall last modification timestamp"
-    },
-    "createdAt": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Issue creation timestamp"
     }
   },
   "$defs": {
@@ -197,7 +93,7 @@
     },
     "parentIssueRef": {
       "type": "object",
-      "required": ["parentIssue", "sortOrder"],
+      "required": ["parentIssue", "lexOrder"],
       "additionalProperties": false,
       "description": "Reference to a parent issue with sort order",
       "properties": {
@@ -206,19 +102,10 @@
           "description": "ID of the parent issue",
           "minLength": 1
         },
-        "sortOrder": {
+        "lexOrder": {
           "type": "string",
           "description": "Lexicographic sort order for ordering children under this parent",
           "minLength": 1
-        },
-        "lastUpdated": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Timestamp when this parent reference was last updated"
-        },
-        "updatedBy": {
-          "type": ["string", "null"],
-          "description": "Username who last updated this parent reference"
         },
         "active": {
           "type": "boolean",

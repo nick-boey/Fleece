@@ -250,12 +250,7 @@ public class FleeceInMemoryServiceIntegrationTests
             Status = IssueStatus.Open,
             Type = IssueType.Feature,
             LastUpdate = DateTimeOffset.UtcNow,
-            CreatedAt = DateTimeOffset.UtcNow,
-            TitleLastUpdate = DateTimeOffset.UtcNow,
-            StatusLastUpdate = DateTimeOffset.UtcNow,
-            TypeLastUpdate = DateTimeOffset.UtcNow,
-            LinkedIssuesLastUpdate = DateTimeOffset.UtcNow,
-            TagsLastUpdate = DateTimeOffset.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var existingIssues = (await _storageService.LoadIssuesAsync()).ToList();

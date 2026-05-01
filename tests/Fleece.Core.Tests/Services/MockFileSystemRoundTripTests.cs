@@ -44,10 +44,14 @@ public class MockFileSystemRoundTripTests
         var fleeceDir = mockFs.Path.Combine(basePath, ".fleece");
         mockFs.Directory.Exists(fleeceDir).Should().BeTrue();
 
-        var jsonlFiles = mockFs.Directory.GetFiles(fleeceDir, "issues*.jsonl");
-        jsonlFiles.Should().HaveCount(1, "exactly one issues_<hash>.jsonl file should exist");
+        // Event-sourced storage writes change events to .fleece/changes/, not a hashed snapshot file.
+        var changesDir = mockFs.Path.Combine(fleeceDir, "changes");
+        mockFs.Directory.Exists(changesDir).Should().BeTrue();
 
-        var content = await mockFs.File.ReadAllTextAsync(jsonlFiles[0]);
+        var changeFiles = mockFs.Directory.GetFiles(changesDir, "change_*.jsonl");
+        changeFiles.Should().HaveCount(1, "exactly one active change file should exist after a single write");
+
+        var content = await mockFs.File.ReadAllTextAsync(changeFiles[0]);
         content.Should().Contain(created.Id);
         content.Should().Contain("Mock round-trip");
 

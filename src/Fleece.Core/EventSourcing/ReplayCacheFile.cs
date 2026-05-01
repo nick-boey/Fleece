@@ -1,3 +1,5 @@
+using Fleece.Core.Models;
+
 namespace Fleece.Core.EventSourcing;
 
 /// <summary>

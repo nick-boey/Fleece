@@ -1,13 +1,12 @@
-using System.Text.Json.Serialization;
 using Fleece.Core.Utilities;
 
-namespace Fleece.Core.Models;
+namespace Fleece.Core.Models.Legacy;
 
 /// <summary>
-/// Projected parent-issue reference. <c>parentIssue</c> is the natural key —
-/// <c>remove</c> events match by ID only, ignoring <c>sortOrder</c>/<c>active</c>.
+/// Legacy parent-issue reference carrying per-ref <c>LastUpdated</c>/<c>UpdatedBy</c> metadata.
+/// Used only by the legacy <c>IssueMerger</c> / <c>Merging</c> / <c>Migration</c> code paths.
 /// </summary>
-public sealed record ParentIssueRef
+public sealed record LegacyParentIssueRef
 {
     /// <summary>
     /// The ID of the parent issue.
@@ -16,10 +15,18 @@ public sealed record ParentIssueRef
 
     /// <summary>
     /// The lexicographic sort order for this issue within the parent's children.
-    /// Serialized as <c>lexOrder</c> in JSON (snapshot and event payloads).
     /// </summary>
-    [JsonPropertyName("lexOrder")]
     public required string SortOrder { get; init; }
+
+    /// <summary>
+    /// Timestamp when this parent reference was last updated.
+    /// </summary>
+    public DateTimeOffset LastUpdated { get; init; }
+
+    /// <summary>
+    /// Username who last updated this parent reference.
+    /// </summary>
+    public string? UpdatedBy { get; init; }
 
     /// <summary>
     /// Whether this parent reference is active. Inactive references represent soft-deleted parent relationships.
@@ -30,16 +37,13 @@ public sealed record ParentIssueRef
     /// Parses a single parent issue reference from a string.
     /// Format: "issueId" or "issueId:sortOrder"
     /// </summary>
-    /// <param name="input">The input string to parse.</param>
-    /// <param name="defaultSortOrder">The default sort order to use if not specified in the input.</param>
-    /// <returns>A new ParentIssueRef instance.</returns>
-    public static ParentIssueRef ParseFromString(string input, string? defaultSortOrder)
+    public static LegacyParentIssueRef ParseFromString(string input, string? defaultSortOrder)
     {
         var parts = input.Split(':', 2);
         var parentIssue = parts[0].Trim();
         var sortOrder = parts.Length > 1 ? parts[1].Trim() : defaultSortOrder ?? "aaa";
 
-        return new ParentIssueRef
+        return new LegacyParentIssueRef
         {
             ParentIssue = parentIssue,
             SortOrder = sortOrder
@@ -50,9 +54,7 @@ public sealed record ParentIssueRef
     /// Parses a comma-separated list of parent issue references.
     /// Format: "issueId1,issueId2:sortOrder,issueId3"
     /// </summary>
-    /// <param name="input">The comma-separated input string to parse.</param>
-    /// <returns>A list of ParentIssueRef instances with generated sort orders for items without explicit ones.</returns>
-    public static IReadOnlyList<ParentIssueRef> ParseFromStrings(string? input)
+    public static IReadOnlyList<LegacyParentIssueRef> ParseFromStrings(string? input)
     {
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -65,7 +67,6 @@ public sealed record ParentIssueRef
             return [];
         }
 
-        // First pass: parse all items and collect those without explicit sort orders
         var parsed = new List<(string ParentIssue, string? SortOrder, int Index)>();
         var indicesNeedingSortOrder = new List<int>();
 
@@ -83,16 +84,15 @@ public sealed record ParentIssueRef
             }
         }
 
-        // Generate sort orders for items without them
         var generatedRanks = LexoRank.GenerateInitialRanks(indicesNeedingSortOrder.Count);
 
-        var result = new List<ParentIssueRef>(items.Length);
+        var result = new List<LegacyParentIssueRef>(items.Length);
         var rankIndex = 0;
 
         foreach (var (parentIssue, sortOrder, _) in parsed)
         {
             var effectiveSortOrder = sortOrder ?? generatedRanks[rankIndex++];
-            result.Add(new ParentIssueRef
+            result.Add(new LegacyParentIssueRef
             {
                 ParentIssue = parentIssue,
                 SortOrder = effectiveSortOrder

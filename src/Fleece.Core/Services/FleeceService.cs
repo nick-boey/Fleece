@@ -124,43 +124,17 @@ public sealed partial class FleeceService : IFleeceService
             {
                 Id = id,
                 Title = title,
-                TitleLastUpdate = now,
-                TitleModifiedBy = createdBy,
                 Description = description,
-                DescriptionLastUpdate = description is not null ? now : null,
-                DescriptionModifiedBy = description is not null ? createdBy : null,
                 Status = status,
-                StatusLastUpdate = now,
-                StatusModifiedBy = createdBy,
                 Type = type,
-                TypeLastUpdate = now,
-                TypeModifiedBy = createdBy,
                 Priority = priority,
-                PriorityLastUpdate = priority is not null ? now : null,
-                PriorityModifiedBy = priority is not null ? createdBy : null,
                 LinkedIssues = linkedIssues ?? [],
-                LinkedIssuesLastUpdate = now,
-                LinkedIssuesModifiedBy = createdBy,
-                ParentIssues = (parentIssues ?? []).Select(p => p with
-                {
-                    LastUpdated = now,
-                    UpdatedBy = createdBy,
-                    Active = true
-                }).ToList(),
+                ParentIssues = (parentIssues ?? []).Select(p => p with { Active = true }).ToList(),
                 AssignedTo = assignedTo,
-                AssignedToLastUpdate = assignedTo is not null ? now : null,
-                AssignedToModifiedBy = assignedTo is not null ? createdBy : null,
                 Tags = effectiveTags,
-                TagsLastUpdate = now,
-                TagsModifiedBy = createdBy,
                 WorkingBranchId = workingBranchId,
-                WorkingBranchIdLastUpdate = workingBranchId is not null ? now : null,
-                WorkingBranchIdModifiedBy = workingBranchId is not null ? createdBy : null,
                 ExecutionMode = executionMode ?? ExecutionMode.Series,
-                ExecutionModeLastUpdate = executionMode is not null ? now : null,
-                ExecutionModeModifiedBy = executionMode is not null ? createdBy : null,
                 CreatedBy = createdBy,
-                CreatedByLastUpdate = createdBy is not null ? now : null,
                 LastUpdate = now,
                 CreatedAt = now
             };
@@ -206,60 +180,31 @@ public sealed partial class FleeceService : IFleeceService
 
             var existing = issues[existingIndex];
             var now = DateTimeOffset.UtcNow;
-            var modifiedBy = _gitConfigService.GetUserName();
 
             // Determine effective tags - apply linkedPr if provided (deprecated parameter)
             var effectiveTags = tags ?? existing.Tags;
-            var tagsModified = tags is not null;
             if (linkedPr.HasValue)
             {
                 effectiveTags = KeyedTag.AddValue(effectiveTags, KeyedTag.LinkedPrKey, linkedPr.Value.ToString());
-                tagsModified = true;
             }
 
             var updated = new Issue
             {
                 Id = existing.Id,
                 Title = title ?? existing.Title,
-                TitleLastUpdate = title is not null ? now : existing.TitleLastUpdate,
-                TitleModifiedBy = title is not null ? modifiedBy : existing.TitleModifiedBy,
                 Description = description ?? existing.Description,
-                DescriptionLastUpdate = description is not null ? now : existing.DescriptionLastUpdate,
-                DescriptionModifiedBy = description is not null ? modifiedBy : existing.DescriptionModifiedBy,
                 Status = status ?? existing.Status,
-                StatusLastUpdate = status is not null ? now : existing.StatusLastUpdate,
-                StatusModifiedBy = status is not null ? modifiedBy : existing.StatusModifiedBy,
                 Type = type ?? existing.Type,
-                TypeLastUpdate = type is not null ? now : existing.TypeLastUpdate,
-                TypeModifiedBy = type is not null ? modifiedBy : existing.TypeModifiedBy,
                 Priority = priority ?? existing.Priority,
-                PriorityLastUpdate = priority is not null ? now : existing.PriorityLastUpdate,
-                PriorityModifiedBy = priority is not null ? modifiedBy : existing.PriorityModifiedBy,
                 LinkedIssues = linkedIssues ?? existing.LinkedIssues,
-                LinkedIssuesLastUpdate = linkedIssues is not null ? now : existing.LinkedIssuesLastUpdate,
-                LinkedIssuesModifiedBy = linkedIssues is not null ? modifiedBy : existing.LinkedIssuesModifiedBy,
                 ParentIssues = parentIssues is not null
-                    ? parentIssues.Select(p => p with
-                    {
-                        LastUpdated = now,
-                        UpdatedBy = modifiedBy,
-                        Active = true
-                    }).ToList()
+                    ? parentIssues.Select(p => p with { Active = true }).ToList()
                     : existing.ParentIssues,
                 AssignedTo = assignedTo ?? existing.AssignedTo,
-                AssignedToLastUpdate = assignedTo is not null ? now : existing.AssignedToLastUpdate,
-                AssignedToModifiedBy = assignedTo is not null ? modifiedBy : existing.AssignedToModifiedBy,
                 Tags = effectiveTags,
-                TagsLastUpdate = tagsModified ? now : existing.TagsLastUpdate,
-                TagsModifiedBy = tagsModified ? modifiedBy : existing.TagsModifiedBy,
                 WorkingBranchId = workingBranchId ?? existing.WorkingBranchId,
-                WorkingBranchIdLastUpdate = workingBranchId is not null ? now : existing.WorkingBranchIdLastUpdate,
-                WorkingBranchIdModifiedBy = workingBranchId is not null ? modifiedBy : existing.WorkingBranchIdModifiedBy,
                 ExecutionMode = executionMode ?? existing.ExecutionMode,
-                ExecutionModeLastUpdate = executionMode is not null ? now : existing.ExecutionModeLastUpdate,
-                ExecutionModeModifiedBy = executionMode is not null ? modifiedBy : existing.ExecutionModeModifiedBy,
                 CreatedBy = existing.CreatedBy,
-                CreatedByLastUpdate = existing.CreatedByLastUpdate,
                 LastUpdate = now,
                 CreatedAt = existing.CreatedAt
             };
@@ -289,12 +234,9 @@ public sealed partial class FleeceService : IFleeceService
 
             var existing = issues[existingIndex];
             var now = DateTimeOffset.UtcNow;
-            var modifiedBy = _gitConfigService.GetUserName();
             var deleted = existing with
             {
                 Status = IssueStatus.Deleted,
-                StatusLastUpdate = now,
-                StatusModifiedBy = modifiedBy,
                 LastUpdate = now
             };
 
@@ -458,23 +400,10 @@ public sealed partial class FleeceService : IFleeceService
             // Persist via full save
             var childIndex = allIssues.FindIndex(i => i.Id.Equals(resolvedChild.Id, StringComparison.OrdinalIgnoreCase));
             var now = DateTimeOffset.UtcNow;
-            var modifiedBy = _gitConfigService.GetUserName();
-
-            // Stamp only the newly added/reactivated parent ref; keep existing refs' timestamps unchanged
-            var stampedParents = updated.ParentIssues.Select(p =>
-            {
-                var existingRef = allIssues[childIndex].ParentIssues.FirstOrDefault(ep =>
-                    string.Equals(ep.ParentIssue, p.ParentIssue, StringComparison.OrdinalIgnoreCase));
-                if (existingRef is null || existingRef.SortOrder != p.SortOrder || existingRef.Active != p.Active)
-                {
-                    return p with { LastUpdated = now, UpdatedBy = modifiedBy };
-                }
-                return existingRef;
-            }).ToList();
 
             var persisted = allIssues[childIndex] with
             {
-                ParentIssues = stampedParents,
+                ParentIssues = updated.ParentIssues,
                 LastUpdate = now
             };
             allIssues[childIndex] = persisted;
@@ -502,23 +431,13 @@ public sealed partial class FleeceService : IFleeceService
 
             var updated = Dependencies.RemoveDependency(resolvedChild, resolvedParent.Id);
 
-            // Persist — stamp the soft-deleted parent ref
+            // Persist
             var childIndex = allIssues.FindIndex(i => i.Id.Equals(resolvedChild.Id, StringComparison.OrdinalIgnoreCase));
             var now = DateTimeOffset.UtcNow;
-            var modifiedBy = _gitConfigService.GetUserName();
-
-            var stampedParents = updated.ParentIssues.Select(p =>
-            {
-                if (string.Equals(p.ParentIssue, resolvedParent.Id, StringComparison.OrdinalIgnoreCase) && !p.Active)
-                {
-                    return p with { LastUpdated = now, UpdatedBy = modifiedBy };
-                }
-                return p;
-            }).ToList();
 
             var persisted = allIssues[childIndex] with
             {
-                ParentIssues = stampedParents,
+                ParentIssues = updated.ParentIssues,
                 LastUpdate = now
             };
             allIssues[childIndex] = persisted;
@@ -606,33 +525,28 @@ public sealed partial class FleeceService : IFleeceService
                 : Dependencies.MoveDown(resolvedChild, resolvedParent.Id, allIssues);
 
             var now = DateTimeOffset.UtcNow;
-            var modifiedBy = _gitConfigService.GetUserName();
 
-            // Apply normalized sibling changes to allIssues — stamp modified parent refs
+            // Apply normalized sibling changes to allIssues
             foreach (var sibling in modifiedSiblings)
             {
                 var sibIndex = allIssues.FindIndex(i => i.Id.Equals(sibling.Id, StringComparison.OrdinalIgnoreCase));
                 if (sibIndex >= 0)
                 {
-                    var stampedParents = StampModifiedParentRefs(
-                        allIssues[sibIndex].ParentIssues, sibling.ParentIssues, now, modifiedBy);
                     allIssues[sibIndex] = allIssues[sibIndex] with
                     {
-                        ParentIssues = stampedParents,
+                        ParentIssues = sibling.ParentIssues,
                         LastUpdate = now
                     };
                 }
             }
 
-            // Apply the moved issue — stamp modified parent refs
+            // Apply the moved issue
             var movedIndex = allIssues.FindIndex(i => i.Id.Equals(movedIssue.Id, StringComparison.OrdinalIgnoreCase));
             if (movedIndex >= 0)
             {
-                var stampedParents = StampModifiedParentRefs(
-                    allIssues[movedIndex].ParentIssues, movedIssue.ParentIssues, now, modifiedBy);
                 allIssues[movedIndex] = allIssues[movedIndex] with
                 {
-                    ParentIssues = stampedParents,
+                    ParentIssues = movedIssue.ParentIssues,
                     LastUpdate = now
                 };
             }
@@ -718,112 +632,26 @@ public sealed partial class FleeceService : IFleeceService
         }
     }
 
-    public async Task<int> MergeAsync(bool dryRun = false, CancellationToken cancellationToken = default)
+    public Task<int> MergeAsync(bool dryRun = false, CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken);
-        try
-        {
-            var issueFiles = await _storage.GetAllIssueFilesAsync(cancellationToken);
-            var fileGroups = new List<(string filePath, IReadOnlyList<Issue> issues)>();
-
-            foreach (var file in issueFiles)
-            {
-                var issues = await _storage.LoadIssuesFromFileAsync(file, cancellationToken);
-                fileGroups.Add((file, issues));
-            }
-
-            var currentUser = _gitConfigService.GetUserName();
-            var plan = Merging.Plan(fileGroups, currentUser);
-            var mergedIssues = Merging.Apply(plan);
-
-            if (!dryRun && issueFiles.Count > 0)
-            {
-                foreach (var file in issueFiles)
-                {
-                    await _storage.DeleteIssueFileAsync(file, cancellationToken);
-                }
-
-                await _storage.SaveIssuesWithHashAsync(mergedIssues, cancellationToken);
-
-                var tombstoneFiles = await _storage.GetAllTombstoneFilesAsync(cancellationToken);
-                if (tombstoneFiles.Count > 1)
-                {
-                    var allTombstones = await _storage.LoadTombstonesAsync(cancellationToken);
-                    await _storage.SaveTombstonesAsync(allTombstones, cancellationToken);
-                }
-            }
-
-            return plan.DuplicateCount;
-        }
-        finally
-        {
-            _lock.Release();
-        }
+        // Event-sourced storage merges via event replay — IssueMerger is now legacy-only.
+        return Task.FromResult(0);
     }
 
-    public async Task<MigrationResult> MigrateAsync(CancellationToken cancellationToken = default)
+    public Task<MigrationResult> MigrateAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken);
-        try
+        // Event-sourced storage has no per-property timestamp migration — Migration is legacy-only.
+        return Task.FromResult(new MigrationResult
         {
-            var loadResult = await _storage.LoadIssuesWithDiagnosticsAsync(cancellationToken);
-            var issues = loadResult.Issues;
-
-            if (issues.Count == 0)
-            {
-                return new MigrationResult
-                {
-                    TotalIssues = 0,
-                    MigratedIssues = 0,
-                    AlreadyMigratedIssues = 0
-                };
-            }
-
-            var migratedIssues = Migration.Migrate(issues);
-
-            var migratedCount = 0;
-            var alreadyMigratedCount = 0;
-            for (var i = 0; i < issues.Count; i++)
-            {
-                if (!ReferenceEquals(issues[i], migratedIssues[i]))
-                {
-                    migratedCount++;
-                }
-                else
-                {
-                    alreadyMigratedCount++;
-                }
-            }
-
-            var unknownProperties = loadResult.Diagnostics
-                .SelectMany(d => d.UnknownProperties)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            if (migratedCount > 0 || unknownProperties.Count > 0)
-            {
-                await _storage.SaveIssuesAsync(migratedIssues, cancellationToken);
-            }
-
-            return new MigrationResult
-            {
-                TotalIssues = issues.Count,
-                MigratedIssues = migratedCount,
-                AlreadyMigratedIssues = alreadyMigratedCount,
-                UnknownPropertiesDeleted = unknownProperties
-            };
-        }
-        finally
-        {
-            _lock.Release();
-        }
+            TotalIssues = 0,
+            MigratedIssues = 0,
+            AlreadyMigratedIssues = 0
+        });
     }
 
-    public async Task<bool> IsMigrationNeededAsync(CancellationToken cancellationToken = default)
+    public Task<bool> IsMigrationNeededAsync(CancellationToken cancellationToken = default)
     {
-        var loadResult = await _storage.LoadIssuesWithDiagnosticsAsync(cancellationToken);
-        var hasUnknownProperties = loadResult.Diagnostics.Any(d => d.UnknownProperties.Count > 0);
-        var needsTimestampMigration = Migration.IsMigrationNeeded(loadResult.Issues);
-        return needsTimestampMigration || hasUnknownProperties;
+        return Task.FromResult(false);
     }
 
     public async Task<DependencyValidationResult> ValidateDependenciesAsync(CancellationToken cancellationToken = default)
@@ -899,12 +727,7 @@ public sealed partial class FleeceService : IFleeceService
     private async Task<IReadOnlyList<Issue>> LoadAndNormalizeAsync(CancellationToken cancellationToken)
     {
         var issues = await _storage.LoadIssuesAsync(cancellationToken);
-        // Repair legacy on-disk shapes in memory (e.g., parent refs written before per-ref
-        // timestamp/active fields existed would otherwise deserialize with Active=false and
-        // disappear from hierarchy rendering). Persisting the migrated form still requires
-        // an explicit `fleece migrate`.
-        var repaired = Migration.IsMigrationNeeded(issues) ? Migration.Migrate(issues) : issues;
-        return Issues.NormalizeSortOrders(repaired);
+        return Issues.NormalizeSortOrders(issues);
     }
 
     private static void ValidateBranchName(string? workingBranchId)
@@ -959,31 +782,6 @@ public sealed partial class FleeceService : IFleeceService
                 CollectAncestorIds(parentId, graph, resultIds);
             }
         }
-    }
-
-    /// <summary>
-    /// Stamps per-parent timestamps on refs that changed between old and new lists.
-    /// </summary>
-    private static IReadOnlyList<ParentIssueRef> StampModifiedParentRefs(
-        IReadOnlyList<ParentIssueRef> oldParents,
-        IReadOnlyList<ParentIssueRef> newParents,
-        DateTimeOffset now,
-        string? modifiedBy)
-    {
-        var oldDict = oldParents
-            .GroupBy(p => p.ParentIssue, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-
-        return newParents.Select(p =>
-        {
-            if (oldDict.TryGetValue(p.ParentIssue, out var oldRef) &&
-                oldRef.SortOrder == p.SortOrder &&
-                oldRef.Active == p.Active)
-            {
-                return oldRef; // Unchanged — keep original timestamps
-            }
-            return p with { LastUpdated = now, UpdatedBy = modifiedBy };
-        }).ToList();
     }
 
     private static Issue ResolveIssue(IReadOnlyList<Issue> allIssues, string partialId, string role)

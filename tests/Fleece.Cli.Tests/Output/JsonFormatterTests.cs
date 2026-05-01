@@ -257,10 +257,9 @@ public class JsonFormatterTests
         root.GetProperty("priority").GetInt32().Should().Be(2);
         root.GetProperty("description").GetString().Should().Be("A test description");
 
-        // Verbose should include the raw metadata timestamps
-        root.TryGetProperty("titleLastUpdate", out _).Should().BeTrue();
-        root.TryGetProperty("statusLastUpdate", out _).Should().BeTrue();
-        root.TryGetProperty("typeLastUpdate", out _).Should().BeTrue();
+        // Verbose mode renders the lean Issue — no per-property timestamps anymore.
+        root.TryGetProperty("createdAt", out _).Should().BeTrue();
+        root.TryGetProperty("lastUpdate", out _).Should().BeTrue();
     }
 
     [Test]

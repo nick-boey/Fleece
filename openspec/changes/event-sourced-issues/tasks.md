@@ -1,6 +1,6 @@
 ## 1. Foundation: Event DTOs and Models
 
-- [ ] 1.1 Move existing `Fleece.Core.Models.Issue` and related DTOs (`IssueDto`, `IssueShowDto`, `IssueSummaryDto`, `IssueSyncDto`, `Tombstone`) into a new `Fleece.Core.Models.Legacy` namespace, renaming with a `Legacy` prefix where ambiguity would arise (e.g., `LegacyIssue`) — **deferred to PR 2**: moving the canonical `Issue` namespace breaks every consumer in the codebase, contradicting the "PR 1 is additive" goal. The new lean type lives at `Fleece.Core.EventSourcing.Issue` for now; PR 2 promotes it to `Fleece.Core.Models.Issue` and pushes the legacy shape down at the same time.
+- [x] 1.1 Move existing `Fleece.Core.Models.Issue` and related DTOs (`IssueDto`, `IssueShowDto`, `IssueSummaryDto`, `IssueSyncDto`, `Tombstone`) into a new `Fleece.Core.Models.Legacy` namespace, renaming with a `Legacy` prefix where ambiguity would arise (e.g., `LegacyIssue`) — **landed in PR 2**: `LegacyIssue` and `LegacyParentIssueRef` live under `Models/Legacy/`; `IssueMerger` → `Services/Legacy/LegacyIssueMerger`; `Merging` and `Migration` → `FunctionalCore/Legacy/`. `Fleece.Core.Models.Issue` and `Fleece.Core.Models.ParentIssueRef` are now the lean event-sourced shapes. Tombstone, IssueDto, IssueShowDto, IssueSummaryDto, IssueSyncDto stayed in `Models/` — they reference only fields that exist on the lean Issue, so no rename was needed.
 - [x] 1.2 Create the new lean `Fleece.Core.Models.Issue` record with: `Id`, `Title`, `Description`, `Status`, `Type`, `LinkedPR`, `LinkedIssues`, `ParentIssues`, `Priority`, `AssignedTo`, `Tags`, `WorkingBranchId`, `ExecutionMode`, `CreatedBy`, `CreatedAt`, `LastUpdate` (no `*LastUpdate`/`*ModifiedBy` per-property fields) — landed at `Fleece.Core.EventSourcing.Issue`; will be promoted to `Fleece.Core.Models.Issue` in PR 2.
 - [x] 1.3 Create event DTOs under `Fleece.Core.Models.Events/`: `IssueEvent` (base/discriminated union), `MetaEvent`, `CreateEvent`, `SetEvent`, `AddEvent`, `RemoveEvent`, `HardDeleteEvent` — landed at `Fleece.Core.EventSourcing.Events`.
 - [x] 1.4 Configure `System.Text.Json` polymorphic deserialization for `IssueEvent` keyed by the `kind` discriminator, with explicit handling for unknown kinds (throw with file/line context)
@@ -42,24 +42,24 @@
 
 - [x] 6.1 Create `IEventSourcedStorageService` (or repurpose the existing `IStorageService` interface) exposing the read/write surface that today's `IFleeceService` consumes (load issues, save issue, etc.) — new sibling interface; `IFleeceService` adapter comes in PR 2.
 - [x] 6.2 Implement `EventSourcedStorageService`: reads via snapshot+replay; writes by appending events
-- [ ] 6.3 Replace `JsonlStorageService` and `SingleFileStorageService` registrations in DI with the new service. Delete the old implementations once no callers remain. — **PR 2** (this is the wire-up step that flips the system).
+- [x] 6.3 Replace `JsonlStorageService` and `SingleFileStorageService` registrations in DI with the new service. Delete the old implementations once no callers remain. — `IStorageService` is now satisfied by `EventSourcedStorageAdapter`, which routes reads through `IEventSourcedStorageService` and translates writes into events. Legacy `JsonlStorageService` / `SingleFileStorageService` are retained as orphaned source (still referenced by `FleeceService.ForFile`, integration tests, and the upcoming PR 4 migration); deletion is deferred until those callers go away.
 - [x] 6.4 Add integration tests: create-then-read on a fresh repo, edit-then-read across a simulated commit boundary, round-trip every event kind — covered by `EventSourcedStorageServiceTests` (in-process, in-memory file system).
 
 ## 7. Wire Up Write Paths
 
-- [ ] 7.1 `CreateCommand`: emit a single `create` event with full property bag from CLI flags
-- [ ] 7.2 `EditCommand`: diff the requested updates against the current in-memory state and emit one `set` per scalar change, plus `add`/`remove` per array delta
-- [ ] 7.3 `DeleteCommand` (soft-delete): emit `set status="Deleted"`
-- [ ] 7.4 `CleanCommand` (hard-delete): emit `hard-delete` per issue removed; tombstones written via the projection path, not directly here on non-main branches (clean still operates locally for now; document the rebase expectation)
-- [ ] 7.5 `MoveCommand` and `DependencyCommand`: emit `add`/`remove` events for `parentIssues`
-- [ ] 7.6 `StatusCommands` (the various status-change shortcuts): emit `set status=<value>` events
-- [ ] 7.7 Verify that no write command bypasses the event store and writes directly to `.fleece/issues.jsonl`
+- [x] 7.1 `CreateCommand`: emit a single `create` event with full property bag from CLI flags — `FleeceService.CreateAsync` calls `IStorageService.AppendIssueAsync(issue)`; the adapter serializes the lean issue into a `create` event's `data` payload.
+- [x] 7.2 `EditCommand`: diff the requested updates against the current in-memory state and emit one `set` per scalar change, plus `add`/`remove` per array delta — handled in `EventSourcedStorageAdapter.SaveIssuesAsync` (`DiffEvents` for scalars, `DiffStringArray` for `linkedIssues`/`tags`, `DiffParentIssues` for `parentIssues`).
+- [x] 7.3 `DeleteCommand` (soft-delete): emit `set status="Deleted"` — `FleeceService.DeleteAsync` updates `Status` and routes through the adapter, which emits a `set status=Deleted` event.
+- [x] 7.4 `CleanCommand` (hard-delete): emit `hard-delete` per issue removed; tombstones written via the projection path — the adapter emits `HardDeleteEvent` for any issue dropped by `SaveIssuesAsync`; tombstones still go to the snapshot sidecar via `SnapshotStore.WriteTombstonesAsync` until `fleece project` (PR 3) takes over.
+- [x] 7.5 `MoveCommand` and `DependencyCommand`: emit `add`/`remove` events for `parentIssues` — `DiffParentIssues` emits an `add` (which upserts by `parentIssue` key in `IssueBuilder`) for each new/changed ref and a `remove` for any ref that disappears.
+- [x] 7.6 `StatusCommands` (the various status-change shortcuts): emit `set status=<value>` events — these route through `IFleeceService.UpdateAsync`, which goes through the adapter's diff path.
+- [x] 7.7 Verify that no write command bypasses the event store and writes directly to `.fleece/issues.jsonl` — the only `IStorageService` registered in DI is `EventSourcedStorageAdapter`; its hashed-file methods (`SaveIssuesWithHashAsync`, `DeleteIssueFileAsync`, `GetAllIssueFilesAsync`) are no-ops/empty. The snapshot is only ever written via the projection path (`WriteSnapshotAsync` / `WriteTombstonesAsync`).
 
 ## 8. Wire Up Read Paths
 
-- [ ] 8.1 `ListCommand`, `ShowCommand`, `NextCommand`, `SearchCommand`, `DiffCommand`, `ValidateCommand`, `tree`/`status`/`graph` views: ensure all reads go through `IEventSourcedStorageService` (which replays internally)
-- [ ] 8.2 Verify that no read command reads `.fleece/issues_*.jsonl` legacy files
-- [ ] 8.3 Update `FleeceService` and `FleeceInMemoryService` to use the new storage service
+- [x] 8.1 `ListCommand`, `ShowCommand`, `NextCommand`, `SearchCommand`, `DiffCommand`, `ValidateCommand`, `tree`/`status`/`graph` views: ensure all reads go through `IEventSourcedStorageService` (which replays internally) — every read command consumes `IFleeceService`, which calls `IStorageService.LoadIssuesAsync`, which the adapter satisfies by calling `IEventSourcedStorageService.GetIssuesAsync` (snapshot + replay).
+- [x] 8.2 Verify that no read command reads `.fleece/issues_*.jsonl` legacy files — the adapter's `GetAllIssueFilesAsync`/`LoadIssuesFromFileAsync` return empty; nothing in the live read path inspects hashed files. (Legacy file reading lives only in the orphaned `JsonlStorageService` and in legacy test fixtures.)
+- [x] 8.3 Update `FleeceService` and `FleeceInMemoryService` to use the new storage service — `FleeceService` is unchanged in shape; it now sits on top of the event-sourced adapter via `IStorageService`. `FleeceInMemoryService` wraps `FleeceService` and inherits the change for free. CLI E2E suite passes against the new layout.
 
 ## 9. `fleece project` Command
 

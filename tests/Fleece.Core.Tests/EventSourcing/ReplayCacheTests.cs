@@ -3,7 +3,7 @@ using Fleece.Core.Models;
 using FluentAssertions;
 using NUnit.Framework;
 using Testably.Abstractions.Testing;
-using Issue = Fleece.Core.EventSourcing.Issue;
+using Issue = Fleece.Core.Models.Issue;
 
 namespace Fleece.Core.Tests.EventSourcing;
 

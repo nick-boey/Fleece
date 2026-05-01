@@ -1,5 +1,6 @@
 using Fleece.Core.EventSourcing.Events;
 using Fleece.Core.EventSourcing.Services.Interfaces;
+using Fleece.Core.Models;
 
 namespace Fleece.Core.EventSourcing.Services;
 

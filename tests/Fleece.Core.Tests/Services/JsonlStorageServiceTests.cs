@@ -145,7 +145,7 @@ public class JsonlStorageServiceTests
         var fleeceDir = Path.Combine(_testDirectory, ".fleece");
         Directory.CreateDirectory(fleeceDir);
         var filePath = Path.Combine(fleeceDir, "issues_test123.jsonl");
-        var json = """{"id":"abc123","title":"Test","status":"Idea","type":"Task","lastUpdate":"2024-01-01T00:00:00Z","unknownField":"value"}""";
+        var json = """{"id":"abc123","title":"Test","status":"Open","type":"Task","createdAt":"2024-01-01T00:00:00Z","lastUpdate":"2024-01-01T00:00:00Z","unknownField":"value"}""";
         await File.WriteAllTextAsync(filePath, json);
 
         var result = await _sut.LoadIssuesWithDiagnosticsAsync();
