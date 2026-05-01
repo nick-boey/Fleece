@@ -105,6 +105,17 @@ public sealed class GitService : IGitService
     }
 
     /// <inheritdoc />
+    public string? GetCurrentBranch()
+    {
+        var (exitCode, output, _) = RunGit("symbolic-ref --short HEAD");
+        if (exitCode != 0 || string.IsNullOrWhiteSpace(output))
+        {
+            return null;
+        }
+        return output.Trim();
+    }
+
+    /// <inheritdoc />
     public GitOperationResult CommitAndPushFleeceChanges(string message)
     {
         var commitResult = CommitFleeceChanges(message);

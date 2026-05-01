@@ -26,4 +26,10 @@
     <ProjectReference Include="..\Fleece.Core\Fleece.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Fleece.Cli.Tests" />
+    <InternalsVisibleTo Include="Fleece.Cli.E2E.Tests" />
+    <InternalsVisibleTo Include="Fleece.Cli.Integration.Tests" />
+  </ItemGroup>
+
 </Project>

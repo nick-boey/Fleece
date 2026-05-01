@@ -52,6 +52,13 @@ public interface IGitService
     /// <param name="message">The commit message.</param>
     /// <returns>Result indicating success or failure with error message.</returns>
     GitOperationResult CommitAndPushFleeceChanges(string message);
+
+    /// <summary>
+    /// Returns the short name of the currently checked-out branch (e.g., "main").
+    /// Returns null if HEAD is detached, the working tree is not a git repository,
+    /// or git is unavailable.
+    /// </summary>
+    string? GetCurrentBranch();
 }
 
 /// <summary>

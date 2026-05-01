@@ -60,9 +60,14 @@ public static class CliApp
                 .WithExample("diff", "file1.jsonl", "file2.jsonl");
 
             config.AddCommand<MergeCommand>("merge")
-                .WithDescription("Find and merge duplicate issues")
+                .WithDescription("[deprecated] Find and merge duplicate issues. Use `fleece project` instead.")
                 .WithExample("merge")
                 .WithExample("merge", "--dry-run");
+
+            config.AddCommand<ProjectCommand>("project")
+                .WithDescription("Compact change files into the snapshot. Runs only on the default branch.")
+                .WithExample("project")
+                .WithExample("project", "--json");
 
             config.AddCommand<MigrateCommand>("migrate")
                 .WithDescription("Migrate issues to property-level timestamps format")

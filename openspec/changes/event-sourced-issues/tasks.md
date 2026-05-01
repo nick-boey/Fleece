@@ -28,7 +28,7 @@
 - [x] 4.1 Define cache file format at `.fleece/.replay-cache`: HEAD SHA + serialized committed-state dictionary
 - [x] 4.2 Implement cache read/write in `EventStore` (or a sibling `IReplayCache` service) — sibling `IReplayCache` / `ReplayCache`.
 - [x] 4.3 Wire the replay engine to: load cache → if HEAD matches, replay only the active uncommitted file on top → otherwise full replay + cache rewrite — wiring lives in `EventSourcedStorageService.GetIssuesAsync`; the `IReplayEngine` itself remains pure.
-- [ ] 4.4 Add `.fleece/.replay-cache` to the bootstrapped `.gitignore` template — **deferred to PR 3** (requires extending `InstallCommand` / migration).
+- [x] 4.4 Add `.fleece/.replay-cache` to the bootstrapped `.gitignore` template — landed in PR 3 via `InstallCommand.EnsureGitignoreEntriesAsync`.
 - [x] 4.5 Add unit tests for cache hit (HEAD unchanged) and cache miss (HEAD advanced)
 
 ## 5. Snapshot I/O
@@ -63,30 +63,30 @@
 
 ## 9. `fleece project` Command
 
-- [ ] 9.1 Create `ProjectCommand` and `ProjectSettings` in `src/Fleece.Cli/Commands/`
-- [ ] 9.2 Implement default-branch detection (from git config or settings) and refuse to run on any other branch with a clear error
-- [ ] 9.3 Implement projection: replay → write new snapshot → write tombstones (including new auto-cleanup tombstones) → delete all change files in `.fleece/changes/`
-- [ ] 9.4 Implement 30-day auto-cleanup for soft-deleted issues, with `cleanedAt` and `cleanedBy` recorded in `tombstones.jsonl`
-- [ ] 9.5 Stage all changes (`git add`) but do not commit (let CI or the user commit)
-- [ ] 9.6 Ensure idempotency: repeated runs with no events between produce no diff
-- [ ] 9.7 Register the command in DI and wire `Spectre.Console.Cli` routing
-- [ ] 9.8 Add E2E tests covering: refuses on non-main, compacts events on main, idempotent on repeat, auto-cleans soft-deleted >30d, leaves <30d soft-deleted intact
+- [x] 9.1 Create `ProjectCommand` and `ProjectSettings` in `src/Fleece.Cli/Commands/`
+- [x] 9.2 Implement default-branch detection (from git config or settings) and refuse to run on any other branch with a clear error — `IGitService.GetCurrentBranch()` + `EffectiveSettings.DefaultBranch` (default `"main"`, configurable via `FleeceSettings.DefaultBranch`).
+- [x] 9.3 Implement projection: replay → write new snapshot → write tombstones (including new auto-cleanup tombstones) → delete all change files in `.fleece/changes/` — `IProjectionService` / `ProjectionService`.
+- [x] 9.4 Implement 30-day auto-cleanup for soft-deleted issues, with `cleanedAt` and `cleanedBy` recorded in `tombstones.jsonl` — uses `Issue.LastUpdate` as a conservative proxy for "status set ≥30d ago" (an issue is cleaned only when it is currently `Deleted` AND has had no modifications for 30 days; this is correct for all spec scenarios).
+- [x] 9.5 Stage all changes (`git add`) but do not commit (let CI or the user commit) — `ProjectCommand` calls `IGitService.StageFleeceDirectory()`.
+- [x] 9.6 Ensure idempotency: repeated runs with no events between produce no diff — covered by `ProjectionServiceTests.Project_is_idempotent_on_repeat_run` and `ProjectIntegrationTests.Project_is_idempotent_when_no_events_remain`.
+- [x] 9.7 Register the command in DI and wire `Spectre.Console.Cli` routing — `IProjectionService` registered in `AddFleeceCore`; command registered in `CliApp.BuildApp`.
+- [x] 9.8 Add E2E tests covering: refuses on non-main, compacts events on main, idempotent on repeat, auto-cleans soft-deleted >30d, leaves <30d soft-deleted intact — `ProjectIntegrationTests` (real-git) covers all five scenarios.
 
 ## 10. Deprecate `fleece merge`
 
-- [ ] 10.1 Update `MergeCommand` to print a deprecation notice on stderr pointing at `fleece project`
-- [ ] 10.2 Keep existing merge behavior functional for one release cycle (still callable, still works, just deprecated)
-- [ ] 10.3 Add a test asserting the deprecation notice is printed
+- [x] 10.1 Update `MergeCommand` to print a deprecation notice on stderr pointing at `fleece project`
+- [x] 10.2 Keep existing merge behavior functional for one release cycle (still callable, still works, just deprecated) — the `IFleeceService.MergeAsync` call is unchanged.
+- [x] 10.3 Add a test asserting the deprecation notice is printed — `MergeCommandTests.Execute_WritesDeprecationNoticeToStderr`.
 
 ## 11. `fleece install` Extensions
 
-- [ ] 11.1 Extend `InstallCommand` to write `.git/hooks/pre-commit` (creating it if absent, appending a fleece block between marker comments if present), making it executable
-- [ ] 11.2 The hook runs `git add .fleece/changes/` and (when on the default branch) `git add .fleece/issues.jsonl .fleece/tombstones.jsonl`
-- [ ] 11.3 Make the install idempotent (single fleece block even on repeat runs)
-- [ ] 11.4 Detect github.com remote; if present and `.github/workflows/` exists, write `.github/workflows/fleece-project.yml` with daily cron + workflow_dispatch + checkout + install fleece + `fleece project` + commit + push steps
-- [ ] 11.5 Skip writing the workflow if it already exists; print a warning
-- [ ] 11.6 Add `.fleece/.active-change` and `.fleece/.replay-cache` to `.gitignore` if missing
-- [ ] 11.7 Add E2E tests: fresh install creates expected files, repeat install is idempotent, existing pre-commit hook is preserved
+- [x] 11.1 Extend `InstallCommand` to write `.git/hooks/pre-commit` (creating it if absent, appending a fleece block between marker comments if present), making it executable — `InstallCommand.InstallPreCommitHookAsync` + `ReplaceOrAppendBlock`.
+- [x] 11.2 The hook runs `git add .fleece/changes/` and (when on the default branch) `git add .fleece/issues.jsonl .fleece/tombstones.jsonl` — see `InstallCommand.BuildFleeceHookBlock`.
+- [x] 11.3 Make the install idempotent (single fleece block even on repeat runs) — covered by `InstallScenarios.Install_is_idempotent_for_pre_commit_hook`.
+- [x] 11.4 Detect github.com remote; if present and `.github/workflows/` exists, write `.github/workflows/fleece-project.yml` with daily cron + workflow_dispatch + checkout + install fleece + `fleece project` + commit + push steps — `InstallCommand.MaybeInstallGitHubWorkflowAsync` + `BuildWorkflowYaml`.
+- [x] 11.5 Skip writing the workflow if it already exists; print a warning — covered by `InstallScenarios.Install_does_not_overwrite_existing_workflow_file`.
+- [x] 11.6 Add `.fleece/.active-change` and `.fleece/.replay-cache` to `.gitignore` if missing — `InstallCommand.EnsureGitignoreEntriesAsync`.
+- [x] 11.7 Add E2E tests: fresh install creates expected files, repeat install is idempotent, existing pre-commit hook is preserved — `InstallScenarios` covers all three.
 
 ## 12. Migration Command
 

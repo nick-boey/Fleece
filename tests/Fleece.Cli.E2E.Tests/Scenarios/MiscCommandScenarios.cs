@@ -100,22 +100,10 @@ public class MiscCommandScenarios : CliScenarioTestBase
     }
 
     [Test]
-    public async Task Install_writes_claude_hooks_into_temp_cwd()
+    public async Task Install_writes_claude_hooks_into_base_path()
     {
-        var tmp = Path.Combine(Path.GetTempPath(), "fleece-install-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tmp);
-        var originalCwd = Directory.GetCurrentDirectory();
-        try
-        {
-            Directory.SetCurrentDirectory(tmp);
-            var exit = await RunAsync("install");
-            exit.Should().Be(0);
-            File.Exists(Path.Combine(tmp, ".claude", "settings.json")).Should().BeTrue();
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(originalCwd);
-            Directory.Delete(tmp, recursive: true);
-        }
+        var exit = await RunAsync("install");
+        exit.Should().Be(0);
+        Fs.File.Exists(Path.Combine(BasePath, ".claude", "settings.json")).Should().BeTrue();
     }
 }

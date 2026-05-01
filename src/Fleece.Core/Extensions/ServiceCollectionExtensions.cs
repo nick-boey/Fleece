@@ -49,6 +49,8 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<IReplayEngine>(),
                 sp.GetRequiredService<IReplayCache>(),
                 sp.GetRequiredService<IEventGitContext>()));
+        services.AddSingleton<IProjectionService>(sp =>
+            new ProjectionService(sp.GetRequiredService<IEventSourcedStorageService>()));
 
         // Legacy IStorageService surface, satisfied by the event-sourced adapter.
         // Reads come from snapshot+replay; writes are diffed and emitted as events.
