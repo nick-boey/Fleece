@@ -20,6 +20,7 @@ public static class CliComposition
         ("diff",       typeof(DiffCommand)),
         ("merge",      typeof(MergeCommand)),
         ("migrate",    typeof(MigrateCommand)),
+        ("migrate-events", typeof(MigrateEventsCommand)),
         ("install",    typeof(InstallCommand)),
         ("prime",      typeof(PrimeCommand)),
         ("validate",   typeof(ValidateCommand)),

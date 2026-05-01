@@ -82,9 +82,33 @@ dotnet test tests/Fleece.Core.Tests
 - **Reviewing snapshot diffs in a PR**: treat `.verified.txt` diffs as user-facing output changes — they should be reviewed like any other UX change.
 - **JSON output is not snapshotted**: tests parse `--json` output structurally. Only stable human-readable stdout uses snapshots.
 
+### Event-sourced storage (current)
+
+Fleece persists issues as a snapshot plus per-session change files:
+
+- `.fleece/issues.jsonl` — projected snapshot of all issues at the most recent `fleece project` run. The lean `Issue` shape (no per-property `*LastUpdate`/`*ModifiedBy`).
+- `.fleece/tombstones.jsonl` — sidecar of hard-deleted issues (`IssueId`, `OriginalTitle`, `CleanedAt`, `CleanedBy`).
+- `.fleece/changes/change_{guid}.jsonl` — append-only event files. One file per branch-session-on-machine. First line is a `meta` event with a `follows` pointer (`null` for a root or a predecessor GUID); subsequent lines are `create`/`set`/`add`/`remove`/`hard-delete` events.
+- `.fleece/.active-change` — gitignored pointer file naming the current session's change-file GUID.
+- `.fleece/.replay-cache` — gitignored cache of the projected state at the current HEAD SHA, used to skip re-replaying committed change files.
+
+Reads load the snapshot, replay all change files in topological order over the `follows`-DAG (with commit-order tiebreak then GUID-alphabetical tiebreak), and answer the query in-memory. Writes append events to the active change file.
+
+#### `fleece project`
+
+Compacts events into the snapshot. Refuses to run anywhere except the configured default branch (`fleece config --set defaultBranch=...`, default `main`). Replays everything, applies 30-day auto-cleanup for soft-deleted issues, writes a fresh snapshot/tombstones, deletes every file under `.fleece/changes/`, and stages the result. Wired to a daily GitHub Action template by `fleece install`.
+
+#### `fleece merge` (deprecated)
+
+Prints a deprecation notice on stderr pointing at `fleece project`. Existing behavior is preserved for one release cycle and will be removed.
+
+#### `fleece migrate-events`
+
+One-shot migration from the legacy hashed `.fleece/issues_{hash}.jsonl` + `.fleece/tombstones_{hash}.jsonl` layout into the new event-sourced layout. Idempotent: a second run on an already-migrated repo exits cleanly. The legacy `*LastUpdate`/`*ModifiedBy` metadata is dropped on the floor (it survives in git history if anyone needs it).
+
 ### Clean Command and Tombstones
 
-The `fleece clean` command permanently removes soft-deleted issues (status `Deleted`) from `issues_{hash}.jsonl` and writes tombstone records to `tombstones_{hash}.jsonl`. Tombstone files are merged alongside issue files during `fleece merge`.
+The `fleece clean` command soft-or-hard deletes issues. Soft-deletes go through the standard event path (`set status=Deleted`); hard-deletes emit `hard-delete` events and the tombstones land in `.fleece/tombstones.jsonl` after the next `fleece project`.
 
 Key details:
 - **Tombstone records** store `IssueId`, `OriginalTitle`, `CleanedAt`, and `CleanedBy`. The title is preserved for historical reference.
@@ -99,6 +123,10 @@ Key details:
 |---------|----------|
 | Core service interfaces | `src/Fleece.Core/Services/Interfaces/` |
 | Core service implementations | `src/Fleece.Core/Services/` |
+| Event-sourced services | `src/Fleece.Core/EventSourcing/Services/` |
+| Event DTOs | `src/Fleece.Core/EventSourcing/Events/` |
+| Lean issue model | `src/Fleece.Core/Models/Issue.cs` |
+| Legacy issue model (migration only) | `src/Fleece.Core/Models/Legacy/` |
 | CLI commands | `src/Fleece.Cli/Commands/` |
 | CLI settings | `src/Fleece.Cli/Settings/` |
 | Core unit tests | `tests/Fleece.Core.Tests/` |

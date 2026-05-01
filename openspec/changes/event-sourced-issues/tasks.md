@@ -90,35 +90,35 @@
 
 ## 12. Migration Command
 
-- [ ] 12.1 Decide: extend `MigrateCommand` or add a new `migrate-events` subcommand. Implement chosen approach.
-- [ ] 12.2 Read all `.fleece/issues_*.jsonl` files using `Fleece.Core.Models.Legacy.LegacyIssue`
-- [ ] 12.3 Reuse `IssueMerger` to reconcile per-issue conflicts across files
-- [ ] 12.4 Project the merged set into the new lean `Issue` shape; write `.fleece/issues.jsonl`
-- [ ] 12.5 Read all `.fleece/tombstones_*.jsonl` files; union by issue ID; write `.fleece/tombstones.jsonl`
-- [ ] 12.6 Delete legacy `issues_*.jsonl` and `tombstones_*.jsonl` files
-- [ ] 12.7 Create `.fleece/changes/` directory; ensure `.gitignore` entries are added
-- [ ] 12.8 Make the migration idempotent: detect already-migrated repos and exit cleanly
-- [ ] 12.9 Add E2E tests: legacy → new conversion, conflict reconciliation, tombstone union, idempotent on already-migrated, gitignore additions
+- [x] 12.1 Decide: extend `MigrateCommand` or add a new `migrate-events` subcommand. Implement chosen approach. — added new `migrate-events` subcommand to keep the legacy `migrate` (which migrates within the legacy shape) distinct.
+- [x] 12.2 Read all `.fleece/issues_*.jsonl` files using `Fleece.Core.Models.Legacy.LegacyIssue` — `EventMigrationService.ReadLegacyIssuesAsync` + `FleeceLegacyJsonContext`.
+- [x] 12.3 Reuse `IssueMerger` to reconcile per-issue conflicts across files — `LegacyMerging.Plan` + `LegacyMerging.Apply` (which delegates to `LegacyIssueMerger`).
+- [x] 12.4 Project the merged set into the new lean `Issue` shape; write `.fleece/issues.jsonl` — `EventMigrationService.ToLeanIssue` + `WriteSnapshotAsync`.
+- [x] 12.5 Read all `.fleece/tombstones_*.jsonl` files; union by issue ID; write `.fleece/tombstones.jsonl` — `EventMigrationService.ReadLegacyTombstonesAsync` (deduplicates on first-write-wins).
+- [x] 12.6 Delete legacy `issues_*.jsonl` and `tombstones_*.jsonl` files — done after the new files land.
+- [x] 12.7 Create `.fleece/changes/` directory; ensure `.gitignore` entries are added — both handled in `MigrateAsync`.
+- [x] 12.8 Make the migration idempotent: detect already-migrated repos and exit cleanly — `IsMigrationNeededAsync` short-circuits.
+- [x] 12.9 Add E2E tests: legacy → new conversion, conflict reconciliation, tombstone union, idempotent on already-migrated, gitignore additions — `EventMigrationServiceTests` (Core unit) + `MigrateEventsScenarios` (CLI E2E).
 
 ## 13. Run Migration on This Repository
 
-- [ ] 13.1 Execute the migration command against `.fleece/` in this repository
-- [ ] 13.2 Verify the resulting `.fleece/issues.jsonl` reflects all current issues
-- [ ] 13.3 Commit the migration result as part of the change PR
-- [ ] 13.4 Verify CI passes on the post-migration tree
+- [x] 13.1 Execute the migration command against `.fleece/` in this repository — ran `dotnet run --project src/Fleece.Cli -- migrate-events`; output: 1 legacy issues file consumed, 1 legacy tombstones file consumed, 209 issues written, 22 tombstones written, gitignore entries added.
+- [x] 13.2 Verify the resulting `.fleece/issues.jsonl` reflects all current issues — `dotnet run -- list --all --json` returned 209 issues; `dotnet run -- show bDBG4p` resolved correctly.
+- [x] 13.3 Commit the migration result as part of the change PR — included in the PR 4 commit alongside the migration command.
+- [ ] 13.4 Verify CI passes on the post-migration tree — to be verified after the PR is opened; `dotnet test` runs clean locally (886 tests).
 
 ## 14. Documentation and Cleanup
 
-- [ ] 14.1 Update `CLAUDE.md` to describe the event-sourced layout, replay model, and `fleece project` semantics
-- [ ] 14.2 Update `fleece prime` topic content to reflect the new architecture (especially `merge` → `project` guidance)
-- [ ] 14.3 Update README and any user-facing docs covering storage layout
-- [ ] 14.4 Remove or archive references to `IssueMerger` and the legacy storage services from non-migration code paths
-- [ ] 14.5 File a follow-up Fleece issue to delete `Fleece.Core.Models.Legacy`, `IssueMerger`, and `MergeCommand` after the migration is rolled out
+- [x] 14.1 Update `CLAUDE.md` to describe the event-sourced layout, replay model, and `fleece project` semantics — added an "Event-sourced storage" section.
+- [x] 14.2 Update `fleece prime` topic content to reflect the new architecture (especially `merge` → `project` guidance) — both the main prime body (steps 9–11) and the `merge` topic content rewritten.
+- [x] 14.3 Update README and any user-facing docs covering storage layout — README now describes the snapshot + change-files layout.
+- [x] 14.4 Remove or archive references to `IssueMerger` and the legacy storage services from non-migration code paths — already isolated in PR 2 (`LegacyIssueMerger` lives under `Services/Legacy/`); only the migration consumes it.
+- [x] 14.5 File a follow-up Fleece issue to delete `Fleece.Core.Models.Legacy`, `IssueMerger`, and `MergeCommand` after the migration is rolled out — Fleece issue `gwywzs`.
 
 ## 15. Verification and Test Coverage
 
-- [ ] 15.1 Verify all existing E2E snapshot tests pass post-migration (or update snapshots intentionally)
-- [ ] 15.2 Add an integration test simulating the full lifecycle: migrate → create on feature branch → commit → switch branch → create different events → switch back → verify correct in-memory state
-- [ ] 15.3 Add an integration test simulating squash-merge: write events on feature branch → squash to main → run `fleece project` → verify final state matches pre-squash projection
-- [ ] 15.4 Add an integration test simulating multi-machine squash: two parallel "machines" with different active-change pointers writing to the same branch → squash → verify follows-DAG ordering produces correct result
-- [ ] 15.5 Confirm the daily GitHub Action template runs cleanly on a test fork (or document the manual smoke test)
+- [x] 15.1 Verify all existing E2E snapshot tests pass post-migration (or update snapshots intentionally) — full suite is green (891 tests).
+- [x] 15.2 Add an integration test simulating the full lifecycle: migrate → create on feature branch → commit → switch branch → create different events → switch back → verify correct in-memory state — `EventSourcedLifecycleTests.Lifecycle_create_commit_switch_branch_create_switch_back_replays_correctly` and `Migrate_then_create_then_project_round_trip_stays_consistent`.
+- [x] 15.3 Add an integration test simulating squash-merge: write events on feature branch → squash to main → run `fleece project` → verify final state matches pre-squash projection — `EventSourcedLifecycleTests.Squash_equivalence_branch_with_three_chained_change_files_replays_same_after_squash` + `Project_after_squash_produces_state_matching_pre_squash_projection`.
+- [x] 15.4 Add an integration test simulating multi-machine squash: two parallel "machines" with different active-change pointers writing to the same branch → squash → verify follows-DAG ordering produces correct result — `EventSourcedLifecycleTests.Multi_machine_squash_with_chained_follows_pointers_replays_correctly`.
+- [ ] 15.5 Confirm the daily GitHub Action template runs cleanly on a test fork (or document the manual smoke test) — manual smoke test deferred; the workflow is generated by `InstallCommand.BuildWorkflowYaml` and exercised by `InstallScenarios.Install_writes_github_action_when_remote_is_github_and_workflows_dir_exists`. Tracking real-fork validation as a follow-up issue when the PR lands.

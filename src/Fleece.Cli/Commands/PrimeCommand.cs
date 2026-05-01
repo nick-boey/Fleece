@@ -85,8 +85,20 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         7. Commit changes by including all changes in the `.fleece/` folder with related code commits or using the `fleece commit` command
 
-        9. When encountering git merge conflicts in `.fleece/` files, ALWAYS use `fleece merge` to resolve them.
-           Never delete conflicting files manually.
+        9. Fleece uses event-sourced storage on this repo. The snapshot lives at `.fleece/issues.jsonl`
+           and per-session events are appended under `.fleece/changes/change_{guid}.jsonl`. Each
+           change file's first line is a `meta` event with a `follows` pointer that orders it under
+           squash-merges. The `.fleece/.active-change` and `.fleece/.replay-cache` files are
+           gitignored runtime state; never edit them by hand. Reads layer the snapshot plus all
+           change files in topological order. Writes append events to the active change file.
+
+        10. To compact change files into the snapshot on `main`, run `fleece project`. It refuses
+            to run on any other branch. The daily GitHub Action installed by `fleece install` runs
+            this automatically; you usually don't have to.
+
+        11. `fleece merge` is deprecated and prints a deprecation notice on stderr — use
+            `fleece project` instead. Conflicts in `.fleece/` arise only on `.fleece/issues.jsonl`
+            after a divergent rebase; fix them by deferring to the daily projection commit on `main`.
 
         ## Issue Types
 
@@ -264,11 +276,13 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         ## Collaboration
 
         - `fleece diff` - Show change history and conflicts
-        - `fleece merge` - Find and resolve duplicate issues
+        - `fleece project` - Compact events into the snapshot (default branch only)
+        - `fleece merge` - [deprecated] use `fleece project` instead
 
         ## Setup
 
-        - `fleece install` - Install Claude Code hooks
+        - `fleece install` - Install Claude Code hooks, pre-commit hook, gitignore entries, and GitHub Action template
+        - `fleece migrate-events` - One-shot migration from the legacy hashed layout to event-sourced storage
         """;
 
     private const string StatusesContent = """
@@ -383,54 +397,46 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         """;
 
     private const string MergeContent = """
-        # Resolving Merge Conflicts in .fleece/
+        # `.fleece/` Conflicts and Compaction
 
-        When git merge conflicts occur in the `.fleece/` folder, you MUST use `fleece merge` to resolve them.
-        DO NOT manually resolve conflicts by deleting one version of the file.
+        Fleece now uses event-sourced storage. The classic `fleece merge` command is
+        deprecated — use `fleece project` instead. `fleece merge` still runs but prints
+        a deprecation notice on stderr.
 
-        ## Why Use fleece merge
+        ## How conflicts arise (and don't)
 
-        The `fleece merge` command intelligently merges conflicting issue data:
-        - **Property-level merging**: Each field is merged individually, not whole files
-        - **Timestamp-based resolution**: Scalar properties use the newer timestamp
-        - **Collection union**: Tags, linked issues, and parent issues combine both versions
-        - **No data loss**: Both versions contribute to the final merged result
+        Per-session change files live at `.fleece/changes/change_{guid}.jsonl`, one per
+        branch-session-on-machine. Concurrent work on the same branch from different
+        machines lands in different files and never textually conflicts. Reads layer
+        them in topological order using each file's `meta` event `follows` pointer, so
+        squash-merges produce identical results to pre-squash on the branch.
 
-        ## Handling Git Merge Conflicts
+        The only file that can conflict on merge is the snapshot, `.fleece/issues.jsonl`.
+        That file is rewritten only by `fleece project` on `main`. If you see a conflict
+        there, your branch has likely diverged from a daily projection commit on `main`:
+        rebase onto the projected `main` and the conflict resolves itself.
 
-        When you encounter a merge conflict in `.fleece/` files:
+        ## Compacting events into the snapshot
 
-        1. **Accept both versions** during git merge (keep both conflicting files)
-        2. **Run `fleece merge`** to intelligently combine duplicates
-        3. **Verify the merge** with `fleece list` or `fleece show <id>`
-        4. **Commit the resolved files**
+        `fleece project` (default-branch only) runs the same replay reads use, applies
+        30-day auto-cleanup for soft-deleted issues, writes a fresh `issues.jsonl` and
+        `tombstones.jsonl`, and deletes every file under `.fleece/changes/`. Wired to
+        a daily GitHub Action template by `fleece install`.
 
-        ## Example Workflow
+        ## Migration from the legacy hashed layout
 
-        ```bash
-        # After a git merge/pull with conflicts in .fleece/
-        git add .fleece/          # Stage all versions
-        fleece merge              # Intelligently merge duplicates
-        fleece list               # Verify issues look correct
-        git add .fleece/          # Stage merged result
-        git commit -m "Resolve fleece merge conflicts"
-        ```
-
-        ## Dry Run
-
-        Preview what would be merged without making changes:
-        ```
-        fleece merge --dry-run
-        ```
+        `fleece migrate-events` is a one-shot migration from the legacy
+        `.fleece/issues_{hash}.jsonl` + `.fleece/tombstones_{hash}.jsonl` layout to the
+        event-sourced layout. Run once per repo; it is idempotent on subsequent runs.
 
         ## IMPORTANT
 
-        NEVER resolve .fleece/ conflicts by:
+        NEVER resolve `.fleece/` conflicts by:
         - Deleting one version of an issue file
         - Manually editing JSONL files
-        - Using git checkout --ours/--theirs
+        - Using `git checkout --ours/--theirs`
 
-        ALWAYS use `fleece merge` which preserves data from both branches.
+        Rebase onto the projected `main` and let the next `fleece project` reconcile.
         """;
 
     private const string OpenSpecContent = """

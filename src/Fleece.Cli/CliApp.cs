@@ -74,6 +74,11 @@ public static class CliApp
                 .WithExample("migrate")
                 .WithExample("migrate", "--dry-run");
 
+            config.AddCommand<MigrateEventsCommand>("migrate-events")
+                .WithDescription("Migrate legacy hashed .fleece/issues_*.jsonl files into the event-sourced layout (one-shot).")
+                .WithExample("migrate-events")
+                .WithExample("migrate-events", "--json");
+
             config.AddCommand<InstallCommand>("install")
                 .WithDescription("Install Claude Code hooks");
 

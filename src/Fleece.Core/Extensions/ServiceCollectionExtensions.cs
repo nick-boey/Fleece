@@ -51,6 +51,8 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<IEventGitContext>()));
         services.AddSingleton<IProjectionService>(sp =>
             new ProjectionService(sp.GetRequiredService<IEventSourcedStorageService>()));
+        services.AddSingleton<IEventMigrationService>(sp =>
+            new EventSourcing.Services.Legacy.EventMigrationService(basePath, sp.GetRequiredService<IFileSystem>()));
 
         // Legacy IStorageService surface, satisfied by the event-sourced adapter.
         // Reads come from snapshot+replay; writes are diffed and emitted as events.
