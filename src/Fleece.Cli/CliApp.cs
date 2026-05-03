@@ -60,7 +60,7 @@ public static class CliApp
                 .WithExample("diff", "file1.jsonl", "file2.jsonl");
 
             config.AddCommand<MergeCommand>("merge")
-                .WithDescription("[deprecated] Find and merge duplicate issues. Use `fleece project` instead.")
+                .WithDescription("[yellow]deprecated[/] Find and merge duplicate issues. Use `fleece project` instead.")
                 .WithExample("merge")
                 .WithExample("merge", "--dry-run");
 
