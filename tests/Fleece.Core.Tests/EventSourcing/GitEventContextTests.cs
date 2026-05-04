@@ -19,11 +19,11 @@ public sealed class GitEventContextTests
                 {
                     return (0, "sha00001\nsha00002\nsha00003\n", "");
                 }
-                if (args == "log --diff-filter=A --format='%H' -- \"change_aaa.jsonl\"")
+                if (args == "log --diff-filter=A --format=%H -- \"change_aaa.jsonl\"")
                 {
                     return (0, "sha00001\n", "");
                 }
-                if (args == "log --diff-filter=A --format='%H' -- \"change_ccc.jsonl\"")
+                if (args == "log --diff-filter=A --format=%H -- \"change_ccc.jsonl\"")
                 {
                     return (0, "sha00003\n", "");
                 }

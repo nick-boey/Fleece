@@ -27,7 +27,10 @@ public sealed class GitEventContext : IEventGitContext
 
     public int? GetFirstCommitOrdinal(string filePath)
     {
-        var (exitCode, shaOutput, _) = _git.RunGitCommand($"log --diff-filter=A --format='%H' -- \"{filePath}\"");
+        // Note: no surrounding single quotes around %H. ProcessStartInfo.Arguments on Unix
+        // does not strip them, so '%H' would make git emit each hash wrapped in literal
+        // quotes — and the hash would then never match GetCommitList()'s output.
+        var (exitCode, shaOutput, _) = _git.RunGitCommand($"log --diff-filter=A --format=%H -- \"{filePath}\"");
         if (exitCode != 0 || string.IsNullOrWhiteSpace(shaOutput))
         {
             return null;

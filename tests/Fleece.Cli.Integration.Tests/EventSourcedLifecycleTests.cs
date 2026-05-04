@@ -215,9 +215,16 @@ public class EventSourcedLifecycleTests : GitTempRepoFixture
     [Test]
     public async Task Merge_two_branches_editing_same_property_on_same_issue_last_commit_wins()
     {
+        // Use explicit commit timestamps so the commit-ordinal tiebreak is deterministic.
+        // Otherwise A and B can land in the same second and `git rev-list --date-order`
+        // is free to order them either way, flaking the assertion.
+        var seedDate = new DateTimeOffset(2026, 5, 1, 10, 0, 0, TimeSpan.Zero);
+        var aDate = new DateTimeOffset(2026, 5, 1, 11, 0, 0, TimeSpan.Zero);
+        var bDate = new DateTimeOffset(2026, 5, 1, 12, 0, 0, TimeSpan.Zero);
+
         (await RunCliAsync("create", "-t", "Merge same prop", "-y", "task", "-d", "x")).Should().Be(0);
         RunGit("add", ".fleece");
-        RunGit("commit", "-m", "main: seed");
+        RunGitCommit("main: seed", seedDate);
 
         var seed = await ReadIssuesAsync();
         var id = seed.Single().Id;
@@ -230,7 +237,7 @@ public class EventSourcedLifecycleTests : GitTempRepoFixture
         File.Delete(pointerPath);
         (await RunCliAsync("edit", id, "-t", "A")).Should().Be(0);
         RunGit("add", ".fleece");
-        RunGit("commit", "-m", "feature/a: title=A");
+        RunGitCommit("feature/a: title=A", aDate);
 
         // Branch B: set title to "B"
         RunGit("checkout", "main");
@@ -239,7 +246,7 @@ public class EventSourcedLifecycleTests : GitTempRepoFixture
         File.Delete(pointerPath);
         (await RunCliAsync("edit", id, "-t", "B")).Should().Be(0);
         RunGit("add", ".fleece");
-        RunGit("commit", "-m", "feature/b: title=B");
+        RunGitCommit("feature/b: title=B", bDate);
 
         // Merge feature/b into feature/a (B committed after A → B's events should win)
         RunGit("checkout", "feature/a");
