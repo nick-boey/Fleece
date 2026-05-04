@@ -1,9 +1,11 @@
+using System.Text.Json.Serialization;
 using Fleece.Core.Utilities;
 
 namespace Fleece.Core.Models;
 
 /// <summary>
-/// Represents a reference to a parent issue with a sort order for maintaining position within the parent's children.
+/// Projected parent-issue reference. <c>parentIssue</c> is the natural key —
+/// <c>remove</c> events match by ID only, ignoring <c>sortOrder</c>/<c>active</c>.
 /// </summary>
 public sealed record ParentIssueRef
 {
@@ -14,18 +16,10 @@ public sealed record ParentIssueRef
 
     /// <summary>
     /// The lexicographic sort order for this issue within the parent's children.
+    /// Serialized as <c>lexOrder</c> in JSON (snapshot and event payloads).
     /// </summary>
+    [JsonPropertyName("lexOrder")]
     public required string SortOrder { get; init; }
-
-    /// <summary>
-    /// Timestamp when this parent reference was last updated.
-    /// </summary>
-    public DateTimeOffset LastUpdated { get; init; }
-
-    /// <summary>
-    /// Username who last updated this parent reference.
-    /// </summary>
-    public string? UpdatedBy { get; init; }
 
     /// <summary>
     /// Whether this parent reference is active. Inactive references represent soft-deleted parent relationships.

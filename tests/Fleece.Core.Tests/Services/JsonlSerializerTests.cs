@@ -63,7 +63,7 @@ public class JsonlSerializerTests
     [Test]
     public void DeserializeIssue_ReturnsIssue()
     {
-        var json = "{\"id\":\"abc123\",\"title\":\"Test\",\"status\":\"Idea\",\"type\":\"Bug\",\"lastUpdate\":\"2024-01-15T10:30:00+00:00\"}";
+        var json = "{\"id\":\"abc123\",\"title\":\"Test\",\"status\":\"Open\",\"type\":\"Bug\",\"createdAt\":\"2024-01-15T10:30:00+00:00\",\"lastUpdate\":\"2024-01-15T10:30:00+00:00\"}";
 
         var result = _sut.DeserializeIssue(json);
 
@@ -72,6 +72,7 @@ public class JsonlSerializerTests
         result.Title.Should().Be("Test");
         result.Status.Should().Be(IssueStatus.Open);
         result.Type.Should().Be(IssueType.Bug);
+        result.CreatedAt.Should().Be(new DateTimeOffset(2024, 1, 15, 10, 30, 0, TimeSpan.Zero));
     }
 
     [Test]
@@ -109,8 +110,8 @@ public class JsonlSerializerTests
     [Test]
     public void DeserializeIssues_ParsesMultipleLines()
     {
-        var content = "{\"id\":\"abc123\",\"title\":\"Issue 1\",\"status\":\"Idea\",\"type\":\"Task\",\"lastUpdate\":\"2024-01-15T10:30:00+00:00\"}\n" +
-                      "{\"id\":\"def456\",\"title\":\"Issue 2\",\"status\":\"Complete\",\"type\":\"Bug\",\"lastUpdate\":\"2024-01-15T11:00:00+00:00\"}";
+        var content = "{\"id\":\"abc123\",\"title\":\"Issue 1\",\"status\":\"Open\",\"type\":\"Task\",\"createdAt\":\"2024-01-15T10:30:00+00:00\",\"lastUpdate\":\"2024-01-15T10:30:00+00:00\"}\n" +
+                      "{\"id\":\"def456\",\"title\":\"Issue 2\",\"status\":\"Complete\",\"type\":\"Bug\",\"createdAt\":\"2024-01-15T11:00:00+00:00\",\"lastUpdate\":\"2024-01-15T11:00:00+00:00\"}";
 
         var result = _sut.DeserializeIssues(content);
 
@@ -122,9 +123,9 @@ public class JsonlSerializerTests
     [Test]
     public void DeserializeIssues_SkipsInvalidLines()
     {
-        var content = "{\"id\":\"abc123\",\"title\":\"Issue 1\",\"status\":\"Idea\",\"type\":\"Task\",\"lastUpdate\":\"2024-01-15T10:30:00+00:00\"}\n" +
+        var content = "{\"id\":\"abc123\",\"title\":\"Issue 1\",\"status\":\"Open\",\"type\":\"Task\",\"createdAt\":\"2024-01-15T10:30:00+00:00\",\"lastUpdate\":\"2024-01-15T10:30:00+00:00\"}\n" +
                       "invalid line\n" +
-                      "{\"id\":\"def456\",\"title\":\"Issue 2\",\"status\":\"Complete\",\"type\":\"Bug\",\"lastUpdate\":\"2024-01-15T11:00:00+00:00\"}";
+                      "{\"id\":\"def456\",\"title\":\"Issue 2\",\"status\":\"Complete\",\"type\":\"Bug\",\"createdAt\":\"2024-01-15T11:00:00+00:00\",\"lastUpdate\":\"2024-01-15T11:00:00+00:00\"}";
 
         var result = _sut.DeserializeIssues(content);
 

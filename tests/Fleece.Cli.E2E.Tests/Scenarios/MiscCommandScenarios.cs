@@ -5,7 +5,6 @@ namespace Fleece.Cli.E2E.Tests.Scenarios;
 [Category("next")]
 [Category("move")]
 [Category("merge")]
-[Category("migrate")]
 [Category("prime")]
 [Category("diff")]
 [Category("commit")]
@@ -55,16 +54,6 @@ public class MiscCommandScenarios : CliScenarioTestBase
     }
 
     [Test]
-    public async Task Migrate_dry_run_reports_status()
-    {
-        await RunAsync("create", "-t", "issue", "-y", "task", "-d", "b");
-
-        var exit = await RunAsync("migrate", "--dry-run", "--json");
-        exit.Should().Be(0);
-        ParseJsonOutput().GetProperty("migrationNeeded").ValueKind.ToString().Should().BeOneOf("True", "False");
-    }
-
-    [Test]
     public async Task Prime_without_fleece_dir_exits_cleanly()
     {
         var tmp = Path.Combine(Path.GetTempPath(), "fleece-prime-" + Guid.NewGuid().ToString("N"));
@@ -100,22 +89,10 @@ public class MiscCommandScenarios : CliScenarioTestBase
     }
 
     [Test]
-    public async Task Install_writes_claude_hooks_into_temp_cwd()
+    public async Task Install_writes_claude_hooks_into_base_path()
     {
-        var tmp = Path.Combine(Path.GetTempPath(), "fleece-install-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tmp);
-        var originalCwd = Directory.GetCurrentDirectory();
-        try
-        {
-            Directory.SetCurrentDirectory(tmp);
-            var exit = await RunAsync("install");
-            exit.Should().Be(0);
-            File.Exists(Path.Combine(tmp, ".claude", "settings.json")).Should().BeTrue();
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(originalCwd);
-            Directory.Delete(tmp, recursive: true);
-        }
+        var exit = await RunAsync("install");
+        exit.Should().Be(0);
+        Fs.File.Exists(Path.Combine(BasePath, ".claude", "settings.json")).Should().BeTrue();
     }
 }

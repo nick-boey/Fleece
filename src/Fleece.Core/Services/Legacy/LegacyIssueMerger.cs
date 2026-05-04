@@ -1,17 +1,20 @@
 using Fleece.Core.Models;
+using Fleece.Core.Models.Legacy;
 
-namespace Fleece.Core.Services;
+namespace Fleece.Core.Services.Legacy;
 
 /// <summary>
-/// Merges two issues property-by-property based on individual property timestamps.
+/// Legacy property-by-property merger for <see cref="LegacyIssue"/>. Replaced by
+/// event-replay merging in event-sourced storage; retained only for historical reference
+/// and any remaining legacy migration paths.
 /// </summary>
-public sealed class IssueMerger
+public sealed class LegacyIssueMerger
 {
     /// <summary>
-    /// Merges two versions of the same issue, keeping the newer value for each property.
+    /// Merges two versions of the same legacy issue, keeping the newer value for each property.
     /// Collections (LinkedIssues, ParentIssues) use union strategy.
     /// </summary>
-    public MergeResult Merge(Issue issueA, Issue issueB, string? mergedBy = null)
+    public LegacyMergeResult Merge(LegacyIssue issueA, LegacyIssue issueB, string? mergedBy = null)
     {
         if (!issueA.Id.Equals(issueB.Id, StringComparison.OrdinalIgnoreCase))
         {
@@ -146,7 +149,7 @@ public sealed class IssueMerger
         // Use the newer LastUpdate
         var lastUpdate = issueA.LastUpdate > issueB.LastUpdate ? issueA.LastUpdate : issueB.LastUpdate;
 
-        var mergedIssue = new Issue
+        var mergedIssue = new LegacyIssue
         {
             Id = issueA.Id,
             Title = title,
@@ -189,7 +192,7 @@ public sealed class IssueMerger
             CreatedAt = createdAt
         };
 
-        return new MergeResult
+        return new LegacyMergeResult
         {
             MergedIssue = mergedIssue,
             PropertyChanges = changes
@@ -203,7 +206,6 @@ public sealed class IssueMerger
         string? mergedBy, DateTimeOffset mergeTime)
         where T : notnull
     {
-        // If values are equal, no conflict
         if (EqualityComparer<T>.Default.Equals(valueA, valueB))
         {
             var newerTimestamp = timestampA > timestampB ? timestampA : timestampB;
@@ -211,7 +213,6 @@ public sealed class IssueMerger
             return (valueA, newerTimestamp, newerModifiedBy, null);
         }
 
-        // Values differ - use timestamp to decide winner
         var aWins = timestampA >= timestampB;
         var winner = aWins ? valueA : valueB;
         var winnerTimestamp = aWins ? timestampA : timestampB;
@@ -235,13 +236,11 @@ public sealed class IssueMerger
         T? valueB, DateTimeOffset? timestampB, string? modifiedByB,
         string? mergedBy, DateTimeOffset mergeTime)
     {
-        // If both are null, no conflict
         if (valueA is null && valueB is null)
         {
             return (default, null, null, null);
         }
 
-        // If values are equal, no conflict
         if (EqualityComparer<T>.Default.Equals(valueA, valueB))
         {
             var newerTimestamp = (timestampA ?? DateTimeOffset.MinValue) > (timestampB ?? DateTimeOffset.MinValue)
@@ -253,7 +252,6 @@ public sealed class IssueMerger
             return (valueA, newerTimestamp, newerModifiedBy, null);
         }
 
-        // Values differ - use timestamp to decide winner
         var effectiveTimestampA = timestampA ?? DateTimeOffset.MinValue;
         var effectiveTimestampB = timestampB ?? DateTimeOffset.MinValue;
         var aWins = effectiveTimestampA >= effectiveTimestampB;
@@ -280,15 +278,12 @@ public sealed class IssueMerger
         IReadOnlyList<string>? listB, DateTimeOffset timestampB, string? modifiedByB,
         string? mergedBy, DateTimeOffset mergeTime)
     {
-        // Handle null collections
         var safeListA = listA ?? [];
         var safeListB = listB ?? [];
 
-        // Union strategy: combine both lists
         var union = safeListA.Union(safeListB, StringComparer.OrdinalIgnoreCase).ToList();
         var newerTimestamp = timestampA > timestampB ? timestampA : timestampB;
 
-        // Check if there's a conflict (lists are different)
         var setA = new HashSet<string>(safeListA, StringComparer.OrdinalIgnoreCase);
         var setB = new HashSet<string>(safeListB, StringComparer.OrdinalIgnoreCase);
 
@@ -310,17 +305,15 @@ public sealed class IssueMerger
         return (union, newerTimestamp, mergedBy ?? (timestampA > timestampB ? modifiedByA : modifiedByB), change);
     }
 
-    private static (IReadOnlyList<ParentIssueRef> Value, PropertyChange? Change) MergeParentIssueCollections(
+    private static (IReadOnlyList<LegacyParentIssueRef> Value, PropertyChange? Change) MergeParentIssueCollections(
         string propertyName,
-        IReadOnlyList<ParentIssueRef>? listA,
-        IReadOnlyList<ParentIssueRef>? listB,
+        IReadOnlyList<LegacyParentIssueRef>? listA,
+        IReadOnlyList<LegacyParentIssueRef>? listB,
         string? mergedBy, DateTimeOffset mergeTime)
     {
-        // Handle null collections
         var safeListA = listA ?? [];
         var safeListB = listB ?? [];
 
-        // Create dictionaries keyed by ParentIssue ID, deduplicating by keeping first occurrence
         var dictA = safeListA
             .GroupBy(p => p.ParentIssue, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
@@ -328,9 +321,8 @@ public sealed class IssueMerger
             .GroupBy(p => p.ParentIssue, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
-        // Per-parent last-write-wins merge
         var allParentIds = new HashSet<string>(dictA.Keys.Concat(dictB.Keys), StringComparer.OrdinalIgnoreCase);
-        var merged = new List<ParentIssueRef>();
+        var merged = new List<LegacyParentIssueRef>();
 
         foreach (var parentId in allParentIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
         {
@@ -339,7 +331,6 @@ public sealed class IssueMerger
 
             if (inA && inB)
             {
-                // Both have it - per-parent last-write-wins (A wins ties)
                 var winner = refA!.LastUpdated >= refB!.LastUpdated ? refA : refB;
                 merged.Add(winner);
             }
@@ -353,7 +344,6 @@ public sealed class IssueMerger
             }
         }
 
-        // Check if there's a conflict
         if (safeListA.SequenceEqual(safeListB))
         {
             return (merged, null);
@@ -375,7 +365,6 @@ public sealed class IssueMerger
         string? valueA, DateTimeOffset? timestampA,
         string? valueB, DateTimeOffset? timestampB)
     {
-        // Keep oldest non-null value (creator never changes)
         if (valueA is null && valueB is null)
         {
             return (null, null);
@@ -391,7 +380,6 @@ public sealed class IssueMerger
             return (valueA, timestampA);
         }
 
-        // Both have values - keep the oldest (earliest timestamp)
         var effectiveTimestampA = timestampA ?? DateTimeOffset.MaxValue;
         var effectiveTimestampB = timestampB ?? DateTimeOffset.MaxValue;
 
@@ -402,4 +390,14 @@ public sealed class IssueMerger
 
         return (valueB, timestampB);
     }
+}
+
+/// <summary>
+/// Result of a legacy property-by-property merge.
+/// </summary>
+public sealed record LegacyMergeResult
+{
+    public required LegacyIssue MergedIssue { get; init; }
+    public required IReadOnlyList<PropertyChange> PropertyChanges { get; init; }
+    public bool HadConflicts => PropertyChanges.Count > 0;
 }

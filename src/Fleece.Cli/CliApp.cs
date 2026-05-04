@@ -60,14 +60,20 @@ public static class CliApp
                 .WithExample("diff", "file1.jsonl", "file2.jsonl");
 
             config.AddCommand<MergeCommand>("merge")
-                .WithDescription("Find and merge duplicate issues")
+                .WithDescription("[yellow]deprecated[/] Find and merge duplicate issues. Use `fleece project` instead.")
                 .WithExample("merge")
                 .WithExample("merge", "--dry-run");
 
+            config.AddCommand<ProjectCommand>("project")
+                .WithDescription("Compact change files into the snapshot. Runs only on the default branch.")
+                .WithExample("project")
+                .WithExample("project", "--json");
+
             config.AddCommand<MigrateCommand>("migrate")
-                .WithDescription("Migrate issues to property-level timestamps format")
+                .WithDescription("Bring fleece data up to the current schema (e.g. legacy hashed files → event-sourced layout).")
                 .WithExample("migrate")
-                .WithExample("migrate", "--dry-run");
+                .WithExample("migrate", "--dry-run")
+                .WithExample("migrate", "--json");
 
             config.AddCommand<InstallCommand>("install")
                 .WithDescription("Install Claude Code hooks");

@@ -16,8 +16,8 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "Fix login bug", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "Add feature", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "Fix login bug", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Add feature", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Search(issues, "login");
@@ -31,8 +31,8 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "Bug", Description = "Users cannot login", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "Feature", Description = "Add new button", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "Bug", Description = "Users cannot login", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Feature", Description = "Add new button", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Search(issues, "login");
@@ -46,8 +46,8 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "Fix bug", Tags = ["backend", "api"], Status = IssueStatus.Progress, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "Add feature", Tags = ["frontend"], Status = IssueStatus.Progress, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "Fix bug", Tags = ["backend", "api"], Status = IssueStatus.Progress, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Add feature", Tags = ["frontend"], Status = IssueStatus.Progress, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Search(issues, "backend");
@@ -61,9 +61,9 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "Frontend Task", Tags = ["project=frontend", "api"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "Backend Task", Tags = ["project=backend"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "Other Task", Tags = ["misc"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "Frontend Task", Tags = ["project=frontend", "api"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Backend Task", Tags = ["project=backend"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "Other Task", Tags = ["misc"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Search(issues, "project:frontend");
@@ -77,7 +77,7 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "Frontend Task", Tags = ["PROJECT=FRONTEND"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "Frontend Task", Tags = ["PROJECT=FRONTEND"], Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Search(issues, "project:frontend");
@@ -91,8 +91,8 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "Fix login bug", Tags = ["project=frontend"], Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "Add feature", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "Fix login bug", Tags = ["project=frontend"], Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "Add feature", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Search(issues, "login");
@@ -107,7 +107,7 @@ public class IssuesTests
         // If query has spaces, it can't be a keyed tag search
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "Fix project:frontend issue", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "Fix project:frontend issue", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Search(issues, "Fix project:frontend");
@@ -121,7 +121,7 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "Issue with :value", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "Issue with :value", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         // ":value" should not trigger keyed tag search
@@ -135,7 +135,7 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "Issue with key:", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "Issue with key:", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         // "key:" should not trigger keyed tag search
@@ -153,8 +153,8 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, status: IssueStatus.Open);
@@ -168,8 +168,8 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Feature, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, type: IssueType.Bug);
@@ -183,9 +183,9 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Bug, Priority = 2, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Complete, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Bug, Priority = 2, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Complete, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, status: IssueStatus.Open, type: IssueType.Bug, priority: 1);
@@ -199,9 +199,9 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["backend", "api"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["frontend"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = [], LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["backend", "api"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["frontend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = [], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, tags: ["backend"]);
@@ -215,9 +215,9 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["backend"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["frontend"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["docs"], LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["backend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["frontend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["docs"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, tags: ["backend", "frontend"]);
@@ -231,9 +231,9 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["hsp-linked-pr=123"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["hsp-linked-pr=456"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = [], LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["hsp-linked-pr=123"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["hsp-linked-pr=456"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = [], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, linkedPr: 123);
@@ -248,8 +248,8 @@ public class IssuesTests
         // Test backward compatibility with deprecated LinkedPR field
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, LinkedPR = 123, Tags = [], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["hsp-linked-pr=456"], LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, LinkedPR = 123, Tags = [], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["hsp-linked-pr=456"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, linkedPr: 123);
@@ -263,8 +263,8 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["Backend", "API"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["frontend"], LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["Backend", "API"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Progress, Type = IssueType.Task, Tags = ["frontend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, tags: ["backend"]);
@@ -278,15 +278,15 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Draft, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "d", Title = "D", Status = IssueStatus.Progress, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "e", Title = "E", Status = IssueStatus.Review, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "f", Title = "F", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "g", Title = "G", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "h", Title = "H", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "i", Title = "I", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Draft, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "d", Title = "D", Status = IssueStatus.Progress, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "e", Title = "E", Status = IssueStatus.Review, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "f", Title = "F", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "g", Title = "G", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "h", Title = "H", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "i", Title = "I", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues);
@@ -302,11 +302,11 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "d", Title = "D", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "e", Title = "E", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "d", Title = "D", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "e", Title = "E", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, includeTerminal: true);
@@ -320,8 +320,8 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         // When a specific terminal status is requested, it should be returned even without includeTerminal
@@ -336,7 +336,7 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues);
@@ -349,7 +349,7 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues);
@@ -362,7 +362,7 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues);
@@ -375,7 +375,7 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues);
@@ -388,9 +388,9 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Priority = 1, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Complete, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Priority = 1, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Complete, Type = IssueType.Bug, Priority = 1, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, type: IssueType.Bug, priority: 1);
@@ -404,8 +404,8 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = null!, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["backend"], LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = null!, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["backend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, tags: ["backend"]);
@@ -419,8 +419,8 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Draft, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Draft, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues);
@@ -434,9 +434,9 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=backend"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=backend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, tags: ["project=frontend"]);
@@ -450,9 +450,9 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=backend"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=backend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, tags: ["project"]);
@@ -466,9 +466,9 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend", "priority=high"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend", "priority=low"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["priority=high"], LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend", "priority=high"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend", "priority=low"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["priority=high"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, tags: ["project=frontend", "priority=high"]);
@@ -481,9 +481,9 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Bug, Tags = ["project=backend"], LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Bug, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Bug, Tags = ["project=backend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, type: IssueType.Bug, tags: ["project=frontend"]);
@@ -497,9 +497,9 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["urgent"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["urgent"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, Tags = ["other"], LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, tags: ["urgent"]);

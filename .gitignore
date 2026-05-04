@@ -60,3 +60,5 @@ nunit-*.xml
 .vs/
 
 .tmp/
+.fleece/.active-change
+.fleece/.replay-cache

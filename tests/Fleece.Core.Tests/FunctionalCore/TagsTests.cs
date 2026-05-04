@@ -220,7 +220,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = ["project=frontend", "backend"],
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.HasKeyedTag(issue, "project", "frontend");
@@ -238,7 +239,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = ["backend"],
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.HasKeyedTag(issue, "project", "frontend");
@@ -256,7 +258,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = ["project=backend"],
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.HasKeyedTag(issue, "project", "frontend");
@@ -274,7 +277,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = ["PROJECT=frontend"],
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.HasKeyedTag(issue, "project", "frontend");
@@ -292,7 +296,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = ["project=FRONTEND"],
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.HasKeyedTag(issue, "project", "frontend");
@@ -310,7 +315,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = null!,
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.HasKeyedTag(issue, "project", "frontend");
@@ -328,7 +334,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = [],
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.HasKeyedTag(issue, "project", "frontend");
@@ -347,7 +354,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = ["project"],
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.HasKeyedTag(issue, "project", "frontend");
@@ -369,7 +377,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = ["project=frontend", "backend", "priority=high"],
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.GetKeyedTags(issue);
@@ -389,7 +398,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = ["project=frontend", "project=services"],
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.GetKeyedTags(issue);
@@ -410,7 +420,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = ["backend", "api"],
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.GetKeyedTags(issue);
@@ -428,7 +439,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = null!,
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.GetKeyedTags(issue);
@@ -446,7 +458,8 @@ public class TagsTests
             Status = IssueStatus.Open,
             Type = IssueType.Task,
             Tags = ["Project=frontend", "PROJECT=services"],
-            LastUpdate = DateTimeOffset.UtcNow
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var result = Tags.GetKeyedTags(issue);
@@ -466,7 +479,8 @@ public class TagsTests
         var issue = new Issue
         {
             Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task,
-            Tags = ["project=frontend", "urgent"], LastUpdate = DateTimeOffset.UtcNow
+            Tags = ["project=frontend", "urgent"], LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         Tags.HasTagKey(issue, "project").Should().BeTrue();
@@ -478,7 +492,8 @@ public class TagsTests
         var issue = new Issue
         {
             Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task,
-            Tags = ["urgent", "backend"], LastUpdate = DateTimeOffset.UtcNow
+            Tags = ["urgent", "backend"], LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         Tags.HasTagKey(issue, "urgent").Should().BeTrue();
@@ -490,7 +505,8 @@ public class TagsTests
         var issue = new Issue
         {
             Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task,
-            Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow
+            Tags = ["project=frontend"], LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         Tags.HasTagKey(issue, "team").Should().BeFalse();
@@ -502,7 +518,8 @@ public class TagsTests
         var issue = new Issue
         {
             Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task,
-            Tags = ["Project=frontend"], LastUpdate = DateTimeOffset.UtcNow
+            Tags = ["Project=frontend"], LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         Tags.HasTagKey(issue, "project").Should().BeTrue();
@@ -514,7 +531,8 @@ public class TagsTests
         var issue = new Issue
         {
             Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task,
-            Tags = [], LastUpdate = DateTimeOffset.UtcNow
+            Tags = [], LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         Tags.HasTagKey(issue, "project").Should().BeFalse();
