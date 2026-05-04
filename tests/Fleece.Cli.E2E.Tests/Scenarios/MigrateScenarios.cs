@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text;
 
 namespace Fleece.Cli.E2E.Tests.Scenarios;
@@ -94,5 +95,79 @@ public class MigrateScenarios : CliScenarioTestBase
     {
         var exit = await RunAsync("migrate-events");
         exit.Should().NotBe(0);
+    }
+
+    private void SeedFleeceDir(params string[] fixturePaths)
+    {
+        var fleeceDir = Path.Combine(BasePath, ".fleece");
+        Fs.Directory.CreateDirectory(fleeceDir);
+        foreach (var path in fixturePaths)
+        {
+            var content = System.IO.File.ReadAllText(path);
+            var name = System.IO.Path.GetFileName(path);
+            Fs.File.WriteAllText(System.IO.Path.Combine(fleeceDir, name), content);
+        }
+    }
+
+    [Test]
+    public async Task Migrate_diff_issues_fixture_creates_gitignore_and_changes_dir()
+    {
+        var diffDir = GetExamplesDir("diff-issues");
+        SeedFleeceDir(System.IO.Directory.GetFiles(diffDir, "issues_*.jsonl"));
+
+        await RunAsync("migrate");
+
+        var gitignore = await Fs.File.ReadAllTextAsync(Path.Combine(BasePath, ".gitignore"));
+        gitignore.Should().Contain(".fleece/.active-change");
+        gitignore.Should().Contain(".fleece/.replay-cache");
+
+        Fs.Directory.Exists(Path.Combine(BasePath, ".fleece", "changes")).Should().BeTrue();
+    }
+
+    [Test]
+    public async Task Migrate_diff_issues_fixture_reconciles_overlapping_issues()
+    {
+        var diffDir = GetExamplesDir("diff-issues");
+        SeedFleeceDir(System.IO.Directory.GetFiles(diffDir, "issues_*.jsonl"));
+
+        await RunAsync("migrate");
+
+        var issues = LoadIssues();
+        issues.Should().HaveCount(206);
+
+        var output = await Fs.File.ReadAllTextAsync(
+            Path.Combine(BasePath, ".fleece", "issues.jsonl"));
+        output.Should().NotContain("LastUpdate");
+        output.Should().NotContain("ModifiedBy");
+    }
+
+    [Test]
+    public async Task Migrate_nested_issues_fixture_preserves_parent_issues()
+    {
+        var nestedDir = GetExamplesDir("nested-issues");
+        SeedFleeceDir(System.IO.Path.Combine(nestedDir, ".fleece", "issues_939e3c.jsonl"));
+
+        await RunAsync("migrate");
+
+        var issues = LoadIssues();
+        issues.Should().HaveCount(13);
+
+        var issue005 = issues.Single(i => i.Id == "ISSUE-005");
+        issue005.ParentIssues.Should().Contain(p => p.ParentIssue == "ISSUE-004");
+    }
+
+    private static string GetExamplesDir(string subDir)
+    {
+        // Walk up from the test assembly to the repo root, then into tests/examples/.
+        var dir = System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
+        while (dir != null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir, ".git")))
+        {
+            dir = System.IO.Path.GetDirectoryName(dir);
+        }
+        if (dir == null)
+        {
+            throw new InvalidOperationException("Could not find repo root from assembly location");
+        }
+        return System.IO.Path.Combine(dir, "tests", "examples", subDir);
     }
 }

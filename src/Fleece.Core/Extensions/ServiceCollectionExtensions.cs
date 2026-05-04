@@ -38,7 +38,11 @@ public static class ServiceCollectionExtensions
             new SnapshotStore(basePath, sp.GetRequiredService<IFileSystem>()));
         services.AddSingleton<IEventStore>(sp =>
             new EventStore(basePath, sp.GetRequiredService<IFileSystem>()));
-        services.AddSingleton<IEventGitContext>(_ => NullEventGitContext.Instance);
+        services.AddSingleton<IEventGitContext>(sp =>
+        {
+            var git = sp.GetRequiredService<IGitService>();
+            return git.IsGitRepository() ? new GitEventContext(git) : NullEventGitContext.Instance;
+        });
         services.AddSingleton<IReplayEngine, ReplayEngine>();
         services.AddSingleton<IReplayCache>(sp =>
             new ReplayCache(basePath, sp.GetRequiredService<IFileSystem>()));

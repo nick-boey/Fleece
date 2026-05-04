@@ -116,6 +116,10 @@ public sealed class GitService : IGitService
     }
 
     /// <inheritdoc />
+    /// <inheritdoc />
+    public (int ExitCode, string Output, string Error) RunGitCommand(string arguments)
+        => RunGit(arguments);
+
     public GitOperationResult CommitAndPushFleeceChanges(string message)
     {
         var commitResult = CommitFleeceChanges(message);

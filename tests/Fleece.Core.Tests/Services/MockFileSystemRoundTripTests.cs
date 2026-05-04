@@ -60,6 +60,26 @@ public class MockFileSystemRoundTripTests
     }
 
     [Test]
+    public void AddFleeceCore_ResolvesNullEventGitContext_WhenNotInGitRepo()
+    {
+        const string basePath = "/mock-non-git-project";
+        var mockFs = new MockFileSystem();
+        mockFs.Directory.CreateDirectory(basePath);
+
+        var services = new ServiceCollection();
+        services.AddFleeceCore(basePath, mockFs);
+
+        using var provider = services.BuildServiceProvider();
+
+        var ctx = provider.GetRequiredService<Fleece.Core.EventSourcing.Services.Interfaces.IEventGitContext>();
+        ctx.Should().BeSameAs(Fleece.Core.EventSourcing.Services.Interfaces.NullEventGitContext.Instance);
+
+        ctx.GetHeadSha().Should().BeNull();
+        ctx.IsFileCommittedAtHead("any.jsonl").Should().BeFalse();
+        ctx.GetFirstCommitOrdinal("any.jsonl").Should().BeNull();
+    }
+
+    [Test]
     public void AddFleeceCore_WithoutFileSystem_RegistersRealFileSystem()
     {
         var services = new ServiceCollection();

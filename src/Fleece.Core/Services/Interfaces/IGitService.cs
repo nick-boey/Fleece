@@ -59,6 +59,12 @@ public interface IGitService
     /// or git is unavailable.
     /// </summary>
     string? GetCurrentBranch();
+
+    /// <summary>
+    /// Runs an arbitrary git command with the given arguments in the working directory,
+    /// returning (exitCode, stdout, stderr).
+    /// </summary>
+    (int ExitCode, string Output, string Error) RunGitCommand(string arguments);
 }
 
 /// <summary>

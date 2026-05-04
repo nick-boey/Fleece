@@ -2,6 +2,7 @@ using System.Text;
 using Fleece.Core.EventSourcing.Services;
 using Fleece.Core.EventSourcing.Services.Interfaces;
 using Fleece.Core.Models;
+using Fleece.Core.Services;
 
 namespace Fleece.Cli.Integration.Tests;
 
@@ -173,6 +174,83 @@ public class EventSourcedLifecycleTests : GitTempRepoFixture
     }
 
     [Test]
+    public async Task Merge_two_branches_editing_different_properties_on_same_issue_replays_both_changes()
+    {
+        (await RunCliAsync("create", "-t", "Merge diff props", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: seed");
+
+        var seed = await ReadIssuesAsync();
+        var id = seed.Single().Id;
+
+        // Branch A: edit title
+        var pointerPath = Path.Combine(TempDir, ".fleece", ".active-change");
+        var pointerBackup = File.ReadAllText(pointerPath);
+
+        RunGit("checkout", "-b", "feature/a");
+        File.Delete(pointerPath);
+        (await RunCliAsync("edit", id, "-t", "Title from A")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/a: edit title");
+
+        // Branch B (from same base): edit status
+        RunGit("checkout", "main");
+        File.WriteAllText(pointerPath, pointerBackup);
+        RunGit("checkout", "-b", "feature/b");
+        File.Delete(pointerPath);
+        (await RunCliAsync("edit", id, "-s", "Complete")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/b: edit status");
+
+        // Merge feature/b into feature/a
+        RunGit("checkout", "feature/a");
+        RunGit("merge", "feature/b", "--no-edit");
+
+        var issues = await ReadIssuesAsync();
+        var merged = issues.Single(i => i.Id == id);
+        merged.Title.Should().Be("Title from A");
+        merged.Status.Should().Be(IssueStatus.Complete);
+    }
+
+    [Test]
+    public async Task Merge_two_branches_editing_same_property_on_same_issue_last_commit_wins()
+    {
+        (await RunCliAsync("create", "-t", "Merge same prop", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: seed");
+
+        var seed = await ReadIssuesAsync();
+        var id = seed.Single().Id;
+
+        var pointerPath = Path.Combine(TempDir, ".fleece", ".active-change");
+        var pointerBackup = File.ReadAllText(pointerPath);
+
+        // Branch A: set title to "A"
+        RunGit("checkout", "-b", "feature/a");
+        File.Delete(pointerPath);
+        (await RunCliAsync("edit", id, "-t", "A")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/a: title=A");
+
+        // Branch B: set title to "B"
+        RunGit("checkout", "main");
+        File.WriteAllText(pointerPath, pointerBackup);
+        RunGit("checkout", "-b", "feature/b");
+        File.Delete(pointerPath);
+        (await RunCliAsync("edit", id, "-t", "B")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/b: title=B");
+
+        // Merge feature/b into feature/a (B committed after A → B's events should win)
+        RunGit("checkout", "feature/a");
+        RunGit("merge", "feature/b", "--no-edit");
+
+        var issues = await ReadIssuesAsync();
+        var merged = issues.Single(i => i.Id == id);
+        merged.Title.Should().Be("B");
+    }
+
+    [Test]
     public async Task Project_after_squash_produces_state_matching_pre_squash_projection()
     {
         // Create + edit on main, capture pre-squash state, then run project.
@@ -195,6 +273,139 @@ public class EventSourcedLifecycleTests : GitTempRepoFixture
         // Change files are gone; snapshot carries the result.
         Directory.GetFiles(ChangesDir).Should().BeEmpty();
         File.Exists(SnapshotPath).Should().BeTrue();
+    }
+
+    [Test]
+    public async Task Real_squash_merge_produces_equivalent_state_after_project()
+    {
+        // Build a feature branch with chained change files, then real git merge --squash.
+        // The post-squash + project state should match the pre-squash state.
+        (await RunCliAsync("create", "-t", "SquashMe", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: seed");
+
+        var seed = await ReadIssuesAsync();
+        var id = seed.Single().Id;
+
+        RunGit("checkout", "-b", "feature/squash-real");
+        // Three changes on the feature branch
+        await Rotate();
+        (await RunCliAsync("edit", id, "-t", "v1")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature: title=v1");
+
+        await Rotate();
+        (await RunCliAsync("edit", id, "-t", "v2")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature: title=v2");
+
+        await Rotate();
+        (await RunCliAsync("edit", id, "-t", "v3")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature: title=v3");
+
+        var preSquash = await ReadIssuesAsync();
+        preSquash.Single().Title.Should().Be("v3");
+
+        // Real squash-merge onto main
+        RunGit("checkout", "main");
+        RunGit("merge", "--squash", "feature/squash-real");
+        RunGit("commit", "-m", "squash: feature/squash-real");
+
+        // Run project to compact
+        (await RunCliAsync("project")).Should().Be(0);
+
+        var postProject = await ReadIssuesAsync();
+        postProject.Single().Title.Should().Be("v3");
+    }
+
+    [Test]
+    public async Task Parallel_branches_with_no_follows_ordered_by_commit_ordinal()
+    {
+        // Seed: create an issue, project to clear change files, commit.
+        (await RunCliAsync("create", "-t", "Ordinal test", "-y", "task", "-d", "x")).Should().Be(0);
+        (await RunCliAsync("project")).Should().Be(0);
+        RunGit("add", ".fleece");
+
+        var seed = await ReadIssuesAsync();
+        var id = seed.Single().Id;
+
+        // Manually plant two change files (no follows) in separate commits.
+        var changesDir = ChangesDir;
+        Directory.CreateDirectory(changesDir);
+
+        // First commit: change_aaa (sets title to "early")
+        File.WriteAllText(Path.Combine(changesDir, "change_aaa.jsonl"), string.Join('\n', new[]
+        {
+            """{"kind":"meta","follows":null}""",
+            $$"""{"kind":"set","at":"2026-05-01T10:00:00Z","by":"tester","issueId":"{{id}}","property":"title","value":"early"}""",
+            "",
+        }));
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "commit1: change_aaa");
+
+        // Second commit: change_bbb (sets title to "late")
+        File.WriteAllText(Path.Combine(changesDir, "change_bbb.jsonl"), string.Join('\n', new[]
+        {
+            """{"kind":"meta","follows":null}""",
+            $$"""{"kind":"set","at":"2026-05-01T11:00:00Z","by":"tester","issueId":"{{id}}","property":"title","value":"late"}""",
+            "",
+        }));
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "commit2: change_bbb");
+
+        // Drop the active-change pointer so the next read doesn't try to use it.
+        var pointerPath = Path.Combine(TempDir, ".fleece", ".active-change");
+        if (File.Exists(pointerPath))
+        {
+            File.Delete(pointerPath);
+        }
+
+        var issues = await ReadIssuesAsync();
+        issues.Single(i => i.Id == id).Title.Should().Be("late");
+    }
+
+    [Test]
+    public async Task Same_commit_parallel_roots_tiebreak_by_guid_alphabetical()
+    {
+        // Seed: create an issue, project to clear change files, commit.
+        (await RunCliAsync("create", "-t", "GUID order", "-y", "task", "-d", "x")).Should().Be(0);
+        (await RunCliAsync("project")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "seed-projection");
+
+        var seed = await ReadIssuesAsync();
+        var id = seed.Single().Id;
+
+        // Manually plant two change files in the same commit. Both have follows=null,
+        // so GUID alphabetical order ("aaa" < "bbb") means aaa replays first, bbb wins.
+        var changesDir = ChangesDir;
+        Directory.CreateDirectory(changesDir);
+
+        File.WriteAllText(Path.Combine(changesDir, "change_aaa.jsonl"), string.Join('\n', new[]
+        {
+            """{"kind":"meta","follows":null}""",
+            $$"""{"kind":"set","at":"2026-05-01T10:00:00Z","by":"tester","issueId":"{{id}}","property":"title","value":"from-aaa"}""",
+            "",
+        }));
+        File.WriteAllText(Path.Combine(changesDir, "change_bbb.jsonl"), string.Join('\n', new[]
+        {
+            """{"kind":"meta","follows":null}""",
+            $$"""{"kind":"set","at":"2026-05-01T11:00:00Z","by":"tester","issueId":"{{id}}","property":"title","value":"from-bbb"}""",
+            "",
+        }));
+
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "same-commit: both change files");
+
+        var pointerPath = Path.Combine(TempDir, ".fleece", ".active-change");
+        if (File.Exists(pointerPath))
+        {
+            File.Delete(pointerPath);
+        }
+
+        var issues = await ReadIssuesAsync();
+        issues.Single(i => i.Id == id).Title.Should().Be("from-bbb");
     }
 
     [Test]
@@ -239,6 +450,7 @@ public class EventSourcedLifecycleTests : GitTempRepoFixture
         var snapshot = new SnapshotStore(TempDir);
         var eventStore = new EventStore(TempDir);
         var replay = new ReplayEngine(eventStore);
+        var gitContext = new GitEventContext(new GitService(TempDir));
 
         var initial = await snapshot.LoadSnapshotAsync();
         var changeFiles = await eventStore.GetAllChangeFilePathsAsync();
@@ -246,7 +458,7 @@ public class EventSourcedLifecycleTests : GitTempRepoFixture
         {
             return initial.Values.ToList();
         }
-        var state = await replay.ReplayAsync(initial, changeFiles, NullEventGitContext.Instance);
+        var state = await replay.ReplayAsync(initial, changeFiles, gitContext);
         return state.Values.ToList();
     }
 }
