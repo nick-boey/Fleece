@@ -16,6 +16,12 @@ public abstract class GitTempRepoFixture
         RunGit("config", "user.name", "Fleece Tester");
         RunGit("config", "user.email", "tester@fleece.example");
         RunGit("config", "commit.gpgsign", "false");
+
+        // Gitignore the volatile pointer files so they are never committed.
+        // Without this, .active-change ends up tracked and conflicts on merge.
+        File.WriteAllText(
+            Path.Combine(TempDir, ".gitignore"),
+            ".fleece/.active-change\n.fleece/.replay-cache\n");
     }
 
     [TearDown]
