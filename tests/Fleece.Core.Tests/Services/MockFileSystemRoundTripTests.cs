@@ -44,15 +44,39 @@ public class MockFileSystemRoundTripTests
         var fleeceDir = mockFs.Path.Combine(basePath, ".fleece");
         mockFs.Directory.Exists(fleeceDir).Should().BeTrue();
 
-        var jsonlFiles = mockFs.Directory.GetFiles(fleeceDir, "issues*.jsonl");
-        jsonlFiles.Should().HaveCount(1, "exactly one issues_<hash>.jsonl file should exist");
+        // Event-sourced storage writes change events to .fleece/changes/, not a hashed snapshot file.
+        var changesDir = mockFs.Path.Combine(fleeceDir, "changes");
+        mockFs.Directory.Exists(changesDir).Should().BeTrue();
 
-        var content = await mockFs.File.ReadAllTextAsync(jsonlFiles[0]);
+        var changeFiles = mockFs.Directory.GetFiles(changesDir, "change_*.jsonl");
+        changeFiles.Should().HaveCount(1, "exactly one active change file should exist after a single write");
+
+        var content = await mockFs.File.ReadAllTextAsync(changeFiles[0]);
         content.Should().Contain(created.Id);
         content.Should().Contain("Mock round-trip");
 
         System.IO.Directory.Exists(basePath).Should().BeFalse(
             "mock path must not exist on the real disk");
+    }
+
+    [Test]
+    public void AddFleeceCore_ResolvesNullEventGitContext_WhenNotInGitRepo()
+    {
+        const string basePath = "/mock-non-git-project";
+        var mockFs = new MockFileSystem();
+        mockFs.Directory.CreateDirectory(basePath);
+
+        var services = new ServiceCollection();
+        services.AddFleeceCore(basePath, mockFs);
+
+        using var provider = services.BuildServiceProvider();
+
+        var ctx = provider.GetRequiredService<Fleece.Core.EventSourcing.Services.Interfaces.IEventGitContext>();
+        ctx.Should().BeSameAs(Fleece.Core.EventSourcing.Services.Interfaces.NullEventGitContext.Instance);
+
+        ctx.GetHeadSha().Should().BeNull();
+        ctx.IsFileCommittedAtHead("any.jsonl").Should().BeFalse();
+        ctx.GetFirstCommitOrdinal("any.jsonl").Should().BeNull();
     }
 
     [Test]

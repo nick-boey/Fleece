@@ -32,9 +32,7 @@ public class SearchTests
             Tags = tags ?? [],
             LinkedPR = linkedPr,
             LastUpdate = DateTimeOffset.UtcNow,
-            TitleLastUpdate = DateTimeOffset.UtcNow,
-            StatusLastUpdate = DateTimeOffset.UtcNow,
-            TypeLastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow,
             ParentIssues = [],
             LinkedIssues = []
         };
@@ -439,9 +437,7 @@ public class SearchTests
                 Status = IssueStatus.Open,
                 Type = IssueType.Feature,
                 LastUpdate = DateTimeOffset.UtcNow,
-                TitleLastUpdate = DateTimeOffset.UtcNow,
-                StatusLastUpdate = DateTimeOffset.UtcNow,
-                TypeLastUpdate = DateTimeOffset.UtcNow,
+                CreatedAt = DateTimeOffset.UtcNow,
                 ParentIssues = [],
                 LinkedIssues = [],
                 Tags = []
@@ -453,9 +449,7 @@ public class SearchTests
                 Status = IssueStatus.Open,
                 Type = IssueType.Task,
                 LastUpdate = DateTimeOffset.UtcNow,
-                TitleLastUpdate = DateTimeOffset.UtcNow,
-                StatusLastUpdate = DateTimeOffset.UtcNow,
-                TypeLastUpdate = DateTimeOffset.UtcNow,
+                CreatedAt = DateTimeOffset.UtcNow,
                 ParentIssues = [parentRef],
                 LinkedIssues = [],
                 Tags = []

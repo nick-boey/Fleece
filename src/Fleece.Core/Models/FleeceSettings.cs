@@ -24,4 +24,10 @@ public sealed record FleeceSettings
     /// Default: null (uses current branch)
     /// </summary>
     public string? SyncBranch { get; init; }
+
+    /// <summary>
+    /// Default branch name where <c>fleece project</c> is allowed to run.
+    /// Default: "main"
+    /// </summary>
+    public string? DefaultBranch { get; init; }
 }

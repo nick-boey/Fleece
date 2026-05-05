@@ -99,7 +99,8 @@ public sealed class SettingsService : ISettingsService
             "automerge" => existing with { AutoMerge = ParseBool(value) },
             "identity" => existing with { Identity = string.IsNullOrEmpty(value) ? null : value },
             "syncbranch" => existing with { SyncBranch = string.IsNullOrEmpty(value) ? null : value },
-            _ => throw new ArgumentException($"Unknown setting: {key}. Valid settings are: autoMerge, identity, syncBranch")
+            "defaultbranch" => existing with { DefaultBranch = string.IsNullOrEmpty(value) ? null : value },
+            _ => throw new ArgumentException($"Unknown setting: {key}. Valid settings are: autoMerge, identity, syncBranch, defaultBranch")
         };
 
         await SaveSettingsToFileAsync(filePath, updated, cancellationToken);
@@ -131,17 +132,21 @@ public sealed class SettingsService : ISettingsService
             cli?.Identity, local?.Identity, global?.Identity, (string?)null);
         var (syncBranch, syncBranchSource) = ResolveValue(
             cli?.SyncBranch, local?.SyncBranch, global?.SyncBranch, (string?)null);
+        var (defaultBranch, defaultBranchSource) = ResolveValue(
+            cli?.DefaultBranch, local?.DefaultBranch, global?.DefaultBranch, "main");
 
         return new EffectiveSettings
         {
             AutoMerge = autoMerge,
             Identity = identity,
             SyncBranch = syncBranch,
+            DefaultBranch = defaultBranch,
             Sources = new SettingsSources
             {
                 AutoMerge = autoMergeSource,
                 Identity = identitySource,
-                SyncBranch = syncBranchSource
+                SyncBranch = syncBranchSource,
+                DefaultBranch = defaultBranchSource
             }
         };
     }

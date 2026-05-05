@@ -7,8 +7,13 @@ namespace Fleece.Cli.Commands;
 
 public sealed class MergeCommand(IFleeceService fleeceService, IAnsiConsole console) : AsyncCommand<MergeSettings>
 {
+    internal const string DeprecationNotice =
+        "warning: `fleece merge` is deprecated and will be removed in a future release. Use `fleece project` instead.";
+
     public override async Task<int> ExecuteAsync(CommandContext context, MergeSettings settings)
     {
+        Console.Error.WriteLine(DeprecationNotice);
+
         if (settings.DryRun)
         {
             console.MarkupLine("[yellow]Dry run mode - no changes will be made[/]");

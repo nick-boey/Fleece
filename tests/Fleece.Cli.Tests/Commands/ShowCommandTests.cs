@@ -238,8 +238,8 @@ public class ShowCommandTests
         root.GetProperty("priority").GetInt32().Should().Be(2);
         root.GetProperty("description").GetString().Should().Be("Detailed description");
 
-        root.TryGetProperty("titleLastUpdate", out _).Should().BeTrue();
-        root.TryGetProperty("statusLastUpdate", out _).Should().BeTrue();
+        root.TryGetProperty("createdAt", out _).Should().BeTrue();
+        root.TryGetProperty("lastUpdate", out _).Should().BeTrue();
 
         root.TryGetProperty("parents", out _).Should().BeFalse();
         root.TryGetProperty("children", out _).Should().BeFalse();

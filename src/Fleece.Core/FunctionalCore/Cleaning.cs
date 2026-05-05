@@ -96,9 +96,7 @@ public static class Cleaning
                     {
                         LinkedIssues = issue.LinkedIssues
                             .Where(li => !cleanedIds.Contains(li))
-                            .ToList(),
-                        LinkedIssuesLastUpdate = now,
-                        LinkedIssuesModifiedBy = cleanedBy
+                            .ToList()
                     };
                     modified = true;
                 }
@@ -128,7 +126,7 @@ public static class Cleaning
                     {
                         ParentIssues = issue.ParentIssues.Select(pi =>
                             danglingParentIds.Contains(pi.ParentIssue)
-                                ? pi with { Active = false, LastUpdated = now, UpdatedBy = cleanedBy }
+                                ? pi with { Active = false }
                                 : pi).ToList()
                     };
                     modified = true;

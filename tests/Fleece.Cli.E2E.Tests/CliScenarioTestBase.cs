@@ -1,5 +1,7 @@
 using System.Text;
 using System.Text.Json;
+using Fleece.Core.EventSourcing.Services;
+using Fleece.Core.EventSourcing.Services.Interfaces;
 using Fleece.Core.Models;
 using Fleece.Core.Serialization;
 using Spectre.Console.Testing;
@@ -56,24 +58,21 @@ public abstract class CliScenarioTestBase
             return Array.Empty<Issue>();
         }
 
-        var issues = new List<Issue>();
-        foreach (var path in Fs.Directory.GetFiles(dir, "issues_*.jsonl"))
-        {
-            foreach (var line in Fs.File.ReadAllLines(path))
-            {
-                if (string.IsNullOrWhiteSpace(line))
-                {
-                    continue;
-                }
-
-                var issue = JsonSerializer.Deserialize(line, FleeceJsonContext.Default.Issue);
-                if (issue is not null)
-                {
-                    issues.Add(issue);
-                }
-            }
-        }
-        return issues;
+        // Replay snapshot + change files using the same engine the CLI uses.
+        var snapshot = new SnapshotStore(BasePath, Fs);
+        var eventStore = new EventStore(BasePath, Fs);
+        var replay = new ReplayEngine(eventStore);
+        var initial = snapshot.LoadSnapshotAsync().GetAwaiter().GetResult();
+        var changeFiles = eventStore.GetAllChangeFilePathsAsync().GetAwaiter().GetResult();
+        var state = changeFiles.Count == 0
+            ? initial
+            : replay.ReplayAsync(initial, changeFiles, NullEventGitContext.Instance).GetAwaiter().GetResult();
+        // Sort by CreatedAt so snapshot tests see issues in creation order (matches the
+        // legacy hashed-file append order that snapshot scrubbing was tuned for).
+        return state.Values
+            .OrderBy(i => i.CreatedAt)
+            .ThenBy(i => i.Id, StringComparer.Ordinal)
+            .ToList();
     }
 
     protected IReadOnlyList<Tombstone> LoadTombstones()
@@ -84,24 +83,8 @@ public abstract class CliScenarioTestBase
             return Array.Empty<Tombstone>();
         }
 
-        var tombstones = new List<Tombstone>();
-        foreach (var path in Fs.Directory.GetFiles(dir, "tombstones_*.jsonl"))
-        {
-            foreach (var line in Fs.File.ReadAllLines(path))
-            {
-                if (string.IsNullOrWhiteSpace(line))
-                {
-                    continue;
-                }
-
-                var ts = JsonSerializer.Deserialize(line, FleeceJsonContext.Default.Tombstone);
-                if (ts is not null)
-                {
-                    tombstones.Add(ts);
-                }
-            }
-        }
-        return tombstones;
+        var snapshot = new SnapshotStore(BasePath, Fs);
+        return snapshot.LoadTombstonesAsync().GetAwaiter().GetResult();
     }
 
     protected Task AssertStdoutSnapshot()

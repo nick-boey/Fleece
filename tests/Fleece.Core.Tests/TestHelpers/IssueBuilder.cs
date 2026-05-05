@@ -18,9 +18,6 @@ public class IssueBuilder
     private string? _createdBy;
     private IReadOnlyList<string> _tags = [];
     private ExecutionMode _executionMode = ExecutionMode.Series;
-    private DateTimeOffset? _executionModeLastUpdate;
-    private string? _executionModeModifiedBy;
-    private bool _executionModeLastUpdateSet;
     private DateTimeOffset _lastUpdate = DateTimeOffset.UtcNow;
     private DateTimeOffset _createdAt = DateTimeOffset.UtcNow;
 
@@ -116,19 +113,11 @@ public class IssueBuilder
     public IssueBuilder WithExecutionMode(ExecutionMode executionMode, DateTimeOffset? lastUpdate = null, string? modifiedBy = null)
     {
         _executionMode = executionMode;
-        if (lastUpdate is not null)
-        {
-            _executionModeLastUpdate = lastUpdate;
-            _executionModeLastUpdateSet = true;
-        }
-        _executionModeModifiedBy = modifiedBy;
         return this;
     }
 
     public IssueBuilder WithExecutionModeLastUpdate(DateTimeOffset? lastUpdate)
     {
-        _executionModeLastUpdate = lastUpdate;
-        _executionModeLastUpdateSet = true;
         return this;
     }
 
@@ -148,31 +137,17 @@ public class IssueBuilder
     {
         Id = _id,
         Title = _title,
-        TitleLastUpdate = _lastUpdate,
         Description = _description,
-        DescriptionLastUpdate = _description is not null ? _lastUpdate : null,
         Status = _status,
-        StatusLastUpdate = _lastUpdate,
         Type = _type,
-        TypeLastUpdate = _lastUpdate,
         LinkedPR = _linkedPr,
-        LinkedPRLastUpdate = _linkedPr is not null ? _lastUpdate : null,
         LinkedIssues = _linkedIssues,
-        LinkedIssuesLastUpdate = _lastUpdate,
-        ParentIssues = _parentIssues.Select(p => p.LastUpdated == default
-            ? p with { LastUpdated = _lastUpdate, Active = true }
-            : p).ToList(),
+        ParentIssues = _parentIssues.Select(p => p with { Active = true }).ToList(),
         Priority = _priority,
-        PriorityLastUpdate = _priority is not null ? _lastUpdate : null,
         AssignedTo = _assignedTo,
-        AssignedToLastUpdate = _assignedTo is not null ? _lastUpdate : null,
         Tags = _tags,
-        TagsLastUpdate = _lastUpdate,
         ExecutionMode = _executionMode,
-        ExecutionModeLastUpdate = _executionModeLastUpdateSet ? _executionModeLastUpdate : _lastUpdate,
-        ExecutionModeModifiedBy = _executionModeModifiedBy,
         CreatedBy = _createdBy,
-        CreatedByLastUpdate = _createdBy is not null ? _lastUpdate : null,
         LastUpdate = _lastUpdate,
         CreatedAt = _createdAt
     };

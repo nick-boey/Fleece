@@ -40,6 +40,8 @@ public static class CliComposition
     {
         var services = new ServiceCollection();
         services.AddFleeceInMemoryService(basePath, fileSystem);
+        var fs = fileSystem ?? new Testably.Abstractions.RealFileSystem();
+        services.AddSingleton(new BasePathProvider(basePath ?? fs.Directory.GetCurrentDirectory()));
         services.AddSingleton<IAnsiConsole>(_ => AnsiConsole.Console);
         return services;
     }

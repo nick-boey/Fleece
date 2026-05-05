@@ -1,29 +1,33 @@
 using System.Text.Json;
 using Fleece.Cli.Settings;
+using Fleece.Core.EventSourcing.Services.Interfaces;
 using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class MigrateCommand(IFleeceService fleeceService, IAnsiConsole console) : AsyncCommand<MigrateSettings>
+/// <summary>
+/// Bring fleece data up to the current schema. Today this converts the legacy hashed
+/// <c>.fleece/issues_*.jsonl</c> + <c>.fleece/tombstones_*.jsonl</c> layout into the
+/// event-sourced layout via <see cref="IMigrationService"/>. Future schema migrations
+/// extend the same pipeline rather than introducing new commands.
+/// </summary>
+public sealed class MigrateCommand(
+    IMigrationService migration,
+    IGitConfigService gitConfig,
+    IAnsiConsole console)
+    : AsyncCommand<MigrateSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, MigrateSettings settings)
     {
-        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
-        if (hasMultiple)
-        {
-            console.MarkupLine($"[red]Error:[/] {message}");
-            return 1;
-        }
-
         if (settings.DryRun)
         {
-            var needed = await fleeceService.IsMigrationNeededAsync();
+            var needed = await migration.IsMigrationNeededAsync();
 
             if (settings.Json)
             {
-                Console.WriteLine(JsonSerializer.Serialize(new { migrationNeeded = needed }));
+                console.WriteLine(JsonSerializer.Serialize(new { migrationNeeded = needed }));
             }
             else if (needed)
             {
@@ -37,37 +41,38 @@ public sealed class MigrateCommand(IFleeceService fleeceService, IAnsiConsole co
             return 0;
         }
 
-        var result = await fleeceService.MigrateAsync();
+        var by = gitConfig.GetUserName() ?? Environment.UserName;
+        var result = await migration.MigrateAsync(by);
 
         if (settings.Json)
         {
-            Console.WriteLine(JsonSerializer.Serialize(new
+            console.WriteLine(JsonSerializer.Serialize(new
             {
-                totalIssues = result.TotalIssues,
-                migratedIssues = result.MigratedIssues,
-                alreadyMigratedIssues = result.AlreadyMigratedIssues,
                 wasMigrationNeeded = result.WasMigrationNeeded,
-                unknownPropertiesDeleted = result.UnknownPropertiesDeleted.OrderBy(p => p).ToArray()
-            }));
+                legacyIssueFiles = result.LegacyIssueFilesConsumed,
+                legacyTombstoneFiles = result.LegacyTombstoneFilesConsumed,
+                issuesWritten = result.IssuesWritten,
+                tombstonesWritten = result.TombstonesWritten,
+                gitignoreEntriesAdded = result.GitignoreEntriesAdded.ToArray(),
+            }, new JsonSerializerOptions { WriteIndented = false }));
+            return 0;
         }
-        else if (result.WasMigrationNeeded)
-        {
-            console.MarkupLine($"[green]Migration complete![/]");
-            console.MarkupLine($"  Total issues: {result.TotalIssues}");
-            console.MarkupLine($"  Migrated: {result.MigratedIssues}");
-            console.MarkupLine($"  Already migrated: {result.AlreadyMigratedIssues}");
 
-            if (result.UnknownPropertiesDeleted.Count > 0)
-            {
-                var properties = string.Join(", ", result.UnknownPropertiesDeleted.OrderBy(p => p));
-                console.MarkupLine($"  Unknown properties removed: {Markup.Escape(properties)}");
-            }
-        }
-        else
+        if (!result.WasMigrationNeeded)
         {
             console.MarkupLine("[green]No migration needed. All issues are up to date.[/]");
+            return 0;
         }
 
+        console.MarkupLine("[green]Migration complete.[/]");
+        console.MarkupLine($"  Legacy issue files consumed: {result.LegacyIssueFilesConsumed}");
+        console.MarkupLine($"  Legacy tombstone files consumed: {result.LegacyTombstoneFilesConsumed}");
+        console.MarkupLine($"  Issues written: {result.IssuesWritten}");
+        console.MarkupLine($"  Tombstones written: {result.TombstonesWritten}");
+        if (result.GitignoreEntriesAdded.Count > 0)
+        {
+            console.MarkupLine($"  .gitignore entries added: {string.Join(", ", result.GitignoreEntriesAdded)}");
+        }
         return 0;
     }
 }

@@ -35,8 +35,8 @@ public class SchemaValidatorTests
         var known = _sut.KnownIssueProperties;
 
         // Verify the stored names are in camelCase format
-        known.Should().Contain("titleLastUpdate");
         known.Should().Contain("linkedIssues");
+        known.Should().Contain("workingBranchId");
 
         // Verify all stored names start with lowercase (camelCase)
         foreach (var prop in known)

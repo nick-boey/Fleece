@@ -86,24 +86,29 @@ fleece history --user john  # Filter by user
 
 ## Storage Format
 
-Issues are stored as [JSONL](https://jsonlines.org/) (JSON Lines) - one JSON object per line:
+Fleece uses event-sourced [JSONL](https://jsonlines.org/) storage: a snapshot file plus per-session change files.
 
 ```
 .fleece/
-  issues.jsonl      # Active issues
-  changes.jsonl     # Change history
-  conflicts.jsonl   # Conflict records (if any)
+  issues.jsonl                    # Projected snapshot (lean issue records)
+  tombstones.jsonl                # Hard-deleted issue records
+  changes/
+    change_<guid>.jsonl           # Per-session event log; first line is a `meta` event
+  .active-change                  # Current session's change-file pointer (gitignored)
+  .replay-cache                   # Cache of projected state at HEAD (gitignored)
 ```
 
-Example issue entry:
+Example snapshot entry:
 
 ```json
-{"Id":"a1b2c3","Title":"Fix login bug","Status":"open","Type":"bug","Priority":1,"LastUpdate":"2024-01-15T10:30:00Z"}
+{"id":"a1b2c3","title":"Fix login bug","status":"Open","type":"Bug","priority":1,"createdAt":"2026-01-15T10:30:00Z","lastUpdate":"2026-01-15T10:30:00Z"}
 ```
 
+Reads layer the snapshot plus all change files in topological order; writes append events to the active change file. Run `fleece project` on the default branch (typically daily, via the GitHub Action template installed by `fleece install`) to compact events back into the snapshot.
+
 This format provides:
-- Easy version control diffing
-- Append-only change tracking
+- Minimal, semantic per-commit diffs (each commit shows only the events appended)
+- Identical results pre- and post-squash-merge thanks to the `follows`-pointer DAG
 - Simple parsing in any language
 - Human-readable storage
 

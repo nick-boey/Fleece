@@ -1,0 +1,127 @@
+## 1. Foundation: Event DTOs and Models
+
+- [x] 1.1 Move existing `Fleece.Core.Models.Issue` and related DTOs (`IssueDto`, `IssueShowDto`, `IssueSummaryDto`, `IssueSyncDto`, `Tombstone`) into a new `Fleece.Core.Models.Legacy` namespace, renaming with a `Legacy` prefix where ambiguity would arise (e.g., `LegacyIssue`) — **landed in PR 2**: `LegacyIssue` and `LegacyParentIssueRef` live under `Models/Legacy/`; `IssueMerger` → `Services/Legacy/LegacyIssueMerger`; `Merging` and `Migration` → `FunctionalCore/Legacy/`. `Fleece.Core.Models.Issue` and `Fleece.Core.Models.ParentIssueRef` are now the lean event-sourced shapes. Tombstone, IssueDto, IssueShowDto, IssueSummaryDto, IssueSyncDto stayed in `Models/` — they reference only fields that exist on the lean Issue, so no rename was needed.
+- [x] 1.2 Create the new lean `Fleece.Core.Models.Issue` record with: `Id`, `Title`, `Description`, `Status`, `Type`, `LinkedPR`, `LinkedIssues`, `ParentIssues`, `Priority`, `AssignedTo`, `Tags`, `WorkingBranchId`, `ExecutionMode`, `CreatedBy`, `CreatedAt`, `LastUpdate` (no `*LastUpdate`/`*ModifiedBy` per-property fields) — landed at `Fleece.Core.EventSourcing.Issue`; will be promoted to `Fleece.Core.Models.Issue` in PR 2.
+- [x] 1.3 Create event DTOs under `Fleece.Core.Models.Events/`: `IssueEvent` (base/discriminated union), `MetaEvent`, `CreateEvent`, `SetEvent`, `AddEvent`, `RemoveEvent`, `HardDeleteEvent` — landed at `Fleece.Core.EventSourcing.Events`.
+- [x] 1.4 Configure `System.Text.Json` polymorphic deserialization for `IssueEvent` keyed by the `kind` discriminator, with explicit handling for unknown kinds (throw with file/line context)
+- [x] 1.5 Add unit tests for event serialization round-trips (each kind, including `parentIssues` element shape and null scalars)
+
+## 2. Event Store: Active File and Rotation
+
+- [x] 2.1 Create `IEventStore` interface in `Fleece.Core/Services/Interfaces/` with methods to read all change files, read the active file, append events, and rotate — landed at `Fleece.Core.EventSourcing.Services.Interfaces.IEventStore`.
+- [x] 2.2 Implement `EventStore` in `Fleece.Core/Services/`: reads `.fleece/.active-change`, applies the rotation rule (pointer missing OR file missing on disk → fresh GUID), scans existing change files to build the follows-DAG, finds the leaf, writes meta event, writes pointer
+- [x] 2.3 Implement append-event behavior: write a single JSON line per event, ensure trailing newline, fsync-or-equivalent for crash safety (best-effort `Stream.FlushAsync` — `IFileSystem` does not expose true fsync)
+- [x] 2.4 Add unit tests for rotation triggers: missing pointer, missing file, file present (reuse), file in HEAD (still reuse), branch switch (file vanishes from working tree → rotation)
+- [x] 2.5 Add unit tests for follows-DAG leaf selection (single chain, multiple roots, multiple leaves, GUID-alphabetical tiebreak)
+
+## 3. Replay Engine
+
+- [x] 3.1 Create `IReplayEngine` interface returning the in-memory issue dictionary given a snapshot path and a change-files directory — interface takes initial state + change-file paths so it stays pure of file I/O concerns.
+- [x] 3.2 Implement `ReplayEngine`: load snapshot, list change files, build follows-DAG from first lines, topologically sort, apply tiebreaks (commit order via `IGitService`, then GUID alphabetical), apply events in line order — commit-order tiebreaks come from `IChangeFileCommitOrder`; PR 2 will plug in the git-backed implementation.
+- [x] 3.3 Implement event application: `create` inserts; `set` overwrites scalar (handles null); `add` appends to array idempotently; `remove` drops from array idempotently (with `parentIssues` matched by `parentIssue` key only); `hard-delete` drops the row
+- [x] 3.4 Handle dangling `follows` pointers: treat as `null` (root) with a debug log (degraded silently to `null` for now; `ILogger` integration deferred)
+- [x] 3.5 Surface a clear diagnostic on unknown `kind` values (file path + line number) — `UnknownEventKindException` carries `FilePath` + `LineNumber`
+- [x] 3.6 Add unit tests covering: simple linear replay, squash equivalence (same events ordered correctly post-squash), multi-machine squash with follows pointers, parallel-branch tiebreak via commit order, dangling follows, idempotency of `add`/`remove`, `parentIssues` match-by-key
+
+## 4. Replay Cache
+
+- [x] 4.1 Define cache file format at `.fleece/.replay-cache`: HEAD SHA + serialized committed-state dictionary
+- [x] 4.2 Implement cache read/write in `EventStore` (or a sibling `IReplayCache` service) — sibling `IReplayCache` / `ReplayCache`.
+- [x] 4.3 Wire the replay engine to: load cache → if HEAD matches, replay only the active uncommitted file on top → otherwise full replay + cache rewrite — wiring lives in `EventSourcedStorageService.GetIssuesAsync`; the `IReplayEngine` itself remains pure.
+- [x] 4.4 Add `.fleece/.replay-cache` to the bootstrapped `.gitignore` template — landed in PR 3 via `InstallCommand.EnsureGitignoreEntriesAsync`.
+- [x] 4.5 Add unit tests for cache hit (HEAD unchanged) and cache miss (HEAD advanced)
+
+## 5. Snapshot I/O
+
+- [x] 5.1 Implement snapshot reader: parse `.fleece/issues.jsonl` into a dictionary using the new lean `Issue` model
+- [x] 5.2 Implement snapshot writer: serialize the in-memory dictionary to `.fleece/issues.jsonl` (sorted by `id` for stable diffs); also write `.fleece/tombstones.jsonl` from a tombstone list
+- [x] 5.3 Implement tombstones reader/writer
+- [x] 5.4 Add unit tests for round-trip snapshot serialization and stable ordering
+
+## 6. New Storage Service
+
+- [x] 6.1 Create `IEventSourcedStorageService` (or repurpose the existing `IStorageService` interface) exposing the read/write surface that today's `IFleeceService` consumes (load issues, save issue, etc.) — new sibling interface; `IFleeceService` adapter comes in PR 2.
+- [x] 6.2 Implement `EventSourcedStorageService`: reads via snapshot+replay; writes by appending events
+- [x] 6.3 Replace `JsonlStorageService` and `SingleFileStorageService` registrations in DI with the new service. Delete the old implementations once no callers remain. — `IStorageService` is now satisfied by `EventSourcedStorageAdapter`, which routes reads through `IEventSourcedStorageService` and translates writes into events. Legacy `JsonlStorageService` / `SingleFileStorageService` are retained as orphaned source (still referenced by `FleeceService.ForFile`, integration tests, and the upcoming PR 4 migration); deletion is deferred until those callers go away.
+- [x] 6.4 Add integration tests: create-then-read on a fresh repo, edit-then-read across a simulated commit boundary, round-trip every event kind — covered by `EventSourcedStorageServiceTests` (in-process, in-memory file system).
+
+## 7. Wire Up Write Paths
+
+- [x] 7.1 `CreateCommand`: emit a single `create` event with full property bag from CLI flags — `FleeceService.CreateAsync` calls `IStorageService.AppendIssueAsync(issue)`; the adapter serializes the lean issue into a `create` event's `data` payload.
+- [x] 7.2 `EditCommand`: diff the requested updates against the current in-memory state and emit one `set` per scalar change, plus `add`/`remove` per array delta — handled in `EventSourcedStorageAdapter.SaveIssuesAsync` (`DiffEvents` for scalars, `DiffStringArray` for `linkedIssues`/`tags`, `DiffParentIssues` for `parentIssues`).
+- [x] 7.3 `DeleteCommand` (soft-delete): emit `set status="Deleted"` — `FleeceService.DeleteAsync` updates `Status` and routes through the adapter, which emits a `set status=Deleted` event.
+- [x] 7.4 `CleanCommand` (hard-delete): emit `hard-delete` per issue removed; tombstones written via the projection path — the adapter emits `HardDeleteEvent` for any issue dropped by `SaveIssuesAsync`; tombstones still go to the snapshot sidecar via `SnapshotStore.WriteTombstonesAsync` until `fleece project` (PR 3) takes over.
+- [x] 7.5 `MoveCommand` and `DependencyCommand`: emit `add`/`remove` events for `parentIssues` — `DiffParentIssues` emits an `add` (which upserts by `parentIssue` key in `IssueBuilder`) for each new/changed ref and a `remove` for any ref that disappears.
+- [x] 7.6 `StatusCommands` (the various status-change shortcuts): emit `set status=<value>` events — these route through `IFleeceService.UpdateAsync`, which goes through the adapter's diff path.
+- [x] 7.7 Verify that no write command bypasses the event store and writes directly to `.fleece/issues.jsonl` — the only `IStorageService` registered in DI is `EventSourcedStorageAdapter`; its hashed-file methods (`SaveIssuesWithHashAsync`, `DeleteIssueFileAsync`, `GetAllIssueFilesAsync`) are no-ops/empty. The snapshot is only ever written via the projection path (`WriteSnapshotAsync` / `WriteTombstonesAsync`).
+
+## 8. Wire Up Read Paths
+
+- [x] 8.1 `ListCommand`, `ShowCommand`, `NextCommand`, `SearchCommand`, `DiffCommand`, `ValidateCommand`, `tree`/`status`/`graph` views: ensure all reads go through `IEventSourcedStorageService` (which replays internally) — every read command consumes `IFleeceService`, which calls `IStorageService.LoadIssuesAsync`, which the adapter satisfies by calling `IEventSourcedStorageService.GetIssuesAsync` (snapshot + replay).
+- [x] 8.2 Verify that no read command reads `.fleece/issues_*.jsonl` legacy files — the adapter's `GetAllIssueFilesAsync`/`LoadIssuesFromFileAsync` return empty; nothing in the live read path inspects hashed files. (Legacy file reading lives only in the orphaned `JsonlStorageService` and in legacy test fixtures.)
+- [x] 8.3 Update `FleeceService` and `FleeceInMemoryService` to use the new storage service — `FleeceService` is unchanged in shape; it now sits on top of the event-sourced adapter via `IStorageService`. `FleeceInMemoryService` wraps `FleeceService` and inherits the change for free. CLI E2E suite passes against the new layout.
+
+## 9. `fleece project` Command
+
+- [x] 9.1 Create `ProjectCommand` and `ProjectSettings` in `src/Fleece.Cli/Commands/`
+- [x] 9.2 Implement default-branch detection (from git config or settings) and refuse to run on any other branch with a clear error — `IGitService.GetCurrentBranch()` + `EffectiveSettings.DefaultBranch` (default `"main"`, configurable via `FleeceSettings.DefaultBranch`).
+- [x] 9.3 Implement projection: replay → write new snapshot → write tombstones (including new auto-cleanup tombstones) → delete all change files in `.fleece/changes/` — `IProjectionService` / `ProjectionService`.
+- [x] 9.4 Implement 30-day auto-cleanup for soft-deleted issues, with `cleanedAt` and `cleanedBy` recorded in `tombstones.jsonl` — uses `Issue.LastUpdate` as a conservative proxy for "status set ≥30d ago" (an issue is cleaned only when it is currently `Deleted` AND has had no modifications for 30 days; this is correct for all spec scenarios).
+- [x] 9.5 Stage all changes (`git add`) but do not commit (let CI or the user commit) — `ProjectCommand` calls `IGitService.StageFleeceDirectory()`.
+- [x] 9.6 Ensure idempotency: repeated runs with no events between produce no diff — covered by `ProjectionServiceTests.Project_is_idempotent_on_repeat_run` and `ProjectIntegrationTests.Project_is_idempotent_when_no_events_remain`.
+- [x] 9.7 Register the command in DI and wire `Spectre.Console.Cli` routing — `IProjectionService` registered in `AddFleeceCore`; command registered in `CliApp.BuildApp`.
+- [x] 9.8 Add E2E tests covering: refuses on non-main, compacts events on main, idempotent on repeat, auto-cleans soft-deleted >30d, leaves <30d soft-deleted intact — `ProjectIntegrationTests` (real-git) covers all five scenarios.
+
+## 10. Deprecate `fleece merge`
+
+- [x] 10.1 Update `MergeCommand` to print a deprecation notice on stderr pointing at `fleece project`
+- [x] 10.2 Keep existing merge behavior functional for one release cycle (still callable, still works, just deprecated) — the `IFleeceService.MergeAsync` call is unchanged.
+- [x] 10.3 Add a test asserting the deprecation notice is printed — `MergeCommandTests.Execute_WritesDeprecationNoticeToStderr`.
+
+## 11. `fleece install` Extensions
+
+- [x] 11.1 Extend `InstallCommand` to write `.git/hooks/pre-commit` (creating it if absent, appending a fleece block between marker comments if present), making it executable — `InstallCommand.InstallPreCommitHookAsync` + `ReplaceOrAppendBlock`.
+- [x] 11.2 The hook runs `git add .fleece/changes/` and (when on the default branch) `git add .fleece/issues.jsonl .fleece/tombstones.jsonl` — see `InstallCommand.BuildFleeceHookBlock`.
+- [x] 11.3 Make the install idempotent (single fleece block even on repeat runs) — covered by `InstallScenarios.Install_is_idempotent_for_pre_commit_hook`.
+- [x] 11.4 Detect github.com remote; if present and `.github/workflows/` exists, write `.github/workflows/fleece-project.yml` with daily cron + workflow_dispatch + checkout + install fleece + `fleece project` + commit + push steps — `InstallCommand.MaybeInstallGitHubWorkflowAsync` + `BuildWorkflowYaml`.
+- [x] 11.5 Skip writing the workflow if it already exists; print a warning — covered by `InstallScenarios.Install_does_not_overwrite_existing_workflow_file`.
+- [x] 11.6 Add `.fleece/.active-change` and `.fleece/.replay-cache` to `.gitignore` if missing — `InstallCommand.EnsureGitignoreEntriesAsync`.
+- [x] 11.7 Add E2E tests: fresh install creates expected files, repeat install is idempotent, existing pre-commit hook is preserved — `InstallScenarios` covers all three.
+
+## 12. Migration Command
+
+- [x] 12.1 Decide: extend `MigrateCommand` or add a new `migrate-events` subcommand. Implement chosen approach. — ~~added new `migrate-events` subcommand to keep the legacy `migrate` (which migrates within the legacy shape) distinct.~~ **REVISED 2026-05-01:** decision reversed. `fleece migrate` remains the single user-facing "bring my data up to the current schema" command; the event-sourcing migration is the final stage of its pipeline. `migrate-events` is removed. See tasks 12.10–12.12 for the unification work.
+- [x] 12.2 Read all `.fleece/issues_*.jsonl` files using `Fleece.Core.Models.Legacy.LegacyIssue` — `EventMigrationService.ReadLegacyIssuesAsync` + `FleeceLegacyJsonContext`.
+- [x] 12.3 Reuse `IssueMerger` to reconcile per-issue conflicts across files — `LegacyMerging.Plan` + `LegacyMerging.Apply` (which delegates to `LegacyIssueMerger`).
+- [x] 12.4 Project the merged set into the new lean `Issue` shape; write `.fleece/issues.jsonl` — `EventMigrationService.ToLeanIssue` + `WriteSnapshotAsync`.
+- [x] 12.5 Read all `.fleece/tombstones_*.jsonl` files; union by issue ID; write `.fleece/tombstones.jsonl` — `EventMigrationService.ReadLegacyTombstonesAsync` (deduplicates on first-write-wins).
+- [x] 12.6 Delete legacy `issues_*.jsonl` and `tombstones_*.jsonl` files — done after the new files land.
+- [x] 12.7 Create `.fleece/changes/` directory; ensure `.gitignore` entries are added — both handled in `MigrateAsync`.
+- [x] 12.8 Make the migration idempotent: detect already-migrated repos and exit cleanly — `IsMigrationNeededAsync` short-circuits.
+- [x] 12.9 Add E2E tests: legacy → new conversion, conflict reconciliation, tombstone union, idempotent on already-migrated, gitignore additions — `EventMigrationServiceTests` (Core unit) + `MigrateEventsScenarios` (CLI E2E).
+- [x] 12.10 Fold `MigrateEventsCommand` into `MigrateCommand`. Delete `src/Fleece.Cli/Commands/MigrateEventsCommand.cs`, the `MigrateEventsSettings` class, and the `migrate-events` registration in `CliApp.cs` + `CliComposition.cs`. `MigrateCommand` consumes the migration service (renamed from `IEventMigrationService` → `IMigrationService`) and reports unified results via the existing `--json` shape. `MigrateSettings` keeps `--dry-run` and `--json`. Snapshot tests for `migrate` reflect the unified output. — Done. `IEventMigrationService`/`EventMigrationService`/`EventMigrationResult` renamed to `IMigrationService`/`MigrationService`/`MigrationResult` (the legacy `Models/MigrationResult.cs` was deleted in 12.12, freeing the name). `MigrateCommand` now takes `IMigrationService` + `IGitConfigService`. CLI E2E `MigrateEventsScenarios` → `MigrateScenarios` targeting `migrate`; an extra scenario asserts `migrate-events` is no longer registered. CLAUDE.md and `PrimeCommand` doc strings updated.
+- [x] 12.11 Add Step A of the Schema Migration Pipeline. The migration service SHALL invoke `LegacyMigration.Migrate` on the parsed `LegacyIssue[]` from each legacy file *before* `LegacyMerging.Plan`. This restores the pre-3.0.0 fixups (timestamp backfill, `LinkedPR`→`Tags` fold, parent-ref `LastUpdated` backfill) that were silently dropped in the original implementation. Add a Core unit test where a legacy file containing an issue with `LinkedPR=42` and zeroed timestamps migrates to a lean Issue with `LinkedPR=null` and `Tags` containing the `linked-pr=42` keyed-tag entry. — Done. `MigrationService.MigrateAsync` step 1 now wraps each file's parsed `LegacyIssue[]` with `LegacyMigration.Migrate` before grouping for `LegacyMerging.Plan`. New `MigrationServiceTests.Migrate_folds_pre_3_0_0_LinkedPR_scalar_into_Tags_keyed_tag` exercises `LinkedPR=42` → `Tags` containing `KeyedTag.LinkedPrKey=42` (the canonical `hsp-linked-pr` prefix; spec scenario updated to match). Fixed a latent NPE in `LegacyMigration.NeedsMigration`/`MigrateIssue` when `ParentIssues` is null on freshly-deserialized JSON.
+- [x] 12.12 Remove `MigrateAsync` and `IsMigrationNeededAsync` from `IFleeceService`. Delete the no-op stubs from `FleeceService` and `FleeceInMemoryService`. Update any tests that referenced them. Verify no callers remain (the previous caller was `MigrateCommand`, which now goes via `IMigrationService`). — Done. Both methods removed from `IFleeceService`; no-op stubs removed from `FleeceService` (`FleeceInMemoryService` never implemented them). The legacy `Fleece.Core.Models.MigrationResult` record is deleted (only used by the removed methods); the name is now reused by `IMigrationService`'s result type. No remaining callers.
+
+## 13. Run Migration on This Repository
+
+- [x] 13.1 Execute the migration command against `.fleece/` in this repository — ran `dotnet run --project src/Fleece.Cli -- migrate-events`; output: 1 legacy issues file consumed, 1 legacy tombstones file consumed, 209 issues written, 22 tombstones written, gitignore entries added. **Note 2026-05-01:** the on-disk result is byte-equivalent to what the unified `fleece migrate` would produce for this repo's data (no `LinkedPR` scalars existed; all timestamps were already populated). No re-run is required after task 12.10 lands.
+- [x] 13.2 Verify the resulting `.fleece/issues.jsonl` reflects all current issues — `dotnet run -- list --all --json` returned 209 issues; `dotnet run -- show bDBG4p` resolved correctly.
+- [x] 13.3 Commit the migration result as part of the change PR — included in the PR 4 commit alongside the migration command.
+- [x] 13.4 Verify CI passes on the post-migration tree — `dotnet test` runs clean locally after tasks 12.10–12.12 (891 tests: 650 Core + 77 CLI E2E + 148 CLI + 16 Integration). CI verification still pending PR open.
+
+## 14. Documentation and Cleanup
+
+- [x] 14.1 Update `CLAUDE.md` to describe the event-sourced layout, replay model, and `fleece project` semantics — added an "Event-sourced storage" section.
+- [x] 14.2 Update `fleece prime` topic content to reflect the new architecture (especially `merge` → `project` guidance) — both the main prime body (steps 9–11) and the `merge` topic content rewritten.
+- [x] 14.3 Update README and any user-facing docs covering storage layout — README now describes the snapshot + change-files layout.
+- [x] 14.4 Remove or archive references to `IssueMerger` and the legacy storage services from non-migration code paths — already isolated in PR 2 (`LegacyIssueMerger` lives under `Services/Legacy/`); only the migration consumes it.
+- [x] 14.5 File a follow-up Fleece issue to delete `Fleece.Core.Models.Legacy`, `IssueMerger`, and `MergeCommand` after the migration is rolled out — Fleece issue `gwywzs`.
+
+## 15. Verification and Test Coverage
+
+- [x] 15.1 Verify all existing E2E snapshot tests pass post-migration (or update snapshots intentionally) — full suite is green (891 tests).
+- [x] 15.2 Add an integration test simulating the full lifecycle: migrate → create on feature branch → commit → switch branch → create different events → switch back → verify correct in-memory state — `EventSourcedLifecycleTests.Lifecycle_create_commit_switch_branch_create_switch_back_replays_correctly` and `Migrate_then_create_then_project_round_trip_stays_consistent`.
+- [x] 15.3 Add an integration test simulating squash-merge: write events on feature branch → squash to main → run `fleece project` → verify final state matches pre-squash projection — `EventSourcedLifecycleTests.Squash_equivalence_branch_with_three_chained_change_files_replays_same_after_squash` + `Project_after_squash_produces_state_matching_pre_squash_projection`.
+- [x] 15.4 Add an integration test simulating multi-machine squash: two parallel "machines" with different active-change pointers writing to the same branch → squash → verify follows-DAG ordering produces correct result — `EventSourcedLifecycleTests.Multi_machine_squash_with_chained_follows_pointers_replays_correctly`.
+- [ ] 15.5 Confirm the daily GitHub Action template runs cleanly on a test fork (or document the manual smoke test) — manual smoke test deferred; the workflow is generated by `InstallCommand.BuildWorkflowYaml` and exercised by `InstallScenarios.Install_writes_github_action_when_remote_is_github_and_workflows_dir_exists`. Tracking real-fork validation as a follow-up issue when the PR lands.

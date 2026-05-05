@@ -1,17 +1,22 @@
 using Fleece.Core.Models;
+using Fleece.Core.Models.Legacy;
 
-namespace Fleece.Core.FunctionalCore;
+namespace Fleece.Core.FunctionalCore.Legacy;
 
-public static class Migration
+/// <summary>
+/// Legacy in-memory shape migration for <see cref="LegacyIssue"/>. Event-sourced storage
+/// no longer requires this — kept for any remaining legacy import paths.
+/// </summary>
+public static class LegacyMigration
 {
-    public static bool IsMigrationNeeded(IReadOnlyList<Issue> issues)
+    public static bool IsMigrationNeeded(IReadOnlyList<LegacyIssue> issues)
     {
         return issues.Any(NeedsMigration);
     }
 
-    public static IReadOnlyList<Issue> Migrate(IReadOnlyList<Issue> issues)
+    public static IReadOnlyList<LegacyIssue> Migrate(IReadOnlyList<LegacyIssue> issues)
     {
-        var result = new List<Issue>(issues.Count);
+        var result = new List<LegacyIssue>(issues.Count);
 
         foreach (var issue in issues)
         {
@@ -21,7 +26,7 @@ public static class Migration
         return result;
     }
 
-    private static bool NeedsMigration(Issue issue)
+    private static bool NeedsMigration(LegacyIssue issue)
     {
         var needsTimestampMigration = issue.TitleLastUpdate == default &&
                                       issue.StatusLastUpdate == default &&
@@ -30,12 +35,12 @@ public static class Migration
 
         var needsLinkedPrMigration = issue.LinkedPR.HasValue;
 
-        var needsParentRefTimestampMigration = issue.ParentIssues.Any(p => p.LastUpdated == default);
+        var needsParentRefTimestampMigration = issue.ParentIssues?.Any(p => p.LastUpdated == default) ?? false;
 
         return needsTimestampMigration || needsLinkedPrMigration || needsParentRefTimestampMigration;
     }
 
-    private static Issue MigrateIssue(Issue issue)
+    private static LegacyIssue MigrateIssue(LegacyIssue issue)
     {
         var result = issue;
 
@@ -55,7 +60,7 @@ public static class Migration
                 PriorityLastUpdate = issue.Priority is not null ? timestamp : null,
                 LinkedPRLastUpdate = issue.LinkedPR is not null ? timestamp : null,
                 LinkedIssuesLastUpdate = timestamp,
-                ParentIssues = issue.ParentIssues.Select(p =>
+                ParentIssues = (issue.ParentIssues ?? []).Select(p =>
                     p.LastUpdated == default
                         ? p with { LastUpdated = timestamp, Active = true }
                         : p).ToList(),
@@ -69,7 +74,7 @@ public static class Migration
         }
 
         // Migrate parent refs that lack per-parent timestamps
-        if (result.ParentIssues.Any(p => p.LastUpdated == default))
+        if (result.ParentIssues?.Any(p => p.LastUpdated == default) == true)
         {
             var fallbackTimestamp = result.LastUpdate;
             result = result with
@@ -87,7 +92,7 @@ public static class Migration
     /// <summary>
     /// Migrates the deprecated LinkedPR field to a keyed tag.
     /// </summary>
-    public static Issue MigrateLinkedPrToTags(Issue issue)
+    public static LegacyIssue MigrateLinkedPrToTags(LegacyIssue issue)
     {
         if (!issue.LinkedPR.HasValue)
         {
