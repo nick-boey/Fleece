@@ -1,22 +1,60 @@
-{"issueId":"0Snck5","originalTitle":"Test draft styling","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"3sqISO","originalTitle":"Test","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"69zgyB","originalTitle":"If there is an existing worktree when starting an agent, just use that worktree","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"7ETU6l","originalTitle":"Test Settings Issue","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"C3TA8N","originalTitle":"Test verify issue","cleanedAt":"2026-03-13T14:40:46.7830001+00:00","cleanedBy":"Homespun Bot"}
-{"issueId":"E8nD1F","originalTitle":"Start agents on existing worktrees","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"HcD2cl","originalTitle":"Test \backtick issue","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"JVduJY","originalTitle":"Test verify type","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"LFp2EH","originalTitle":"Test CLI creation","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"TBoaM3","originalTitle":"Test verify type","cleanedAt":"2026-03-13T14:40:46.7830001+00:00","cleanedBy":"Homespun Bot"}
-{"issueId":"XctcDR","originalTitle":"Test identity setting","cleanedAt":"2026-02-20T08:40:43.0822603+00:00","cleanedBy":"Homespun Bot"}
-{"issueId":"cNAjDk","originalTitle":"Task 1.1","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"dZHBiD","originalTitle":"Task 1.2","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"ebtbW6","originalTitle":"Test \u0060backtick\u0060 issue fixed","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"fRIjMX","originalTitle":"Test complete issue","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"gPCe1T","originalTitle":"Test backtick rendering","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"mr3B6M","originalTitle":"Test issue with tags","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"nNPfDD","originalTitle":"test issue","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"ociGkt","originalTitle":"New test issue","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"pPEj5E","originalTitle":"Task 1","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"w55HbG","originalTitle":"Test with backtick","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
-{"issueId":"zRo338","originalTitle":"Move linked PRs to key-valur tags","cleanedAt":"2026-03-22T04:10:43.7176991+00:00","cleanedBy":"testuser"}
+{"issueId":"0bRgVW","originalTitle":"Test issue with tags","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"0bx00L","originalTitle":"New test issue","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"1RbKIT","originalTitle":"Test \backtick issue","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"3sqISO","originalTitle":"Test","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"69zgyB","originalTitle":"If there is an existing worktree when starting an agent, just use that worktree","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"6AagHP","originalTitle":"Show parents in \u0027tree --task-graph\u0027 regardless of status","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"7ETU6l","originalTitle":"Test Settings Issue","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"7GcBo8","originalTitle":"Add ID to tree command","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"98WRcD","originalTitle":"Test complete issue","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"9p8Rbl","originalTitle":"Test CLI creation","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"B8esnK","originalTitle":"Fix backtick rendering","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"BVwLnC","originalTitle":"Create FleeceSpec feature","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"C6lcT5","originalTitle":"Fix merge issues with parent-issues field","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"CKDMUW","originalTitle":"Fleece Server: Optional ASP.NET server for extended issue functionality","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"E8nD1F","originalTitle":"Start agents on existing worktrees","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"HcD2cl","originalTitle":"Test \backtick issue","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"HrNw0O","originalTitle":"Start agents on existing worktrees","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"J6qgOR","originalTitle":"Remove support for multiple parents","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"JEZb5G","originalTitle":"Create schemas","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"LFp2EH","originalTitle":"Test CLI creation","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"NPFPbA","originalTitle":"Review last-write-wins properties","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"OzBi4L","originalTitle":"Show next issues with descriptions first on task graph","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"OzBjE1","originalTitle":"Create TUI","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"PkTYNq","originalTitle":"Add permanent deletion with clean command","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"PmSGRU","originalTitle":"Set active issue","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"QVbeLp","originalTitle":"Update graph structure","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"QctHV0","originalTitle":"Test Settings Issue","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"RyKvMc","originalTitle":"Add [--issues|-i] \u003Cissues_file.jsonl\u003E argument to all CLI commands","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"TxeQDX","originalTitle":"Test","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"UCTS6c","originalTitle":"Filtering by tag returns all issues in list","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"UKHs5J","originalTitle":"Use separate branch for issue syncing","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"Xbr76T","originalTitle":"Update issue merging to prevent PR change pollution","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"YAfGwU","originalTitle":"Next shows parent issues as next","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"Zyl26E","originalTitle":"Transition to functional core, imperative service architecture","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"akE1bk","originalTitle":"If there is an existing worktree when starting an agent, just use that worktree","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"bBEIV4","originalTitle":"Add task graph mode to tree","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"bwji8z","originalTitle":"Remove --next graph vuew","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"bwouPq","originalTitle":"No output for \u0027fleece prime\u0027 without \u0027.fleece\u0027 folder","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"cc4hhA","originalTitle":"Remove parent issues editing","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"cgWwhL","originalTitle":"Test issue with changes","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"ebtbW6","originalTitle":"Test \u0060backtick\u0060 issue fixed","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"fRIjMX","originalTitle":"Test complete issue","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"fZ1S1x","originalTitle":"Add series and parallel execution modes","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"gPCe1T","originalTitle":"Test backtick rendering","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"gkxjqK","originalTitle":"Fix last update value for execution mode","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"hTmtJ5","originalTitle":"Add global and local settings","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"iyL5qZ","originalTitle":"Update TUI","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"mr3B6M","originalTitle":"Test issue with tags","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"nNPfDD","originalTitle":"test issue","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"ociGkt","originalTitle":"New test issue","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"oooLM4","originalTitle":"Adjust task graph sort","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"oxuFb7","originalTitle":"Test with backtick","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"svRPou","originalTitle":"Test backtick rendering","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"uf38Sv","originalTitle":"Test \u0060backtick\u0060 issue fixed","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"vHckf7","originalTitle":"tag-multi-value probe","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"vXWSmP","originalTitle":"Move linked PRs to key-valur tags","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"w55HbG","originalTitle":"Test with backtick","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"xCa8Nv","originalTitle":"Add issue order to show command","cleanedAt":"2026-05-14T03:45:11.9178803+00:00","cleanedBy":"nick-boey"}
+{"issueId":"yV0YZd","originalTitle":"test issue","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}
+{"issueId":"zRo338","originalTitle":"Move linked PRs to key-valur tags","cleanedAt":"2026-05-14T03:43:20.781294+00:00","cleanedBy":"nick-boey"}

@@ -34,11 +34,13 @@ public sealed class MigrationService : IMigrationService
 
     private readonly string _basePath;
     private readonly IFileSystem _fileSystem;
+    private readonly IReplayCache _replayCache;
 
-    public MigrationService(string basePath, IFileSystem? fileSystem = null)
+    public MigrationService(string basePath, IFileSystem? fileSystem = null, IReplayCache? replayCache = null)
     {
         _basePath = basePath;
         _fileSystem = fileSystem ?? new Testably.Abstractions.RealFileSystem();
+        _replayCache = replayCache ?? new ReplayCache(_basePath, _fileSystem);
     }
 
     private string FleeceDirectoryPath => _fileSystem.Path.Combine(_basePath, FleeceDirectory);
@@ -113,9 +115,12 @@ public sealed class MigrationService : IMigrationService
             }
         }
 
-        // 5. Write the new snapshot & tombstones.
+        // 5. Write the new snapshot & tombstones. Invalidate any stale replay cache
+        //    so a pre-migration empty cache at the current HEAD SHA doesn't shadow
+        //    the freshly written snapshot on the next read.
         await WriteSnapshotAsync(leanIssues, cancellationToken);
         await WriteTombstonesAsync(tombstones.Values.OrderBy(t => t.IssueId, StringComparer.Ordinal).ToList(), cancellationToken);
+        await _replayCache.InvalidateAsync(cancellationToken);
 
         // 6. Delete legacy files.
         foreach (var path in legacyIssueFiles)
