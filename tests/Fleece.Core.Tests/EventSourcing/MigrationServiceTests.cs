@@ -2,7 +2,6 @@ using System.Text;
 using Fleece.Core.EventSourcing.Services.Legacy;
 using Fleece.Core.Models;
 using FluentAssertions;
-using NUnit.Framework;
 using Testably.Abstractions.Testing;
 
 namespace Fleece.Core.Tests.EventSourcing;
@@ -170,6 +169,25 @@ public sealed class MigrationServiceTests
         result.WasMigrationNeeded.Should().BeTrue();
         result.IssuesWritten.Should().Be(0);
         result.TombstonesWritten.Should().Be(1);
+    }
+
+    [Test]
+    public async Task Migrate_invalidates_stale_replay_cache()
+    {
+        // Simulate a stale replay cache written by a pre-migration read on the new
+        // event-sourced reader (empty snapshot at the current HEAD SHA). Without
+        // invalidation, the cache would shadow the freshly written snapshot.
+        _fs.Directory.CreateDirectory(FleeceDir);
+        var cachePath = Path.Combine(FleeceDir, ".replay-cache");
+        await _fs.File.WriteAllTextAsync(cachePath,
+            """{"headSha":"deadbeef","issues":[]}""" + "\n");
+
+        WriteLegacyIssuesFile("aaa", LegacyIssueJson("i1", "Hello"));
+
+        await _sut.MigrateAsync();
+
+        _fs.File.Exists(cachePath).Should().BeFalse(
+            "migration must invalidate any pre-existing replay cache so the fresh snapshot is read on the next query");
     }
 
     [Test]
