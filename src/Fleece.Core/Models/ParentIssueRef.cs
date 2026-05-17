@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using Fleece.Core.Serialization;
 using Fleece.Core.Utilities;
 
 namespace Fleece.Core.Models;
@@ -8,7 +7,6 @@ namespace Fleece.Core.Models;
 /// Projected parent-issue reference. <c>parentIssue</c> is the natural key —
 /// <c>remove</c> events match by ID only, ignoring <c>sortOrder</c>/<c>active</c>.
 /// </summary>
-[JsonConverter(typeof(ParentIssueRefConverter))]
 public sealed record ParentIssueRef
 {
     /// <summary>

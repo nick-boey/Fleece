@@ -11,7 +11,7 @@ namespace Fleece.Cli;
 
 public static class CliApp
 {
-    public static CommandApp BuildApp(TypeRegistrar registrar, string version, AutoMergeInterceptor autoMergeInterceptor)
+    public static CommandApp BuildApp(TypeRegistrar registrar, string version, ICommandInterceptor interceptor)
     {
         var app = new CommandApp(registrar);
 
@@ -19,7 +19,7 @@ public static class CliApp
         {
             config.SetApplicationName("fleece");
             config.SetApplicationVersion(version);
-            config.SetInterceptor(autoMergeInterceptor);
+            config.SetInterceptor(interceptor);
 
             config.AddCommand<CreateCommand>("create")
                 .WithDescription("Create a new issue. --title and --type are required.")
@@ -185,8 +185,10 @@ public static class CliApp
         }
 
         var registrar = new TypeRegistrar(services);
+        var autoMigrateInterceptor = new AutoMigrateInterceptor(() => registrar.GetServiceProvider());
         var autoMergeInterceptor = new AutoMergeInterceptor(() => registrar.GetServiceProvider());
-        var app = BuildApp(registrar, version, autoMergeInterceptor);
+        var interceptor = new CompositeCommandInterceptor(autoMigrateInterceptor, autoMergeInterceptor);
+        var app = BuildApp(registrar, version, interceptor);
         if (console is not null)
         {
             app.Configure(config => config.ConfigureConsole(console));
