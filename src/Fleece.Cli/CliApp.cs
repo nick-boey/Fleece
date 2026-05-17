@@ -78,6 +78,10 @@ public static class CliApp
             config.AddCommand<InstallCommand>("install")
                 .WithDescription("Install Claude Code hooks");
 
+            config.AddCommand<LinkCommand>("link")
+                .WithDescription("Write merge marker change files. Use --merge to link the DAG leaves at the current merge in progress.")
+                .WithExample("link", "--merge");
+
             config.AddCommand<PrimeCommand>("prime")
                 .WithDescription("Print LLM instructions for issue tracking")
                 .WithExample("prime")

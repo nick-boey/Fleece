@@ -441,6 +441,499 @@ public class EventSourcedLifecycleTests : GitTempRepoFixture
         Directory.GetFiles(ChangesDir).Should().BeEmpty();
     }
 
+    // --- Per-commit rotation -------------------------------------------------
+
+    [Test]
+    public async Task Multiple_edits_within_one_commit_accumulate_into_single_file()
+    {
+        (await RunCliAsync("create", "-t", "Acc", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: seed");
+
+        var seed = await ReadIssuesAsync();
+        var id = seed.Single().Id;
+
+        // Three edits, no commit between them. Per-commit rotation should leave
+        // them in the same change file because none has been committed since the
+        // previous one was created.
+        var before = Directory.GetFiles(ChangesDir).Length;
+        (await RunCliAsync("edit", id, "-t", "v1")).Should().Be(0);
+        (await RunCliAsync("edit", id, "-t", "v2")).Should().Be(0);
+        (await RunCliAsync("edit", id, "-t", "v3")).Should().Be(0);
+        var after = Directory.GetFiles(ChangesDir).Length;
+
+        (after - before).Should().Be(1, because: "all three edits should land in the same new change file");
+    }
+
+    [Test]
+    public async Task First_edit_after_commit_rotates_into_new_file_with_follows_to_previous()
+    {
+        (await RunCliAsync("create", "-t", "Seed", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: seed");
+
+        var seed = await ReadIssuesAsync();
+        var id = seed.Single().Id;
+
+        var firstChangeFiles = Directory.GetFiles(ChangesDir).OrderBy(f => f).ToArray();
+        firstChangeFiles.Length.Should().Be(1);
+        var firstGuid = Path.GetFileNameWithoutExtension(firstChangeFiles[0])["change_".Length..];
+
+        // First edit *after* the commit → previous file is committed at HEAD → rotate.
+        (await RunCliAsync("edit", id, "-t", "Edited")).Should().Be(0);
+
+        var allChangeFiles = Directory.GetFiles(ChangesDir).OrderBy(f => f).ToArray();
+        allChangeFiles.Length.Should().Be(2);
+        var newFile = allChangeFiles.Single(f => f != firstChangeFiles[0]);
+
+        var firstLine = (await File.ReadAllLinesAsync(newFile))[0];
+        firstLine.Should().Contain($"\"follows\":\"{firstGuid}\"");
+    }
+
+    // --- Bug 1 (fixed): merge conflicts on shared change files ---------------
+
+    [Test]
+    public async Task Same_worktree_two_branches_from_main_edits_conflict_on_merge()
+    {
+        // Repro of Bug 1 from the per-commit-change-rotation change.
+        // Pre-fix: branching from main twice and editing on each branch reused
+        // the same change file GUID → merging caused a content conflict on the
+        // change file. Post-fix: per-commit rotation seals the main file on commit,
+        // each branch's first edit rotates to a fresh GUID — no conflict.
+
+        (await RunCliAsync("create", "-t", "Seed", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: seed");
+
+        var seed = await ReadIssuesAsync();
+        var id = seed.Single().Id;
+
+        // feature/a
+        RunGit("checkout", "-b", "feature/a");
+        (await RunCliAsync("edit", id, "-t", "From A")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/a: edit");
+
+        // back to main
+        RunGit("checkout", "main");
+
+        // feature/b
+        RunGit("checkout", "-b", "feature/b");
+        (await RunCliAsync("edit", id, "-s", "Complete")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/b: edit");
+
+        // Merge feature/a into main
+        RunGit("checkout", "main");
+        RunGit("merge", "feature/a", "--no-edit");
+
+        // Merge feature/b into main — must succeed without conflicts.
+        Action act = () => RunGit("merge", "feature/b", "--no-edit");
+        act.Should().NotThrow("per-commit rotation prevents reuse of the same change file across branches");
+
+        var merged = (await ReadIssuesAsync()).Single();
+        merged.Title.Should().Be("From A");
+        merged.Status.Should().Be(IssueStatus.Complete);
+    }
+
+    // --- Marker generation ---------------------------------------------------
+
+    [Test]
+    public async Task Merge_marker_written_by_pre_merge_commit_hook_includes_both_leaves()
+    {
+        // Simulates the pre-merge-commit hook by calling `fleece link --merge` between
+        // `git merge --no-commit` (which leaves MERGE_HEAD in place) and the final commit.
+        (await RunCliAsync("create", "-t", "Seed", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: seed");
+        var id = (await ReadIssuesAsync()).Single().Id;
+
+        RunGit("checkout", "-b", "feature/a");
+        (await RunCliAsync("edit", id, "-t", "A")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/a");
+
+        RunGit("checkout", "main");
+        RunGit("checkout", "-b", "feature/b");
+        (await RunCliAsync("edit", id, "-s", "Complete")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/b");
+
+        RunGit("checkout", "main");
+        RunGit("merge", "feature/a", "--no-edit");
+
+        // Two-way clean merge of feature/b: --no-commit emulates pre-merge-commit timing.
+        RunGit("merge", "feature/b", "--no-ff", "--no-commit");
+        (await RunCliAsync("link", "--merge")).Should().Be(0);
+        RunGit("commit", "--no-edit");
+
+        var changeFiles = Directory.GetFiles(ChangesDir).OrderBy(f => f).ToArray();
+        var markers = changeFiles.Select(f => (path: f, body: File.ReadAllText(f)))
+            .Where(t => t.body.Contains("\"follows\":["))
+            .ToList();
+        markers.Should().NotBeEmpty("link --merge should have written a multi-parent marker file");
+    }
+
+    [Test]
+    public async Task Conflict_merge_pre_commit_hook_also_writes_marker()
+    {
+        // Two branches edit the same property → git merge produces a conflict on the
+        // change file would happen pre-fix; with per-commit rotation the change files
+        // are different and git merges them cleanly via "both modified" of different
+        // files… so to force a conflict we make both branches edit an UNRELATED tracked
+        // file. The marker is what we're verifying lands during the pre-commit path.
+        (await RunCliAsync("create", "-t", "Seed", "-y", "task", "-d", "x")).Should().Be(0);
+        File.WriteAllText(Path.Combine(TempDir, "shared.txt"), "base\n");
+        RunGit("add", ".fleece", "shared.txt");
+        RunGit("commit", "-m", "main: seed");
+        var id = (await ReadIssuesAsync()).Single().Id;
+
+        RunGit("checkout", "-b", "feature/a");
+        (await RunCliAsync("edit", id, "-t", "A")).Should().Be(0);
+        File.WriteAllText(Path.Combine(TempDir, "shared.txt"), "A wins\n");
+        RunGit("add", ".fleece", "shared.txt");
+        RunGit("commit", "-m", "feature/a");
+
+        RunGit("checkout", "main");
+        RunGit("checkout", "-b", "feature/b");
+        (await RunCliAsync("edit", id, "-s", "Complete")).Should().Be(0);
+        File.WriteAllText(Path.Combine(TempDir, "shared.txt"), "B wins\n");
+        RunGit("add", ".fleece", "shared.txt");
+        RunGit("commit", "-m", "feature/b");
+
+        RunGit("checkout", "main");
+        RunGit("merge", "feature/a", "--no-edit");
+
+        // Merge feature/b — conflicts on shared.txt.
+        Action mergeAct = () => RunGit("merge", "feature/b", "--no-edit");
+        mergeAct.Should().Throw<InvalidOperationException>("shared.txt conflicts on both branches");
+
+        // Resolve the conflict manually.
+        File.WriteAllText(Path.Combine(TempDir, "shared.txt"), "resolved\n");
+        RunGit("add", "shared.txt");
+
+        // Simulate the pre-commit hook: write the marker before committing.
+        (await RunCliAsync("link", "--merge")).Should().Be(0);
+        RunGit("commit", "--no-edit");
+
+        var markers = Directory.GetFiles(ChangesDir)
+            .Where(f => File.ReadAllText(f).Contains("\"follows\":["))
+            .ToList();
+        markers.Should().NotBeEmpty("link --merge during pre-commit should write a multi-parent marker");
+    }
+
+    [Test]
+    public async Task Interactive_rebase_drop_commit_leaves_dangling_followers_treated_as_roots()
+    {
+        // Build feature with two commits, each producing a change file chained off
+        // the previous. Drop the first commit via rebase --rebase-merges --onto, then
+        // verify replay tolerates the dangling follows pointer in the surviving file.
+        (await RunCliAsync("create", "-t", "Seed", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: seed");
+        var id = (await ReadIssuesAsync()).Single().Id;
+        var mainSha = GitOutput("rev-parse", "HEAD").Trim();
+
+        RunGit("checkout", "-b", "feature/d");
+        (await RunCliAsync("edit", id, "-t", "v1")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/d: v1 (will be dropped)");
+        var dropCommit = GitOutput("rev-parse", "HEAD").Trim();
+
+        (await RunCliAsync("edit", id, "-t", "v2")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/d: v2");
+
+        // Drop the v1 commit by rebasing v2 directly onto main.
+        // Using `rebase --onto main <dropCommit> HEAD` keeps commits *after* dropCommit only.
+        RunGit("rebase", "--onto", mainSha, dropCommit, "HEAD");
+
+        // Replay must complete; the surviving change file's `follows` (pointing at the
+        // dropped commit's file) is dangling — silently treated as root.
+        var issues = await ReadIssuesAsync();
+        issues.Should().ContainSingle(i => i.Id == id);
+    }
+
+    [Test]
+    public async Task Fast_forward_merge_writes_no_marker()
+    {
+        (await RunCliAsync("create", "-t", "Seed", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: seed");
+        var id = (await ReadIssuesAsync()).Single().Id;
+
+        RunGit("checkout", "-b", "feature/ff");
+        (await RunCliAsync("edit", id, "-t", "FF")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/ff");
+
+        var beforeMerge = Directory.GetFiles(ChangesDir).Length;
+
+        RunGit("checkout", "main");
+        RunGit("merge", "feature/ff", "--ff-only");
+
+        var afterMerge = Directory.GetFiles(ChangesDir).Length;
+        // Fast-forward leaves no new commit, hence no marker file. We didn't
+        // invoke link, so the count should be exactly what feature/ff added.
+        afterMerge.Should().Be(beforeMerge);
+    }
+
+    // --- Bug 2 (fixed): squash of integration branch preserves order ---------
+
+    [Test]
+    public async Task Squash_of_integration_branch_with_parallel_chains_loses_order()
+    {
+        // Repro of Bug 2 from the per-commit-change-rotation change, in its
+        // post-fix form (asserts the corrected outcome): with merge markers
+        // written during the regular merges into develop, the squash from
+        // develop into main preserves the intended ordering.
+
+        var seedDate = new DateTimeOffset(2026, 5, 1, 10, 0, 0, TimeSpan.Zero);
+        var aDate = new DateTimeOffset(2026, 5, 1, 11, 0, 0, TimeSpan.Zero);
+        var bDate = new DateTimeOffset(2026, 5, 1, 12, 0, 0, TimeSpan.Zero);
+        var mergeADate = new DateTimeOffset(2026, 5, 1, 13, 0, 0, TimeSpan.Zero);
+        var mergeBDate = new DateTimeOffset(2026, 5, 1, 14, 0, 0, TimeSpan.Zero);
+
+        (await RunCliAsync("create", "-t", "Seed", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGitCommit("main: seed", seedDate);
+        var id = (await ReadIssuesAsync()).Single().Id;
+
+        RunGit("checkout", "-b", "develop");
+
+        // feature/a from develop
+        RunGit("checkout", "-b", "feature/a");
+        (await RunCliAsync("edit", id, "-t", "A")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGitCommit("feature/a: title=A", aDate);
+
+        // feature/b from develop
+        RunGit("checkout", "develop");
+        RunGit("checkout", "-b", "feature/b");
+        (await RunCliAsync("edit", id, "-t", "B")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGitCommit("feature/b: title=B", bDate);
+
+        // Merge feature/a into develop, writing a marker via --no-commit + link.
+        RunGit("checkout", "develop");
+        RunGit("merge", "feature/a", "--no-ff", "--no-commit");
+        (await RunCliAsync("link", "--merge")).Should().Be(0);
+        RunGitCommit("merge: feature/a", mergeADate);
+
+        // Merge feature/b into develop with a marker.
+        RunGit("merge", "feature/b", "--no-ff", "--no-commit");
+        (await RunCliAsync("link", "--merge")).Should().Be(0);
+        RunGitCommit("merge: feature/b", mergeBDate);
+
+        // Squash develop into main → all change files (including markers) ride along.
+        RunGit("checkout", "main");
+        RunGit("merge", "--squash", "develop");
+        RunGit("commit", "-m", "squash: develop");
+
+        var post = (await ReadIssuesAsync()).Single();
+        post.Title.Should().Be("B", because: "feature/b was merged into develop after feature/a, and the markers preserve that order through the squash");
+    }
+
+    [Test]
+    public async Task Squash_merge_of_integration_branch_with_markers_preserves_order()
+    {
+        // Same scenario as Squash_of_integration_branch_with_parallel_chains_loses_order
+        // (intentional alias spelled per task 7.6); kept distinct to make the wiring of
+        // markers through a squash a first-class test surface.
+        var aDate = new DateTimeOffset(2026, 6, 1, 11, 0, 0, TimeSpan.Zero);
+        var bDate = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
+        var mADate = new DateTimeOffset(2026, 6, 1, 13, 0, 0, TimeSpan.Zero);
+        var mBDate = new DateTimeOffset(2026, 6, 1, 14, 0, 0, TimeSpan.Zero);
+
+        (await RunCliAsync("create", "-t", "PreservesOrder", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: seed");
+        var id = (await ReadIssuesAsync()).Single().Id;
+
+        RunGit("checkout", "-b", "develop");
+
+        RunGit("checkout", "-b", "feature/a");
+        (await RunCliAsync("edit", id, "-t", "A")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGitCommit("feature/a", aDate);
+
+        RunGit("checkout", "develop");
+        RunGit("checkout", "-b", "feature/b");
+        (await RunCliAsync("edit", id, "-t", "B")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGitCommit("feature/b", bDate);
+
+        RunGit("checkout", "develop");
+        RunGit("merge", "feature/a", "--no-ff", "--no-commit");
+        (await RunCliAsync("link", "--merge")).Should().Be(0);
+        RunGitCommit("merge a", mADate);
+
+        RunGit("merge", "feature/b", "--no-ff", "--no-commit");
+        (await RunCliAsync("link", "--merge")).Should().Be(0);
+        RunGitCommit("merge b", mBDate);
+
+        // Capture the marker files so we can prove they survive the squash.
+        var markerNames = Directory.GetFiles(ChangesDir)
+            .Where(f => File.ReadAllText(f).Contains("\"follows\":["))
+            .Select(Path.GetFileName)
+            .ToList();
+        markerNames.Should().NotBeEmpty();
+
+        RunGit("checkout", "main");
+        RunGit("merge", "--squash", "develop");
+        RunGit("commit", "-m", "squash: develop");
+
+        var postNames = Directory.GetFiles(ChangesDir).Select(Path.GetFileName).ToList();
+        foreach (var name in markerNames)
+        {
+            postNames.Should().Contain(name, because: "markers must survive the squash");
+        }
+
+        (await ReadIssuesAsync()).Single().Title.Should().Be("B");
+    }
+
+    // --- Rebase / cherry-pick ------------------------------------------------
+
+    [Test]
+    public async Task Rebase_feature_onto_main_with_stale_follows_replays_via_commit_ordinal()
+    {
+        var seedDate = new DateTimeOffset(2026, 7, 1, 10, 0, 0, TimeSpan.Zero);
+        var f1Date = new DateTimeOffset(2026, 7, 1, 11, 0, 0, TimeSpan.Zero);
+        var f2Date = new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
+        var mainAdvanceDate = new DateTimeOffset(2026, 7, 1, 13, 0, 0, TimeSpan.Zero);
+
+        (await RunCliAsync("create", "-t", "Rebase", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGitCommit("main: seed", seedDate);
+        var id = (await ReadIssuesAsync()).Single().Id;
+
+        RunGit("checkout", "-b", "feature/r");
+        (await RunCliAsync("edit", id, "-t", "v1")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGitCommit("feature/r: v1", f1Date);
+
+        (await RunCliAsync("edit", id, "-t", "v2")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGitCommit("feature/r: v2", f2Date);
+
+        // Advance main with an unrelated change.
+        RunGit("checkout", "main");
+        (await RunCliAsync("create", "-t", "Other", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGitCommit("main: other", mainAdvanceDate);
+
+        // Rebase feature onto main.
+        RunGit("checkout", "feature/r");
+        RunGit("rebase", "main");
+
+        // Replay must still produce the correct final title=v2 even though follows
+        // pointers across the rebased commits are stale.
+        (await ReadIssuesAsync()).Single(i => i.Id == id).Title.Should().Be("v2");
+    }
+
+    [Test]
+    public async Task Cherry_pick_commit_with_dangling_follows_treats_file_as_root()
+    {
+        // The cherry-picked feature commit brings its edit change file (`follows` points
+        // at the seed file, which is absent on the orphan branch). Per the spec, dangling
+        // follows entries are silently dropped and the file becomes a DAG root — replay
+        // must complete without throwing.
+        (await RunCliAsync("create", "-t", "Source", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: seed");
+        var id = (await ReadIssuesAsync()).Single().Id;
+
+        RunGit("checkout", "-b", "feature/c");
+        (await RunCliAsync("edit", id, "-t", "Cherry-picked")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/c: edit");
+        var cherrySha = GitOutput("rev-parse", "HEAD").Trim();
+
+        // Build a brand-new orphan branch with no shared history.
+        RunGit("checkout", "--orphan", "orphan");
+        RunGit("rm", "-rf", ".");
+
+        // Seed orphan with a minimal commit so HEAD exists.
+        File.WriteAllText(Path.Combine(TempDir, "readme.md"), "orphan\n");
+        RunGit("add", "readme.md");
+        RunGit("commit", "-m", "orphan: seed");
+
+        RunGit("cherry-pick", cherrySha);
+
+        // Replay must succeed without throwing; the dangling follows is silently dropped
+        // and the orphan file becomes a DAG root. The issue itself won't materialise
+        // because the original Create event is on the (now-absent) seed file — what we
+        // assert is that replay produces a well-formed (possibly empty) state.
+        var issues = await ReadIssuesAsync();
+        issues.Should().NotBeNull();
+    }
+
+    // --- Round-trip ----------------------------------------------------------
+
+    [Test]
+    public async Task Project_after_merge_marker_collapses_marker_into_snapshot()
+    {
+        (await RunCliAsync("create", "-t", "Seed", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: seed");
+        var id = (await ReadIssuesAsync()).Single().Id;
+
+        RunGit("checkout", "-b", "feature/p");
+        (await RunCliAsync("edit", id, "-t", "Final")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/p");
+
+        RunGit("checkout", "main");
+        RunGit("merge", "feature/p", "--no-ff", "--no-commit");
+        (await RunCliAsync("link", "--merge")).Should().Be(0);
+        RunGit("commit", "--no-edit");
+
+        // Project should collapse all change files (including the marker) into the snapshot.
+        (await RunCliAsync("project")).Should().Be(0);
+
+        Directory.GetFiles(ChangesDir).Should().BeEmpty();
+        File.Exists(SnapshotPath).Should().BeTrue();
+        (await ReadIssuesAsync()).Single().Title.Should().Be("Final");
+    }
+
+    [Test]
+    public async Task Migrate_then_create_then_project_round_trip_stays_consistent_with_merge()
+    {
+        var fleeceDir = Path.Combine(TempDir, ".fleece");
+        Directory.CreateDirectory(fleeceDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(fleeceDir, "issues_aaa.jsonl"),
+            """{"id":"old1","title":"Legacy","titleLastUpdate":"2026-04-01T10:00:00Z","status":"open","statusLastUpdate":"2026-04-01T10:00:00Z","type":"task","typeLastUpdate":"2026-04-01T10:00:00Z","createdAt":"2026-03-01T10:00:00Z","lastUpdate":"2026-04-01T10:00:00Z"}""" + "\n",
+            System.Text.Encoding.UTF8);
+
+        (await RunCliAsync("migrate")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "migrate");
+
+        (await RunCliAsync("create", "-t", "Fresh", "-y", "task", "-d", "x")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "main: fresh");
+
+        var fresh = (await ReadIssuesAsync()).Single(i => i.Title == "Fresh").Id;
+
+        RunGit("checkout", "-b", "feature/edit");
+        (await RunCliAsync("edit", fresh, "-t", "Edited")).Should().Be(0);
+        RunGit("add", ".fleece");
+        RunGit("commit", "-m", "feature/edit");
+
+        RunGit("checkout", "main");
+        RunGit("merge", "feature/edit", "--no-ff", "--no-commit");
+        (await RunCliAsync("link", "--merge")).Should().Be(0);
+        RunGit("commit", "--no-edit");
+
+        (await RunCliAsync("project")).Should().Be(0);
+
+        var after = await ReadIssuesAsync();
+        after.Should().HaveCount(2);
+        after.Single(i => i.Id == fresh).Title.Should().Be("Edited");
+        Directory.GetFiles(ChangesDir).Should().BeEmpty();
+    }
+
     private async Task Rotate()
     {
         // Force the next write to produce a new change file by deleting the active-change pointer.

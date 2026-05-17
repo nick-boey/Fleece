@@ -3,12 +3,15 @@ namespace Fleece.Core.EventSourcing.Services.Interfaces;
 /// <summary>
 /// Git information the event-sourced storage layer needs:
 /// the current HEAD SHA (used as the replay-cache key), whether a given change
-/// file is committed at HEAD (used to split committed vs uncommitted replay), and
+/// file is committed at HEAD (load-bearing for the per-commit rotation rule in
+/// <see cref="EventStore"/>; also splits committed vs uncommitted replay), and
 /// commit-order tiebreaks (consumed by <see cref="IReplayEngine"/>).
 /// </summary>
 /// <remarks>
-/// PR 1 ships <see cref="NullEventGitContext"/>; the CLI will plug in a real
-/// git-backed implementation in PR 2 when the storage service is wired into DI.
+/// When the working tree is not a git repository, <see cref="NullEventGitContext"/>
+/// is used; <see cref="IsFileCommittedAtHead"/> always returns false there, so
+/// per-commit rotation degrades to per-session rotation. Non-git consumers have
+/// no commits to rotate against, so that degradation is intentional.
 /// </remarks>
 public interface IEventGitContext : IChangeFileCommitOrder
 {
@@ -17,7 +20,8 @@ public interface IEventGitContext : IChangeFileCommitOrder
 
     /// <summary>
     /// True if <paramref name="filePath"/> is tracked and present at HEAD.
-    /// False for uncommitted, staged-only, or untracked files.
+    /// False for uncommitted, staged-only, or untracked files. Drives the
+    /// "rotate when the active file is committed" trigger in <see cref="EventStore"/>.
     /// </summary>
     bool IsFileCommittedAtHead(string filePath);
 }

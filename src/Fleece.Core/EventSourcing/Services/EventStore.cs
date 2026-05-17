@@ -20,13 +20,19 @@ public sealed class EventStore : IEventStore
 
     private readonly string _basePath;
     private readonly IFileSystem _fileSystem;
+    private readonly IEventGitContext _gitContext;
     private readonly Func<string> _guidFactory;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
 
-    public EventStore(string basePath, IFileSystem? fileSystem = null, Func<string>? guidFactory = null)
+    public EventStore(
+        string basePath,
+        IFileSystem? fileSystem = null,
+        Func<string>? guidFactory = null,
+        IEventGitContext? gitContext = null)
     {
         _basePath = basePath;
         _fileSystem = fileSystem ?? new Testably.Abstractions.RealFileSystem();
+        _gitContext = gitContext ?? NullEventGitContext.Instance;
         _guidFactory = guidFactory ?? (() => Guid.NewGuid().ToString("N"));
     }
 
@@ -176,17 +182,29 @@ public sealed class EventStore : IEventStore
     }
 
     /// <summary>
-    /// Returns the active change file path. Triggers a rotation if the pointer is missing
-    /// or the file it references no longer exists on disk. Caller MUST hold <see cref="_writeLock"/>.
+    /// Returns the active change file path. Triggers a rotation when:
+    /// (a) the pointer is missing, (b) the file it references no longer exists on disk,
+    /// or (c) the file is committed at HEAD per <see cref="IEventGitContext.IsFileCommittedAtHead"/>.
+    /// The third trigger makes change files immutable once committed: any edit after the
+    /// file lands in HEAD lands in a fresh change file whose <c>follows</c> chains back.
+    /// Caller MUST hold <see cref="_writeLock"/>.
     /// </summary>
     private async Task<string> ResolveActiveOrRotateAsync(CancellationToken cancellationToken)
     {
         var activePath = await GetActiveChangeFilePathAsync(cancellationToken);
-        if (activePath is not null && _fileSystem.File.Exists(activePath))
+        if (activePath is null)
         {
-            return activePath;
+            return await RotateInternalAsync(cancellationToken);
         }
-        return await RotateInternalAsync(cancellationToken);
+        if (!_fileSystem.File.Exists(activePath))
+        {
+            return await RotateInternalAsync(cancellationToken);
+        }
+        if (_gitContext.IsFileCommittedAtHead(activePath))
+        {
+            return await RotateInternalAsync(cancellationToken);
+        }
+        return activePath;
     }
 
     private async Task<string> RotateInternalAsync(CancellationToken cancellationToken)
@@ -204,7 +222,8 @@ public sealed class EventStore : IEventStore
                 $"Generated GUID '{newGuid}' collides with existing change file at {newPath}.");
         }
 
-        var meta = new MetaEvent { Follows = leaf };
+        var follows = leaf is null ? Array.Empty<string>() : new[] { leaf };
+        var meta = new MetaEvent { Follows = follows };
         await AppendLinesAsync(newPath, [EventJsonSerializer.Serialize(meta)], cancellationToken);
 
         var pointer = new ActiveChangePointer { Guid = newGuid };
@@ -224,17 +243,18 @@ public sealed class EventStore : IEventStore
 
         var guids = allPaths.Select(ExtractGuidFromPath).ToList();
         var guidSet = guids.ToHashSet(StringComparer.Ordinal);
-        var followsByGuid = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var followsByGuid = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         foreach (var path in allPaths)
         {
             var meta = await ReadMetaAsync(path, cancellationToken);
-            followsByGuid[ExtractGuidFromPath(path)] = meta.Follows;
+            followsByGuid[ExtractGuidFromPath(path)] = meta.Follows ?? Array.Empty<string>();
         }
 
-        // A leaf is a GUID that no other file's `follows` references.
+        // A leaf is a GUID that no other file's `follows` (in any position) references.
         var hasDescendant = followsByGuid.Values
-            .Where(f => f is not null && guidSet.Contains(f!))
-            .ToHashSet(StringComparer.Ordinal)!;
+            .SelectMany(f => f)
+            .Where(f => guidSet.Contains(f))
+            .ToHashSet(StringComparer.Ordinal);
 
         var leaves = guids.Where(g => !hasDescendant.Contains(g)).ToList();
         if (leaves.Count == 0)

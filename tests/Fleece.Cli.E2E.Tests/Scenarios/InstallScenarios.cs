@@ -23,6 +23,41 @@ public class InstallScenarios : CliScenarioTestBase
         content.Should().Contain(InstallCommand.FleeceHookBlockStart);
         content.Should().Contain(InstallCommand.FleeceHookBlockEnd);
         content.Should().Contain("git add .fleece/changes/");
+        content.Should().Contain("fleece link --merge");
+        content.Should().Contain(".git/MERGE_HEAD");
+    }
+
+    [Test]
+    public async Task Install_creates_pre_merge_commit_hook_with_fleece_block()
+    {
+        Fs.Directory.CreateDirectory(Path.Combine(BasePath, ".git"));
+
+        var exit = await RunAsync("install");
+        exit.Should().Be(0);
+
+        var hookPath = Path.Combine(BasePath, ".git", "hooks", "pre-merge-commit");
+        Fs.File.Exists(hookPath).Should().BeTrue();
+        var content = await Fs.File.ReadAllTextAsync(hookPath);
+        content.Should().Contain(InstallCommand.FleeceHookBlockStart);
+        content.Should().Contain(InstallCommand.FleeceHookBlockEnd);
+        content.Should().Contain("fleece link --merge");
+    }
+
+    [Test]
+    public async Task Install_is_idempotent_for_pre_merge_commit_hook()
+    {
+        Fs.Directory.CreateDirectory(Path.Combine(BasePath, ".git"));
+
+        await RunAsync("install");
+        var hookPath = Path.Combine(BasePath, ".git", "hooks", "pre-merge-commit");
+        var first = await Fs.File.ReadAllTextAsync(hookPath);
+
+        await RunAsync("install");
+        var second = await Fs.File.ReadAllTextAsync(hookPath);
+
+        second.Should().Be(first);
+        second.Split(InstallCommand.FleeceHookBlockStart).Length.Should().Be(2,
+            because: "the fleece block must appear exactly once");
     }
 
     [Test]

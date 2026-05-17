@@ -28,15 +28,93 @@ public abstract record IssueEvent
 }
 
 /// <summary>
-/// First line of every change file. Carries the <c>follows</c> pointer to the
-/// predecessor session GUID (or <c>null</c> if this session is a DAG root).
+/// First line of every change file. Carries the <c>follows</c> pointer(s) identifying
+/// the predecessor change file(s) this one continues. Empty = the file is a DAG root;
+/// one entry = a single-parent chain (most common); two or more entries = a merge
+/// marker linking parallel chains.
 /// </summary>
+/// <remarks>
+/// On the wire, <c>follows</c> may be <c>null</c>, a scalar string, or an array of strings.
+/// We hold it as a <see cref="JsonElement"/> on the JSON-facing property so STJ source-gen
+/// reads/writes all three shapes losslessly; the typed <see cref="Follows"/> property
+/// converts to/from <see cref="IReadOnlyList{T}"/> for callers.
+/// </remarks>
 public sealed record MetaEvent : IssueEvent
 {
     [JsonIgnore]
     public override string Kind => "meta";
 
-    public string? Follows { get; init; }
+    /// <summary>
+    /// Raw wire-format <c>follows</c> value. Null = root; string = single parent;
+    /// array = multi-parent marker. Exposed for serialisation only — callers should
+    /// use <see cref="Follows"/>.
+    /// </summary>
+    [JsonPropertyName("follows")]
+    public JsonElement? FollowsRaw { get; init; }
+
+    /// <summary>
+    /// Typed view of <see cref="FollowsRaw"/>. Empty list = root; one entry = single
+    /// parent; two or more entries = merge marker. Assigning here updates the wire form.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> Follows
+    {
+        get
+        {
+            if (FollowsRaw is null)
+            {
+                return Array.Empty<string>();
+            }
+            var elem = FollowsRaw.Value;
+            return elem.ValueKind switch
+            {
+                JsonValueKind.Null => Array.Empty<string>(),
+                JsonValueKind.String => new[] { elem.GetString()! },
+                JsonValueKind.Array => elem.EnumerateArray().Select(e =>
+                    e.ValueKind == JsonValueKind.String
+                        ? e.GetString()!
+                        : throw new InvalidOperationException("follows array must contain only strings.")).ToArray(),
+                _ => throw new InvalidOperationException(
+                    $"follows must be null, a string, or an array of strings; got {elem.ValueKind}."),
+            };
+        }
+        init
+        {
+            FollowsRaw = BuildFollowsElement(value);
+        }
+    }
+
+    /// <summary>
+    /// Builds a <see cref="JsonElement"/> for the wire representation of <paramref name="follows"/>
+    /// without going through the reflection-based serializer (AOT-safe).
+    /// </summary>
+    private static JsonElement BuildFollowsElement(IReadOnlyList<string>? follows)
+    {
+        if (follows is null || follows.Count == 0)
+        {
+            return JsonDocument.Parse("null").RootElement;
+        }
+
+        using var ms = new System.IO.MemoryStream();
+        using (var writer = new Utf8JsonWriter(ms))
+        {
+            if (follows.Count == 1)
+            {
+                writer.WriteStringValue(follows[0]);
+            }
+            else
+            {
+                writer.WriteStartArray();
+                foreach (var item in follows)
+                {
+                    writer.WriteStringValue(item);
+                }
+                writer.WriteEndArray();
+            }
+        }
+        ms.Position = 0;
+        return JsonDocument.Parse(ms).RootElement;
+    }
 }
 
 /// <summary>

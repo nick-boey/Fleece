@@ -11,25 +11,59 @@ public sealed class EventSerializationTests
     [Test]
     public void MetaEvent_Roundtrips()
     {
-        var evt = new MetaEvent { Follows = "abc-123" };
+        var evt = new MetaEvent { Follows = ["abc-123"] };
         var json = EventJsonSerializer.Serialize(evt);
         json.Should().Contain("\"kind\":\"meta\"").And.Contain("\"follows\":\"abc-123\"");
 
-        var parsed = EventJsonSerializer.ParseLine(json, "x.jsonl", 1);
-        parsed.Should().BeEquivalentTo(evt);
+        var parsed = (MetaEvent)EventJsonSerializer.ParseLine(json, "x.jsonl", 1);
+        parsed.Follows.Should().Equal("abc-123");
     }
 
     [Test]
-    public void MetaEvent_NullFollows_Roundtrips()
+    public void MetaEvent_EmptyFollows_RoundtripsAsNull()
     {
-        var evt = new MetaEvent { Follows = null };
+        var evt = new MetaEvent { Follows = [] };
         var json = EventJsonSerializer.Serialize(evt);
-        // null is omitted on write per DefaultIgnoreCondition.WhenWritingNull;
-        // round-trip still produces null.
-        json.Should().Contain("\"kind\":\"meta\"");
+        json.Should().Contain("\"kind\":\"meta\"").And.Contain("\"follows\":null");
 
         var parsed = (MetaEvent)EventJsonSerializer.ParseLine(json, "x.jsonl", 1);
-        parsed.Follows.Should().BeNull();
+        parsed.Follows.Should().BeEmpty();
+    }
+
+    [Test]
+    public void MetaEvent_TwoParentFollows_SerialisesAsArrayAndRoundtrips()
+    {
+        var evt = new MetaEvent { Follows = ["g1", "g2"] };
+        var json = EventJsonSerializer.Serialize(evt);
+        json.Should().Contain("\"follows\":[\"g1\",\"g2\"]");
+
+        var parsed = (MetaEvent)EventJsonSerializer.ParseLine(json, "x.jsonl", 1);
+        parsed.Follows.Should().Equal("g1", "g2");
+    }
+
+    [Test]
+    public void MetaEvent_AcceptsScalarFollowsOnRead()
+    {
+        var parsed = (MetaEvent)EventJsonSerializer.ParseLine(
+            """{"kind":"meta","follows":"single"}""", "x.jsonl", 1);
+        parsed.Follows.Should().Equal("single");
+    }
+
+    [Test]
+    public void MetaEvent_AcceptsArrayFollowsOnRead()
+    {
+        var parsed = (MetaEvent)EventJsonSerializer.ParseLine(
+            """{"kind":"meta","follows":["a","b","c"]}""", "x.jsonl", 1);
+        parsed.Follows.Should().Equal("a", "b", "c");
+    }
+
+    [Test]
+    public void MetaEvent_SerialisesLengthOneFollowsAsScalar()
+    {
+        var evt = new MetaEvent { Follows = ["only"] };
+        var json = EventJsonSerializer.Serialize(evt);
+        json.Should().Contain("\"follows\":\"only\"");
+        json.Should().NotContain("[");
     }
 
     [Test]

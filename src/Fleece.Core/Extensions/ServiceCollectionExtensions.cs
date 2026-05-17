@@ -36,14 +36,28 @@ public static class ServiceCollectionExtensions
         // Event-sourced storage stack (snapshot + change files + replay).
         services.AddSingleton<ISnapshotStore>(sp =>
             new SnapshotStore(basePath, sp.GetRequiredService<IFileSystem>()));
-        services.AddSingleton<IEventStore>(sp =>
-            new EventStore(basePath, sp.GetRequiredService<IFileSystem>()));
         services.AddSingleton<IEventGitContext>(sp =>
         {
             var git = sp.GetRequiredService<IGitService>();
             return git.IsGitRepository() ? new GitEventContext(git) : NullEventGitContext.Instance;
         });
-        services.AddSingleton<IReplayEngine, ReplayEngine>();
+        services.AddSingleton<IEventStore>(sp =>
+            new EventStore(
+                basePath,
+                sp.GetRequiredService<IFileSystem>(),
+                guidFactory: null,
+                gitContext: sp.GetRequiredService<IEventGitContext>()));
+        services.AddSingleton<IWarningSink>(ConsoleWarningSink.Instance);
+        services.AddSingleton<IReplayEngine>(sp =>
+            new ReplayEngine(
+                sp.GetRequiredService<IEventStore>(),
+                sp.GetRequiredService<IWarningSink>()));
+        services.AddSingleton<ILinkService>(sp =>
+            new LinkService(
+                basePath,
+                sp.GetRequiredService<IFileSystem>(),
+                sp.GetRequiredService<IEventStore>(),
+                sp.GetRequiredService<IGitService>()));
         services.AddSingleton<IReplayCache>(sp =>
             new ReplayCache(basePath, sp.GetRequiredService<IFileSystem>()));
         services.AddSingleton<IEventSourcedStorageService>(sp =>

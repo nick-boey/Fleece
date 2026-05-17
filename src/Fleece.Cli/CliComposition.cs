@@ -21,6 +21,7 @@ public static class CliComposition
         ("merge",      typeof(MergeCommand)),
         ("migrate",    typeof(MigrateCommand)),
         ("install",    typeof(InstallCommand)),
+        ("link",       typeof(LinkCommand)),
         ("prime",      typeof(PrimeCommand)),
         ("validate",   typeof(ValidateCommand)),
         ("commit",     typeof(CommitCommand)),
