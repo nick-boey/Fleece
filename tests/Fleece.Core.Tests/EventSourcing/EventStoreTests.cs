@@ -2,6 +2,7 @@ using System.Text.Json;
 using Fleece.Core.EventSourcing;
 using Fleece.Core.EventSourcing.Events;
 using Fleece.Core.EventSourcing.Services;
+using Fleece.Core.EventSourcing.Services.Interfaces;
 using FluentAssertions;
 using NUnit.Framework;
 using Testably.Abstractions.Testing;
@@ -58,7 +59,7 @@ public sealed class EventStoreTests
         var lines = _fs.File.ReadAllText(path).Split('\n', StringSplitOptions.RemoveEmptyEntries);
         lines.Should().HaveCount(2);
         var meta = (MetaEvent)EventJsonSerializer.ParseLine(lines[0], path, 1);
-        meta.Follows.Should().BeNull();
+        meta.Follows.Should().BeEmpty();
         EventJsonSerializer.ParseLine(lines[1], path, 2).Should().BeOfType<SetEvent>();
     }
 
@@ -89,8 +90,8 @@ public sealed class EventStoreTests
 
         var meta = (MetaEvent)EventJsonSerializer.ParseLine(
             _fs.File.ReadAllText(second).Split('\n', StringSplitOptions.RemoveEmptyEntries)[0], second, 1);
-        // guidA's file is gone, so the DAG has no nodes — follows must be null.
-        meta.Follows.Should().BeNull();
+        // guidA's file is gone, so the DAG has no nodes — follows must be empty.
+        meta.Follows.Should().BeEmpty();
     }
 
     [Test]
@@ -105,7 +106,7 @@ public sealed class EventStoreTests
         newPath.Should().Be(ChangePath("ccc"));
 
         var meta = await store.ReadMetaAsync(newPath);
-        meta.Follows.Should().Be("bbb");
+        meta.Follows.Should().Equal("bbb");
     }
 
     [Test]
@@ -118,7 +119,7 @@ public sealed class EventStoreTests
         var newPath = await store.RotateAsync();
         var meta = await store.ReadMetaAsync(newPath);
         // Both aaa and bbb are leaves (no descendants); alphabetical first is aaa.
-        meta.Follows.Should().Be("aaa");
+        meta.Follows.Should().Equal("aaa");
     }
 
     [Test]
@@ -133,16 +134,16 @@ public sealed class EventStoreTests
         var store = CreateStore("zzz");
         var newPath = await store.RotateAsync();
         var meta = await store.ReadMetaAsync(newPath);
-        meta.Follows.Should().Be("bbb");
+        meta.Follows.Should().Equal("bbb");
     }
 
     [Test]
-    public async Task RotateAsync_NoExistingFiles_FollowsIsNull()
+    public async Task RotateAsync_NoExistingFiles_FollowsIsEmpty()
     {
         var store = CreateStore("guidA");
         var path = await store.RotateAsync();
         var meta = await store.ReadMetaAsync(path);
-        meta.Follows.Should().BeNull();
+        meta.Follows.Should().BeEmpty();
     }
 
     [Test]
@@ -169,7 +170,7 @@ public sealed class EventStoreTests
     public async Task AppendEventsAsync_RejectsMetaEvent()
     {
         var store = CreateStore("guidA");
-        var act = () => store.AppendEventsAsync([new MetaEvent { Follows = null }]);
+        var act = () => store.AppendEventsAsync([new MetaEvent { Follows = [] }]);
         await act.Should().ThrowAsync<ArgumentException>();
     }
 
@@ -192,11 +193,81 @@ public sealed class EventStoreTests
         second.Should().Be(first);
     }
 
+    [Test]
+    public async Task EventStore_rotates_when_active_file_is_committed_at_head()
+    {
+        var ctx = new StubGitContext { Committed = false };
+        var store = new EventStore(
+            _basePath, _fs,
+            () => _guids.Count > 0 ? _guids.Dequeue() : Guid.NewGuid().ToString("N"),
+            ctx);
+        _guids.Enqueue("guidA");
+        _guids.Enqueue("guidB");
+
+        var first = await store.AppendEventsAsync([SampleSet("a")]);
+        first.Should().Be(ChangePath("guidA"));
+
+        // Pretend the commit just happened: the file is now in HEAD.
+        ctx.Committed = true;
+
+        var second = await store.AppendEventsAsync([SampleSet("b")]);
+        second.Should().Be(ChangePath("guidB"));
+        second.Should().NotBe(first);
+
+        var meta = await store.ReadMetaAsync(second);
+        meta.Follows.Should().Equal("guidA");
+    }
+
+    [Test]
+    public async Task EventStore_appends_to_active_file_when_not_yet_committed()
+    {
+        var ctx = new StubGitContext { Committed = false };
+        var store = new EventStore(
+            _basePath, _fs,
+            () => _guids.Count > 0 ? _guids.Dequeue() : Guid.NewGuid().ToString("N"),
+            ctx);
+        _guids.Enqueue("guidA");
+
+        var first = await store.AppendEventsAsync([SampleSet("a")]);
+        var second = await store.AppendEventsAsync([SampleSet("b")]);
+        var third = await store.AppendEventsAsync([SampleSet("c")]);
+
+        first.Should().Be(second).And.Be(third);
+
+        var lines = _fs.File.ReadAllText(first).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        lines.Should().HaveCount(4); // meta + three sets
+    }
+
+    [Test]
+    public async Task EventStore_with_NullEventGitContext_never_rotates_for_commit_reason()
+    {
+        // NullEventGitContext.IsFileCommittedAtHead always returns false → the new
+        // rotation trigger never fires, behaviour matches the pre-change "per-session" model.
+        var store = new EventStore(
+            _basePath, _fs,
+            () => _guids.Count > 0 ? _guids.Dequeue() : Guid.NewGuid().ToString("N"),
+            NullEventGitContext.Instance);
+        _guids.Enqueue("guidA");
+
+        var first = await store.AppendEventsAsync([SampleSet("a")]);
+        var second = await store.AppendEventsAsync([SampleSet("b")]);
+        second.Should().Be(first);
+    }
+
+    private sealed class StubGitContext : IEventGitContext
+    {
+        public bool Committed { get; set; }
+        public string? GetHeadSha() => Committed ? "fake-sha" : null;
+        public bool IsFileCommittedAtHead(string filePath) => Committed;
+        public int? GetFirstCommitOrdinal(string filePath) => null;
+    }
+
     private async Task SeedChangeFile(string guid, string? followsGuid)
     {
         var path = ChangePath(guid);
         _fs.Directory.CreateDirectory(_fs.Path.GetDirectoryName(path)!);
-        var meta = EventJsonSerializer.Serialize(new MetaEvent { Follows = followsGuid });
+        IReadOnlyList<string> follows = followsGuid is null ? Array.Empty<string>() : [followsGuid];
+        var meta = EventJsonSerializer.Serialize(new MetaEvent { Follows = follows });
         await _fs.File.WriteAllTextAsync(path, meta + "\n");
     }
 }

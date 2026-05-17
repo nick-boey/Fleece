@@ -31,6 +31,7 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
     {
         await InstallClaudeHooksAsync();
         await InstallPreCommitHookAsync();
+        await InstallPreMergeCommitHookAsync();
         await EnsureGitignoreEntriesAsync();
         await MaybeInstallGitHubWorkflowAsync();
         return 0;
@@ -137,9 +138,12 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
     {
         // Stage event-sourcing change files on every commit. Snapshot/tombstones are
         // staged opportunistically on the default branch (the projection writes there).
+        // On conflict-resolved merges (where pre-merge-commit does NOT fire) write the
+        // merge marker before staging so it lands in the same commit as the resolution.
         return string.Join('\n', new[]
         {
             FleeceHookBlockStart,
+            "if [ -f .git/MERGE_HEAD ]; then fleece link --merge || exit 1; fi",
             "if [ -d .fleece/changes ]; then git add .fleece/changes/; fi",
             "current_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo \"\")",
             "default_branch=$(git config --get fleece.defaultBranch 2>/dev/null || echo \"main\")",
@@ -150,6 +154,51 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
             FleeceHookBlockEnd,
             "",
         });
+    }
+
+    /// <summary>
+    /// pre-merge-commit fires for clean auto-merges (no conflicts); pre-commit covers
+    /// the conflict-resolution path. Both invoke `fleece link --merge` so a marker
+    /// always lands in the merge commit.
+    /// </summary>
+    private static string BuildFleecePreMergeCommitBlock()
+    {
+        return string.Join('\n', new[]
+        {
+            FleeceHookBlockStart,
+            "if [ -f .git/MERGE_HEAD ]; then fleece link --merge || exit 1; fi",
+            "if [ -d .fleece/changes ]; then git add .fleece/changes/ 2>/dev/null || true; fi",
+            FleeceHookBlockEnd,
+            "",
+        });
+    }
+
+    private async Task InstallPreMergeCommitHookAsync()
+    {
+        var hooksDir = _fileSystem.Path.Combine(_basePath, ".git", "hooks");
+        if (!_fileSystem.Directory.Exists(_fileSystem.Path.Combine(_basePath, ".git")))
+        {
+            return;
+        }
+        _fileSystem.Directory.CreateDirectory(hooksDir);
+
+        var hookPath = _fileSystem.Path.Combine(hooksDir, "pre-merge-commit");
+        var fleeceBlock = BuildFleecePreMergeCommitBlock();
+
+        string newContent;
+        if (_fileSystem.File.Exists(hookPath))
+        {
+            var existing = await _fileSystem.File.ReadAllTextAsync(hookPath);
+            newContent = ReplaceOrAppendBlock(existing, fleeceBlock);
+        }
+        else
+        {
+            newContent = "#!/bin/sh\n" + fleeceBlock;
+        }
+
+        await _fileSystem.File.WriteAllTextAsync(hookPath, newContent);
+        TryMarkExecutable(hookPath);
+        _console.MarkupLine($"[green]pre-merge-commit hook installed:[/] {hookPath}");
     }
 
     internal static string ReplaceOrAppendBlock(string existing, string block)

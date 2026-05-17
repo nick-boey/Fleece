@@ -1,10 +1,4 @@
-# Git Integration
-
-## Purpose
-
-Defines how Fleece integrates with Git workflows: pre-commit hook for staging fleece data, daily projection GitHub Action, and deprecation of `fleece merge` in favor of `fleece project`.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: `fleece install` SHALL install a pre-commit hook that stages fleece data and writes merge markers
 
@@ -55,6 +49,8 @@ The command SHALL NOT install a post-commit hook for fleece-related rotation.
 - **WHEN** the user runs `git commit`
 - **THEN** the hook invokes `fleece link --merge` before staging
 - **AND** the resulting commit contains a new `change_*.jsonl` whose meta event's `follows` is an array of the two side leaves
+
+## ADDED Requirements
 
 ### Requirement: `fleece install` SHALL install a pre-merge-commit hook that writes merge markers
 
@@ -122,46 +118,3 @@ The command SHALL also be invocable manually (`fleece link --merge` outside a ho
 - **GIVEN** an octopus merge with our-leaf `"a"` and three their-leaves `"b"`, `"c"`, `"d"`
 - **WHEN** the user (or hook) runs `fleece link --merge`
 - **THEN** the new marker's meta event has `follows=["a","b","c","d"]`
-
-### Requirement: `fleece install` SHALL write a daily projection GitHub Action template
-
-The `fleece install` command SHALL write a workflow file at `.github/workflows/fleece-project.yml` containing a GitHub Action that:
-
-- Triggers on `schedule` with a cron expression running once per day, AND on `workflow_dispatch` (manual trigger).
-- Checks out the default branch with full history.
-- Installs the Fleece CLI (or uses a prebuilt binary, as appropriate for the repository's setup).
-- Runs `fleece project`.
-- Commits any resulting changes with a message such as `chore: project fleece events` and pushes back to the default branch.
-
-The command SHALL skip writing the workflow file if a file already exists at that path, printing a warning that the user must reconcile manually.
-
-The command SHALL NOT write the workflow file if `.github/workflows/` does not already exist or if the repository is not detected as a GitHub repository (presence of `.git/config` referencing a github.com remote).
-
-#### Scenario: Install creates daily projection workflow
-- **GIVEN** a repository with a github.com remote and a `.github/workflows/` directory
-- **WHEN** the user runs `fleece install`
-- **THEN** `.github/workflows/fleece-project.yml` exists
-- **AND** the file contains both `schedule:` and `workflow_dispatch:` triggers
-- **AND** the file invokes `fleece project`
-
-#### Scenario: Install does not overwrite existing workflow
-- **GIVEN** a repository where `.github/workflows/fleece-project.yml` already exists with custom content
-- **WHEN** the user runs `fleece install`
-- **THEN** the existing file is unchanged
-- **AND** a warning is printed indicating the user must reconcile manually
-
-#### Scenario: Install skips workflow on non-GitHub repository
-- **GIVEN** a repository with no github.com remote
-- **WHEN** the user runs `fleece install`
-- **THEN** no file is written under `.github/workflows/`
-- **AND** the pre-commit hook is still installed
-
-### Requirement: `fleece merge` SHALL be deprecated in favor of `fleece project`
-
-The `fleece merge` command SHALL print a deprecation notice on every invocation, pointing the user at `fleece project`. The command SHALL still execute its existing behavior for the duration of one release cycle, after which it SHALL be removed.
-
-#### Scenario: Merge prints deprecation notice
-- **WHEN** a user runs `fleece merge`
-- **THEN** a clearly-marked deprecation notice is printed to stderr
-- **AND** the notice points the user at `fleece project`
-- **AND** the existing merge behavior still executes

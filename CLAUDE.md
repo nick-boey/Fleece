@@ -84,15 +84,64 @@ dotnet test tests/Fleece.Core.Tests
 
 ### Event-sourced storage (current)
 
-Fleece persists issues as a snapshot plus per-session change files:
+Fleece persists issues as a snapshot plus per-commit change files:
 
 - `.fleece/issues.jsonl` — projected snapshot of all issues at the most recent `fleece project` run. The lean `Issue` shape (no per-property `*LastUpdate`/`*ModifiedBy`).
 - `.fleece/tombstones.jsonl` — sidecar of hard-deleted issues (`IssueId`, `OriginalTitle`, `CleanedAt`, `CleanedBy`).
-- `.fleece/changes/change_{guid}.jsonl` — append-only event files. One file per branch-session-on-machine. First line is a `meta` event with a `follows` pointer (`null` for a root or a predecessor GUID); subsequent lines are `create`/`set`/`add`/`remove`/`hard-delete` events.
+- `.fleece/changes/change_{guid}.jsonl` — append-only event files, one per commit (multiple edits inside the same commit accumulate into one file). First line is a `meta` event whose `follows` is one of: `null` (the file is a DAG root), a string GUID (a single-parent chain), or an array of GUIDs (a merge marker linking multiple chains). Subsequent lines are `create`/`set`/`add`/`remove`/`hard-delete` events.
 - `.fleece/.active-change` — gitignored pointer file naming the current session's change-file GUID.
 - `.fleece/.replay-cache` — gitignored cache of the projected state at the current HEAD SHA, used to skip re-replaying committed change files.
 
 Reads load the snapshot, replay all change files in topological order over the `follows`-DAG (with commit-order tiebreak then GUID-alphabetical tiebreak), and answer the query in-memory. Writes append events to the active change file.
+
+#### Change files are commit-scoped and immutable
+
+Once a change file lands in a git commit, no further events are appended to it. The next write rotates to a fresh GUID whose meta `follows` chains back to the just-sealed file. This invariant is enforced by `EventStore.ResolveActiveOrRotateAsync` via `IEventGitContext.IsFileCommittedAtHead`: the rotation trigger fires whenever the active pointer references a file that is tracked at HEAD. Outside a git repository (`NullEventGitContext`) the trigger is always false and rotation reverts to per-session.
+
+The immutability invariant eliminates the merge-conflict failure mode that arose when the same change-file GUID was appended to by two branches before merging.
+
+#### Merge markers
+
+Multi-parent meta events (`follows` as an array) are written by `fleece link --merge` from the git `pre-merge-commit` (clean auto-merges) and `pre-commit` (conflict-resolution merges) hooks installed by `fleece install`. The marker file's body is empty; its only payload is the multi-parent `follows` listing the DAG leaves on HEAD and on each MERGE_HEAD side. The order of parents in the array is load-bearing: replay adds Pi → Pi+1 ordering edges between them so the merge topology survives a downstream squash.
+
+```
+Commit boundary makes change files immutable.
+Merge marker captures topology.
+
+         change_x ←─── follows=null
+              │
+         (M0 commits change_x)                main branch
+              │
+              ▼
+         change_y ←─── follows="x"
+              │
+         (M1 commits change_y)
+              │
+              ▼
+
+Two feature branches off main, both edited:
+
+   main: ─── M1 ─────────────────── (merge a) ───── (merge b) ───
+              \                    /              /
+   feature/a:  change_a (follows=y) ────────── /
+                                              /
+   feature/b:  change_b (follows=y) ────────/
+
+At the "merge a" commit, pre-merge-commit fires:
+   → writes change_link_a (follows=["y","a"])  ←─ in same commit
+
+At the "merge b" commit, pre-merge-commit fires:
+   → writes change_link_b (follows=["link_a","b"])  ←─ in same commit
+
+Replay DAG:
+   y → a → link_a
+            │
+            └→ link_b → (next main commit)
+   y → b → link_b
+
+Even after squash of this whole branch into another:
+all five files ride along; the link files force linear order. ✓
+```
 
 #### `fleece project`
 

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.Json;
 using Fleece.Core.EventSourcing.Events;
 using Fleece.Core.EventSourcing.Services;
@@ -31,6 +32,12 @@ public sealed class ReplayEngineTests
     private string ChangePath(string guid) => _fs.Path.Combine(_basePath, ".fleece", "changes", $"change_{guid}.jsonl");
 
     private async Task SeedFileAsync(string guid, string? follows, params IssueEvent[] events)
+    {
+        IReadOnlyList<string> followsList = follows is null ? Array.Empty<string>() : [follows];
+        await SeedMultiParentFileAsync(guid, followsList, events);
+    }
+
+    private async Task SeedMultiParentFileAsync(string guid, IReadOnlyList<string> follows, params IssueEvent[] events)
     {
         var path = ChangePath(guid);
         _fs.Directory.CreateDirectory(_fs.Path.GetDirectoryName(path)!);
@@ -250,9 +257,77 @@ public sealed class ReplayEngineTests
         postSquash["i1"].Title.Should().Be("v3");
     }
 
+    [Test]
+    public async Task ReplayEngine_multi_parent_node_waits_for_all_parents()
+    {
+        // A (root), B (root), C (follows=[A,B]). C MUST come after both.
+        await SeedFileAsync("aaa", null, Create("i1", "Aval"), Set("i1", "title", "from-A"));
+        await SeedFileAsync("bbb", null, Set("i1", "title", "from-B"));
+        await SeedMultiParentFileAsync("ccc", ["aaa", "bbb"], Set("i1", "title", "from-C"));
+
+        var paths = (await _eventStore.GetAllChangeFilePathsAsync()).ToList();
+        var result = await _engine.ReplayAsync(new Dictionary<string, Issue>(), paths);
+
+        // C's events must apply last, so title=from-C.
+        result["i1"].Title.Should().Be("from-C");
+    }
+
+    [Test]
+    public async Task ReplayEngine_warns_when_parallel_files_share_commit_ordinal()
+    {
+        // Two roots with the same commit ordinal and no marker → warning fires.
+        await SeedFileAsync("aaa", null, Create("i1", "T"), Set("i1", "title", "from-aaa"));
+        await SeedFileAsync("bbb", null, Create("i1", "T"), Set("i1", "title", "from-bbb"));
+
+        var sink = new CapturingWarningSink();
+        var engine = new ReplayEngine(_eventStore, sink);
+        var paths = (await _eventStore.GetAllChangeFilePathsAsync()).ToList();
+        var commitOrder = new StubCommitOrder
+        {
+            { ChangePath("aaa"), 7 },
+            { ChangePath("bbb"), 7 },
+        };
+
+        await engine.ReplayAsync(new Dictionary<string, Issue>(), paths, commitOrder);
+
+        sink.Warnings.Should().HaveCount(1);
+        sink.Warnings[0].Should().Contain("change_aaa.jsonl")
+            .And.Contain("change_bbb.jsonl")
+            .And.Contain("7");
+    }
+
+    [Test]
+    public async Task ReplayEngine_does_not_warn_when_marker_links_parallel_files()
+    {
+        // Same parallel setup but with a marker file naming both as parents → silent.
+        await SeedFileAsync("aaa", null, Create("i1", "T"), Set("i1", "title", "from-aaa"));
+        await SeedFileAsync("bbb", null, Create("i1", "T"), Set("i1", "title", "from-bbb"));
+        await SeedMultiParentFileAsync("link", ["aaa", "bbb"]);
+
+        var sink = new CapturingWarningSink();
+        var engine = new ReplayEngine(_eventStore, sink);
+        var paths = (await _eventStore.GetAllChangeFilePathsAsync()).ToList();
+        var commitOrder = new StubCommitOrder
+        {
+            { ChangePath("aaa"), 7 },
+            { ChangePath("bbb"), 7 },
+            { ChangePath("link"), 7 },
+        };
+
+        await engine.ReplayAsync(new Dictionary<string, Issue>(), paths, commitOrder);
+
+        sink.Warnings.Should().BeEmpty();
+    }
+
     private sealed class StubCommitOrder : Dictionary<string, int>, IChangeFileCommitOrder
     {
         public int? GetFirstCommitOrdinal(string filePath) =>
             TryGetValue(filePath, out var v) ? v : null;
+    }
+
+    private sealed class CapturingWarningSink : IWarningSink
+    {
+        public List<string> Warnings { get; } = [];
+        public void Warn(string message) => Warnings.Add(message);
     }
 }
