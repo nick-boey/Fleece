@@ -215,4 +215,161 @@ public sealed class MigrationServiceTests
         var issues = await LoadMigratedIssuesAsync();
         issues["i1"].Type.Should().Be(IssueType.Task);
     }
+
+    // ----- Layout B: legacy durable snapshot (`.fleece/issues.jsonl` + `.fleece/changes/`) -----
+
+    private string ChangesDir => Path.Combine(FleeceDir, "changes");
+
+    private void WriteDurableSnapshot(params string[] jsonLines)
+    {
+        _fs.Directory.CreateDirectory(FleeceDir);
+        var content = string.Join('\n', jsonLines) + "\n";
+        _fs.File.WriteAllText(Path.Combine(FleeceDir, "issues.jsonl"), content, Encoding.UTF8);
+    }
+
+    private void WriteChangeFile(string guid, params string[] jsonLines)
+    {
+        _fs.Directory.CreateDirectory(ChangesDir);
+        var content = string.Join('\n', jsonLines) + "\n";
+        _fs.File.WriteAllText(Path.Combine(ChangesDir, $"change_{guid}.jsonl"), content, Encoding.UTF8);
+    }
+
+    private static string LeanIssueJson(string id, string title, string status = "open") =>
+        $$"""
+        {"id":"{{id}}","title":"{{title}}","status":"{{status}}","type":"task","createdAt":"2026-03-01T10:00:00Z","lastUpdate":"2026-03-01T10:00:00Z"}
+        """;
+
+    private static string MetaLine(string? follows = null) =>
+        follows is null
+            ? """{"kind":"meta","follows":null}"""
+            : $$"""{"kind":"meta","follows":"{{follows}}"}""";
+
+    private static string SetTitleLine(string id, string title, string at = "2026-04-01T10:00:00Z") =>
+        $$"""{"kind":"set","at":"{{at}}","issueId":"{{id}}","property":"title","value":"{{title}}"}""";
+
+    [Test]
+    public async Task Migrate_converts_durable_snapshot_only_into_per_issue_logs()
+    {
+        WriteDurableSnapshot(LeanIssueJson("d1", "Alpha"), LeanIssueJson("d2", "Beta"));
+
+        var result = await _sut.MigrateAsync("tester");
+
+        result.WasMigrationNeeded.Should().BeTrue();
+        result.IssuesWritten.Should().Be(2);
+
+        var issues = await LoadMigratedIssuesAsync();
+        issues.Keys.Should().BeEquivalentTo(["d1", "d2"]);
+        issues["d1"].Title.Should().Be("Alpha");
+        issues["d2"].Title.Should().Be("Beta");
+
+        // Source snapshot is consumed.
+        _fs.File.Exists(Path.Combine(FleeceDir, "issues.jsonl")).Should().BeFalse();
+    }
+
+    [Test]
+    public async Task Migrate_durable_snapshot_plus_change_file_applies_events()
+    {
+        WriteDurableSnapshot(LeanIssueJson("d1", "Old"));
+        WriteChangeFile("aaa", MetaLine(), SetTitleLine("d1", "New"));
+
+        await _sut.MigrateAsync("tester");
+
+        var issues = await LoadMigratedIssuesAsync();
+        issues["d1"].Title.Should().Be("New", "the change-file event must be replayed over the snapshot");
+
+        _fs.File.Exists(Path.Combine(FleeceDir, "issues.jsonl")).Should().BeFalse();
+        _fs.Directory.Exists(ChangesDir).Should().BeFalse();
+    }
+
+    [Test]
+    public async Task Migrate_durable_replays_change_files_in_follows_order_not_file_order()
+    {
+        // Snapshot starts at "v0". Three change files chain A → B → C via `follows`, but their
+        // GUIDs sort in the OPPOSITE order (ccc, bbb, aaa) so naive file-order replay would end
+        // on "v1". Correct follows ordering must end on "v3".
+        WriteDurableSnapshot(LeanIssueJson("d1", "v0"));
+        WriteChangeFile("ccc", MetaLine(), SetTitleLine("d1", "v1"));          // A: root
+        WriteChangeFile("bbb", MetaLine("ccc"), SetTitleLine("d1", "v2"));     // B: follows A
+        WriteChangeFile("aaa", MetaLine("bbb"), SetTitleLine("d1", "v3"));     // C: follows B
+
+        await _sut.MigrateAsync("tester");
+
+        var issues = await LoadMigratedIssuesAsync();
+        issues["d1"].Title.Should().Be("v3");
+    }
+
+    [Test]
+    public async Task Migrate_durable_is_idempotent_second_run_is_a_clean_no_op()
+    {
+        WriteDurableSnapshot(LeanIssueJson("d1", "Once"));
+
+        var first = await _sut.MigrateAsync("tester");
+        first.WasMigrationNeeded.Should().BeTrue();
+
+        var second = await _sut.MigrateAsync("tester");
+        second.WasMigrationNeeded.Should().BeFalse();
+        second.IssuesWritten.Should().Be(0);
+    }
+
+    [Test]
+    public async Task IsMigrationNeeded_stays_false_for_durable_but_explicit_migrate_converts()
+    {
+        // The interceptor's auto-trigger must never fire on the durable layout...
+        WriteDurableSnapshot(LeanIssueJson("d1", "Durable"));
+        (await _sut.IsMigrationNeededAsync()).Should().BeFalse();
+
+        // ...but the explicit `fleece migrate` command still converts it.
+        await _sut.MigrateAsync("tester");
+        var issues = await LoadMigratedIssuesAsync();
+        issues.Should().ContainKey("d1");
+    }
+
+    [Test]
+    public async Task Migrate_durable_remaps_removed_enum_members_in_snapshot()
+    {
+        // A genuine v3 snapshot can carry enum members v4 removed: type `idea`, status `archived`.
+        WriteDurableSnapshot(
+            """{"id":"d1","title":"Old idea","status":"archived","type":"idea","createdAt":"2026-03-01T10:00:00Z","lastUpdate":"2026-03-01T10:00:00Z"}""");
+
+        await _sut.MigrateAsync("tester");
+
+        var issues = await LoadMigratedIssuesAsync();
+        issues["d1"].Type.Should().Be(IssueType.Task, "removed type `idea` maps to task");
+        issues["d1"].Status.Should().Be(IssueStatus.Promoted, "removed status `archived` maps to promoted");
+    }
+
+    [Test]
+    public async Task Migrate_durable_remaps_removed_enum_value_in_change_event()
+    {
+        // The latest state may live in a change-file event setting a now-removed status.
+        WriteDurableSnapshot(LeanIssueJson("d1", "Active", status: "open"));
+        WriteChangeFile("aaa", MetaLine(),
+            """{"kind":"set","at":"2026-04-01T10:00:00Z","issueId":"d1","property":"status","value":"archived"}""");
+
+        await _sut.MigrateAsync("tester");
+
+        var issues = await LoadMigratedIssuesAsync();
+        issues["d1"].Status.Should().Be(IssueStatus.Promoted,
+            "a `set status=archived` change event must remap to promoted, not silently degrade");
+    }
+
+    [Test]
+    public async Task Migrate_with_convertDurableLayout_false_leaves_the_durable_snapshot_intact()
+    {
+        // This is the interceptor's contract: even alongside hashed files (which it DOES
+        // auto-migrate), the durable layout must never be auto-converted.
+        WriteLegacyIssuesFile("aaa", LegacyIssueJson("h1", "Hashed"));
+        WriteDurableSnapshot(LeanIssueJson("d1", "Durable"));
+
+        var result = await _sut.MigrateAsync("tester", convertDurableLayout: false);
+
+        result.WasMigrationNeeded.Should().BeTrue("the hashed layout still migrates");
+
+        var issues = await LoadMigratedIssuesAsync();
+        issues.Should().ContainKey("h1");
+        issues.Should().NotContainKey("d1", "the durable snapshot must not be auto-converted");
+
+        // The durable sources are untouched.
+        _fs.File.Exists(Path.Combine(FleeceDir, "issues.jsonl")).Should().BeTrue();
+    }
 }

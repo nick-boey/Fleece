@@ -84,7 +84,10 @@ public sealed class AutoMigrateInterceptor : ICommandInterceptor
 
         var gitConfig = ServiceProvider.GetRequiredService<IGitConfigService>();
         var by = gitConfig.GetUserName() ?? Environment.UserName;
-        await migration.MigrateAsync(by);
+        // convertDurableLayout: false — the interceptor only ever auto-migrates the hashed-file
+        // layout. The durable snapshot is converted solely by an explicit `fleece migrate`, so
+        // it is never silently consumed on an unrelated command (even alongside hashed files).
+        await migration.MigrateAsync(by, convertDurableLayout: false);
 
         var console = ServiceProvider.GetRequiredService<IAnsiConsole>();
         console.MarkupLine("[dim]Auto-migrated snapshot format[/]");

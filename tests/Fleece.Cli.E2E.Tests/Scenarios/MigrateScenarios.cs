@@ -103,6 +103,71 @@ public class MigrateScenarios : CliScenarioTestBase
         exit.Should().NotBe(0);
     }
 
+    // ----- Layout B: legacy durable snapshot (`.fleece/issues.jsonl` + `.fleece/changes/`) -----
+
+    private string ChangesDir => Path.Combine(BasePath, ".fleece", "changes");
+
+    private void WriteDurableSnapshot(params string[] jsonLines)
+    {
+        var dir = Path.Combine(BasePath, ".fleece");
+        Fs.Directory.CreateDirectory(dir);
+        var content = string.Join('\n', jsonLines) + "\n";
+        Fs.File.WriteAllText(Path.Combine(dir, "issues.jsonl"), content, Encoding.UTF8);
+    }
+
+    private void WriteChangeFile(string guid, params string[] jsonLines)
+    {
+        Fs.Directory.CreateDirectory(ChangesDir);
+        var content = string.Join('\n', jsonLines) + "\n";
+        Fs.File.WriteAllText(Path.Combine(ChangesDir, $"change_{guid}.jsonl"), content, Encoding.UTF8);
+    }
+
+    private static string LeanIssueJson(string id, string title, string status = "open") =>
+        $$"""
+        {"id":"{{id}}","title":"{{title}}","status":"{{status}}","type":"task","createdAt":"2026-03-01T10:00:00Z","lastUpdate":"2026-03-01T10:00:00Z"}
+        """;
+
+    private static string MetaLine(string? follows = null) =>
+        follows is null
+            ? """{"kind":"meta","follows":null}"""
+            : $$"""{"kind":"meta","follows":"{{follows}}"}""";
+
+    private static string SetTitleLine(string id, string title, string at = "2026-04-01T10:00:00Z") =>
+        $$"""{"kind":"set","at":"{{at}}","issueId":"{{id}}","property":"title","value":"{{title}}"}""";
+
+    [Test]
+    public async Task Migrate_converts_durable_snapshot_into_per_issue_logs()
+    {
+        WriteDurableSnapshot(LeanIssueJson("d1", "Old"));
+        WriteChangeFile("aaa", MetaLine(), SetTitleLine("d1", "New"));
+
+        (await RunAsync("migrate")).Should().Be(0);
+
+        var fleeceDir = Path.Combine(BasePath, ".fleece");
+        Fs.File.Exists(Path.Combine(IssuesDir, "d1.jsonl")).Should().BeTrue();
+
+        // Sources consumed.
+        Fs.File.Exists(Path.Combine(fleeceDir, "issues.jsonl")).Should().BeFalse();
+        Fs.Directory.Exists(ChangesDir).Should().BeFalse();
+
+        LoadIssues().Single(i => i.Id == "d1").Title.Should().Be("New");
+    }
+
+    [Test]
+    public async Task Interceptor_warns_but_does_not_convert_the_durable_snapshot()
+    {
+        WriteDurableSnapshot(LeanIssueJson("d1", "Durable"));
+
+        // An unrelated command runs the interceptor, which must warn but NOT convert.
+        (await RunAsync("list")).Should().Be(0);
+
+        Console.Output.Should().Contain("v4-migration");
+
+        // The snapshot is untouched and nothing was converted into per-issue logs.
+        Fs.File.Exists(Path.Combine(BasePath, ".fleece", "issues.jsonl")).Should().BeTrue();
+        Fs.File.Exists(Path.Combine(IssuesDir, "d1.jsonl")).Should().BeFalse();
+    }
+
     private void SeedFleeceDir(params string[] fixturePaths)
     {
         var fleeceDir = Path.Combine(BasePath, ".fleece");
