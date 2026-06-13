@@ -20,13 +20,6 @@ public abstract class StatusCommandBase(IFleeceService fleeceService, IAnsiConso
             return 1;
         }
 
-        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
-        if (hasMultiple)
-        {
-            console.MarkupLine($"[red]Error:[/] {message}");
-            return 1;
-        }
-
         var resolutionErrors = new List<string>();
         var resolvedIds = new List<string>();
 

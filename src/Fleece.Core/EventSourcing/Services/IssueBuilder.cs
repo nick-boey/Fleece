@@ -45,9 +45,11 @@ internal sealed class IssueBuilder
             CreatedAt = issue.CreatedAt,
             LastUpdate = issue.LastUpdate,
         };
-        b.LinkedIssues.AddRange(issue.LinkedIssues);
-        b.ParentIssues.AddRange(issue.ParentIssues);
-        b.Tags.AddRange(issue.Tags);
+        // Null-coalesce: a hand-written or partial legacy snapshot may omit these arrays,
+        // which deserialize to null. (FromIssue is used only by the durable-snapshot reader.)
+        b.LinkedIssues.AddRange(issue.LinkedIssues ?? []);
+        b.ParentIssues.AddRange(issue.ParentIssues ?? []);
+        b.Tags.AddRange(issue.Tags ?? []);
         return b;
     }
 

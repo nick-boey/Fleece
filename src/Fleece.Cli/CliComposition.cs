@@ -1,6 +1,7 @@
 using System.IO.Abstractions;
 using Fleece.Cli.Commands;
 using Fleece.Core.Extensions;
+using Fleece.GitHub;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
 
@@ -14,14 +15,15 @@ public static class CliComposition
         ("list",       typeof(ListCommand)),
         ("edit",       typeof(EditCommand)),
         ("delete",     typeof(DeleteCommand)),
-        ("clean",      typeof(CleanCommand)),
         ("show",       typeof(ShowCommand)),
         ("search",     typeof(SearchCommand)),
-        ("diff",       typeof(DiffCommand)),
-        ("merge",      typeof(MergeCommand)),
         ("migrate",    typeof(MigrateCommand)),
         ("install",    typeof(InstallCommand)),
-        ("link",       typeof(LinkCommand)),
+        ("seal",       typeof(SealCommand)),
+        ("auth",       typeof(AuthCommand)),
+        ("promote",    typeof(PromoteCommand)),
+        ("absorb",     typeof(AbsorbCommand)),
+        ("openspec dependencies", typeof(OpenSpecDependenciesCommand)),
         ("prime",      typeof(PrimeCommand)),
         ("validate",   typeof(ValidateCommand)),
         ("commit",     typeof(CommitCommand)),
@@ -33,17 +35,24 @@ public static class CliComposition
         ("progress",   typeof(ProgressCommand)),
         ("review",     typeof(ReviewCommand)),
         ("complete",   typeof(CompleteCommand)),
-        ("archived",   typeof(ArchivedCommand)),
         ("closed",     typeof(ClosedCommand)),
     };
 
-    public static IServiceCollection BuildServices(string? basePath = null, IFileSystem? fileSystem = null)
+    public static IServiceCollection BuildServices(
+        string? basePath = null,
+        IFileSystem? fileSystem = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var services = new ServiceCollection();
         services.AddFleeceInMemoryService(basePath, fileSystem);
+        services.AddFleeceGitHub();
         var fs = fileSystem ?? new Testably.Abstractions.RealFileSystem();
         services.AddSingleton(new BasePathProvider(basePath ?? fs.Directory.GetCurrentDirectory()));
         services.AddSingleton<IAnsiConsole>(_ => AnsiConsole.Console);
+
+        // Lets test composition substitute services (e.g. a fake IGitHubService) before the
+        // provider is built. Registrations here win because DI resolves the last registration.
+        configureServices?.Invoke(services);
         return services;
     }
 }

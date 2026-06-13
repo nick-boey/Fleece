@@ -232,15 +232,9 @@ public sealed partial class FleeceService : IFleeceService
                 return false;
             }
 
-            var existing = issues[existingIndex];
-            var now = DateTimeOffset.UtcNow;
-            var deleted = existing with
-            {
-                Status = IssueStatus.Deleted,
-                LastUpdate = now
-            };
-
-            issues[existingIndex] = deleted;
+            // Hard-remove the issue from the set; the storage layer deletes its
+            // `.fleece/issues/<id>.jsonl` log file for any issue absent from the saved set.
+            issues.RemoveAt(existingIndex);
             await _storage.SaveIssuesAsync(issues, cancellationToken);
             return true;
         }
@@ -569,84 +563,10 @@ public sealed partial class FleeceService : IFleeceService
 
     #region Maintenance
 
-    public async Task<CleanResult> CleanAsync(
-        bool includeComplete = false,
-        bool includeClosed = false,
-        bool includeArchived = false,
-        bool stripReferences = true,
-        bool dryRun = false,
-        CancellationToken cancellationToken = default)
-    {
-        await _lock.WaitAsync(cancellationToken);
-        try
-        {
-            var issues = (await _storage.LoadIssuesAsync(cancellationToken)).ToList();
-            var existingTombstones = await _storage.LoadTombstonesAsync(cancellationToken);
-
-            var now = DateTimeOffset.UtcNow;
-            var cleanedBy = _gitConfigService.GetUserName() ?? "unknown";
-
-            var plan = Cleaning.Plan(
-                issues,
-                existingTombstones.ToList(),
-                includeComplete,
-                includeClosed,
-                includeArchived,
-                stripReferences,
-                now,
-                cleanedBy);
-
-            if (plan.IssuesToRemove.Count == 0)
-            {
-                return new CleanResult
-                {
-                    CleanedTombstones = [],
-                    StrippedReferences = []
-                };
-            }
-
-            if (!dryRun)
-            {
-                await _storage.SaveIssuesAsync(plan.UpdatedIssues.ToList(), cancellationToken);
-
-                var allTombstones = existingTombstones.ToList();
-                allTombstones.AddRange(plan.TombstonesToCreate);
-
-                var deduplicatedTombstones = allTombstones
-                    .GroupBy(t => t.IssueId, StringComparer.OrdinalIgnoreCase)
-                    .Select(g => g.OrderByDescending(t => t.CleanedAt).First())
-                    .ToList();
-
-                await _storage.SaveTombstonesAsync(deduplicatedTombstones, cancellationToken);
-            }
-
-            return new CleanResult
-            {
-                CleanedTombstones = plan.TombstonesToCreate.ToList(),
-                StrippedReferences = plan.StrippedReferences.ToList()
-            };
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-
-    public Task<int> MergeAsync(bool dryRun = false, CancellationToken cancellationToken = default)
-    {
-        // Event-sourced storage merges via event replay — IssueMerger is now legacy-only.
-        return Task.FromResult(0);
-    }
-
     public async Task<DependencyValidationResult> ValidateDependenciesAsync(CancellationToken cancellationToken = default)
     {
         var issues = await LoadAndNormalizeAsync(cancellationToken);
         return Validation.ValidateDependencyCycles(issues);
-    }
-
-    public async Task<(bool HasMultiple, string Message)> HasMultipleUnmergedFilesAsync(CancellationToken cancellationToken = default)
-    {
-        return await _storage.HasMultipleUnmergedFilesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Issue>> GetIssueHierarchyAsync(

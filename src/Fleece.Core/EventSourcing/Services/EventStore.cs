@@ -1,57 +1,48 @@
 using System.IO.Abstractions;
 using System.Text;
-using System.Text.Json;
 using Fleece.Core.EventSourcing.Events;
 using Fleece.Core.EventSourcing.Services.Interfaces;
 
 namespace Fleece.Core.EventSourcing.Services;
 
 /// <summary>
-/// Default <see cref="IEventStore"/> implementation. Uses <see cref="IFileSystem"/> for
-/// all I/O so tests can substitute an in-memory file system.
+/// Default <see cref="IEventStore"/> implementation. Persists each issue as a single
+/// append-only event log at <c>.fleece/issues/{id}.jsonl</c>. Uses <see cref="IFileSystem"/>
+/// for all I/O so tests can substitute an in-memory file system.
 /// </summary>
 public sealed class EventStore : IEventStore
 {
     internal const string FleeceDirectory = ".fleece";
-    internal const string ChangesDirectory = "changes";
-    internal const string ActiveChangeFileName = ".active-change";
-    private const string ChangeFilePrefix = "change_";
-    private const string ChangeFileExtension = ".jsonl";
+    internal const string IssuesDirectory = "issues";
+    private const string LogFileExtension = ".jsonl";
 
     private readonly string _basePath;
     private readonly IFileSystem _fileSystem;
-    private readonly IEventGitContext _gitContext;
-    private readonly Func<string> _guidFactory;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
 
     public EventStore(
         string basePath,
-        IFileSystem? fileSystem = null,
-        Func<string>? guidFactory = null,
-        IEventGitContext? gitContext = null)
+        IFileSystem? fileSystem = null)
     {
         _basePath = basePath;
         _fileSystem = fileSystem ?? new Testably.Abstractions.RealFileSystem();
-        _gitContext = gitContext ?? NullEventGitContext.Instance;
-        _guidFactory = guidFactory ?? (() => Guid.NewGuid().ToString("N"));
     }
 
     private string FleeceDirectoryPath => _fileSystem.Path.Combine(_basePath, FleeceDirectory);
-    private string ChangesDirectoryPath => _fileSystem.Path.Combine(FleeceDirectoryPath, ChangesDirectory);
-    private string ActiveChangeFilePath => _fileSystem.Path.Combine(FleeceDirectoryPath, ActiveChangeFileName);
+    private string IssuesDirectoryPath => _fileSystem.Path.Combine(FleeceDirectoryPath, IssuesDirectory);
 
-    public Task<IReadOnlyList<string>> GetAllChangeFilePathsAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<string>> GetAllIssueLogPathsAsync(CancellationToken cancellationToken = default)
     {
-        if (!_fileSystem.Directory.Exists(ChangesDirectoryPath))
+        if (!_fileSystem.Directory.Exists(IssuesDirectoryPath))
         {
             return Task.FromResult<IReadOnlyList<string>>([]);
         }
-        var files = _fileSystem.Directory.GetFiles(ChangesDirectoryPath, $"{ChangeFilePrefix}*{ChangeFileExtension}");
+        var files = _fileSystem.Directory.GetFiles(IssuesDirectoryPath, $"*{LogFileExtension}");
         Array.Sort(files, StringComparer.Ordinal);
         return Task.FromResult<IReadOnlyList<string>>(files);
     }
 
-    public async Task<IReadOnlyList<IssueEvent>> ReadChangeFileAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<IssueEvent>> ReadIssueLogAsync(string filePath, CancellationToken cancellationToken = default)
     {
         var content = await _fileSystem.File.ReadAllTextAsync(filePath, cancellationToken);
         var events = new List<IssueEvent>();
@@ -64,115 +55,27 @@ public sealed class EventStore : IEventStore
             {
                 continue;
             }
-            var evt = EventJsonSerializer.ParseLine(line, filePath, lineNumber);
-            if (events.Count == 0 && evt is not MetaEvent)
-            {
-                throw new InvalidOperationException(
-                    $"Change file {filePath} does not begin with a meta event (line 1 was '{evt.Kind}').");
-            }
-            events.Add(evt);
-        }
-        if (events.Count == 0)
-        {
-            throw new InvalidOperationException($"Change file {filePath} is empty.");
+            events.Add(EventJsonSerializer.ParseLine(line, filePath, lineNumber));
         }
         return events;
     }
 
-    public async Task<MetaEvent> ReadMetaAsync(string filePath, CancellationToken cancellationToken = default)
-    {
-        // Read just the first non-blank line for efficiency on large change files.
-        await using var stream = _fileSystem.File.OpenRead(filePath);
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-        var lineNumber = 0;
-        string? line;
-        while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
-        {
-            lineNumber++;
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-            var evt = EventJsonSerializer.ParseLine(line, filePath, lineNumber);
-            if (evt is MetaEvent meta)
-            {
-                return meta;
-            }
-            throw new InvalidOperationException(
-                $"Change file {filePath} does not begin with a meta event (line {lineNumber} was '{evt.Kind}').");
-        }
-        throw new InvalidOperationException($"Change file {filePath} is empty.");
-    }
-
-    public async Task<string?> GetActiveChangeFilePathAsync(CancellationToken cancellationToken = default)
-    {
-        if (!_fileSystem.File.Exists(ActiveChangeFilePath))
-        {
-            return null;
-        }
-        var content = await _fileSystem.File.ReadAllTextAsync(ActiveChangeFilePath, cancellationToken);
-        var pointer = JsonSerializer.Deserialize(content, EventSourcingJsonContext.Default.ActiveChangePointer);
-        if (pointer is null || string.IsNullOrEmpty(pointer.Guid))
-        {
-            return null;
-        }
-        return ChangeFilePathFor(pointer.Guid);
-    }
-
-    public async Task<string> AppendEventsAsync(IReadOnlyList<IssueEvent> events, CancellationToken cancellationToken = default)
+    public async Task AppendEventsAsync(IReadOnlyList<IssueEvent> events, CancellationToken cancellationToken = default)
     {
         if (events.Count == 0)
         {
             throw new ArgumentException("AppendEventsAsync requires at least one event.", nameof(events));
         }
-        if (events.Any(e => e is MetaEvent))
-        {
-            throw new ArgumentException(
-                "Meta events are written automatically on rotation and cannot be passed to AppendEventsAsync.",
-                nameof(events));
-        }
 
         await _writeLock.WaitAsync(cancellationToken);
         try
         {
-            var activePath = await ResolveActiveOrRotateAsync(cancellationToken);
-            await AppendLinesAsync(activePath, events.Select(EventJsonSerializer.Serialize), cancellationToken);
-            return activePath;
-        }
-        finally
-        {
-            _writeLock.Release();
-        }
-    }
-
-    public async Task<string> RotateAsync(CancellationToken cancellationToken = default)
-    {
-        await _writeLock.WaitAsync(cancellationToken);
-        try
-        {
-            return await RotateInternalAsync(cancellationToken);
-        }
-        finally
-        {
-            _writeLock.Release();
-        }
-    }
-
-    public async Task DeleteAllChangeFilesAsync(CancellationToken cancellationToken = default)
-    {
-        await _writeLock.WaitAsync(cancellationToken);
-        try
-        {
-            if (_fileSystem.Directory.Exists(ChangesDirectoryPath))
+            // Group by issue id, preserving append order within each group, and write each
+            // group to that issue's own log file. File order within a single issue is truth.
+            foreach (var group in GroupByIssue(events))
             {
-                foreach (var path in _fileSystem.Directory.GetFiles(ChangesDirectoryPath, $"{ChangeFilePrefix}*{ChangeFileExtension}"))
-                {
-                    _fileSystem.File.Delete(path);
-                }
-            }
-            if (_fileSystem.File.Exists(ActiveChangeFilePath))
-            {
-                _fileSystem.File.Delete(ActiveChangeFilePath);
+                var path = LogFilePathFor(group.Key);
+                await AppendLinesAsync(path, group.Value.Select(EventJsonSerializer.Serialize), cancellationToken);
             }
         }
         finally
@@ -181,95 +84,53 @@ public sealed class EventStore : IEventStore
         }
     }
 
-    /// <summary>
-    /// Returns the active change file path. Triggers a rotation when:
-    /// (a) the pointer is missing, (b) the file it references no longer exists on disk,
-    /// or (c) the file is committed at HEAD per <see cref="IEventGitContext.IsFileCommittedAtHead"/>.
-    /// The third trigger makes change files immutable once committed: any edit after the
-    /// file lands in HEAD lands in a fresh change file whose <c>follows</c> chains back.
-    /// Caller MUST hold <see cref="_writeLock"/>.
-    /// </summary>
-    private async Task<string> ResolveActiveOrRotateAsync(CancellationToken cancellationToken)
+    public async Task DeleteIssueLogAsync(string issueId, CancellationToken cancellationToken = default)
     {
-        var activePath = await GetActiveChangeFilePathAsync(cancellationToken);
-        if (activePath is null)
+        await _writeLock.WaitAsync(cancellationToken);
+        try
         {
-            return await RotateInternalAsync(cancellationToken);
+            var path = LogFilePathFor(issueId);
+            if (_fileSystem.File.Exists(path))
+            {
+                _fileSystem.File.Delete(path);
+            }
         }
-        if (!_fileSystem.File.Exists(activePath))
+        finally
         {
-            return await RotateInternalAsync(cancellationToken);
+            _writeLock.Release();
         }
-        if (_gitContext.IsFileCommittedAtHead(activePath))
-        {
-            return await RotateInternalAsync(cancellationToken);
-        }
-        return activePath;
     }
 
-    private async Task<string> RotateInternalAsync(CancellationToken cancellationToken)
+    private static IReadOnlyList<KeyValuePair<string, List<IssueEvent>>> GroupByIssue(IReadOnlyList<IssueEvent> events)
     {
-        EnsureChangesDirectory();
-
-        var leaf = await FindDagLeafAsync(cancellationToken);
-        var newGuid = _guidFactory();
-        var newPath = ChangeFilePathFor(newGuid);
-
-        // Avoid overwriting an existing file (extremely unlikely with full GUIDs).
-        if (_fileSystem.File.Exists(newPath))
+        var order = new List<string>();
+        var groups = new Dictionary<string, List<IssueEvent>>(StringComparer.Ordinal);
+        foreach (var evt in events)
         {
-            throw new InvalidOperationException(
-                $"Generated GUID '{newGuid}' collides with existing change file at {newPath}.");
+            var id = IssueIdOf(evt);
+            if (!groups.TryGetValue(id, out var list))
+            {
+                list = [];
+                groups[id] = list;
+                order.Add(id);
+            }
+            list.Add(evt);
         }
-
-        var follows = leaf is null ? Array.Empty<string>() : new[] { leaf };
-        var meta = new MetaEvent { Follows = follows };
-        await AppendLinesAsync(newPath, [EventJsonSerializer.Serialize(meta)], cancellationToken);
-
-        var pointer = new ActiveChangePointer { Guid = newGuid };
-        var pointerJson = JsonSerializer.Serialize(pointer, EventSourcingJsonContext.Default.ActiveChangePointer);
-        await _fileSystem.File.WriteAllTextAsync(ActiveChangeFilePath, pointerJson + "\n", cancellationToken);
-
-        return newPath;
+        return order.Select(id => new KeyValuePair<string, List<IssueEvent>>(id, groups[id])).ToList();
     }
 
-    private async Task<string?> FindDagLeafAsync(CancellationToken cancellationToken)
+    private static string IssueIdOf(IssueEvent evt) => evt switch
     {
-        var allPaths = await GetAllChangeFilePathsAsync(cancellationToken);
-        if (allPaths.Count == 0)
-        {
-            return null;
-        }
-
-        var guids = allPaths.Select(ExtractGuidFromPath).ToList();
-        var guidSet = guids.ToHashSet(StringComparer.Ordinal);
-        var followsByGuid = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
-        foreach (var path in allPaths)
-        {
-            var meta = await ReadMetaAsync(path, cancellationToken);
-            followsByGuid[ExtractGuidFromPath(path)] = meta.Follows ?? Array.Empty<string>();
-        }
-
-        // A leaf is a GUID that no other file's `follows` (in any position) references.
-        var hasDescendant = followsByGuid.Values
-            .SelectMany(f => f)
-            .Where(f => guidSet.Contains(f))
-            .ToHashSet(StringComparer.Ordinal);
-
-        var leaves = guids.Where(g => !hasDescendant.Contains(g)).ToList();
-        if (leaves.Count == 0)
-        {
-            // Cycle in the DAG (shouldn't happen with honest rotation but be defensive).
-            // Fall back to alphabetical first.
-            leaves = [.. guids];
-        }
-        leaves.Sort(StringComparer.Ordinal);
-        return leaves[0];
-    }
+        CreateEvent c => c.IssueId,
+        SetEvent s => s.IssueId,
+        AddEvent a => a.IssueId,
+        RemoveEvent r => r.IssueId,
+        _ => throw new InvalidOperationException($"Event of kind '{evt.Kind}' has no issue id."),
+    };
 
     private async Task AppendLinesAsync(string filePath, IEnumerable<string> lines, CancellationToken cancellationToken)
     {
-        EnsureChangesDirectory();
+        EnsureIssuesDirectory();
 
         // Open with FileShare.Read so concurrent reads are allowed.
         // FileMode.Append creates if missing, otherwise positions at end.
@@ -296,32 +157,18 @@ public sealed class EventStore : IEventStore
         }
     }
 
-    private void EnsureChangesDirectory()
+    private void EnsureIssuesDirectory()
     {
         if (!_fileSystem.Directory.Exists(FleeceDirectoryPath))
         {
             _fileSystem.Directory.CreateDirectory(FleeceDirectoryPath);
         }
-        if (!_fileSystem.Directory.Exists(ChangesDirectoryPath))
+        if (!_fileSystem.Directory.Exists(IssuesDirectoryPath))
         {
-            _fileSystem.Directory.CreateDirectory(ChangesDirectoryPath);
+            _fileSystem.Directory.CreateDirectory(IssuesDirectoryPath);
         }
     }
 
-    private string ChangeFilePathFor(string guid) =>
-        _fileSystem.Path.Combine(ChangesDirectoryPath, $"{ChangeFilePrefix}{guid}{ChangeFileExtension}");
-
-    /// <summary>
-    /// Extracts the GUID portion of <c>change_{guid}.jsonl</c>. Internal so the replay
-    /// engine can do the same lookup.
-    /// </summary>
-    internal static string ExtractGuidFromPath(string filePath)
-    {
-        var name = Path.GetFileNameWithoutExtension(filePath);
-        if (!name.StartsWith(ChangeFilePrefix, StringComparison.Ordinal))
-        {
-            throw new ArgumentException($"Path does not match the change_{{guid}}.jsonl pattern: {filePath}");
-        }
-        return name[ChangeFilePrefix.Length..];
-    }
+    private string LogFilePathFor(string issueId) =>
+        _fileSystem.Path.Combine(IssuesDirectoryPath, $"{issueId}{LogFileExtension}");
 }

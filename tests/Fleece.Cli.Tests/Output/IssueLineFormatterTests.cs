@@ -133,7 +133,7 @@ public class IssueLineFormatterTests
     [TestCase(IssueStatus.Progress, "blue")]
     [TestCase(IssueStatus.Review, "purple")]
     [TestCase(IssueStatus.Complete, "green")]
-    [TestCase(IssueStatus.Archived, "dim")]
+    [TestCase(IssueStatus.Promoted, "dim")]
     [TestCase(IssueStatus.Closed, "dim")]
     public void GetStatusColor_ReturnsExpectedColor(IssueStatus status, string expectedColor)
     {

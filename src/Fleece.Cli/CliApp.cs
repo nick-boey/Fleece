@@ -40,12 +40,6 @@ public static class CliApp
                 .WithDescription("Delete an issue by ID")
                 .WithExample("delete", "abc123");
 
-            config.AddCommand<CleanCommand>("clean")
-                .WithDescription("Permanently remove deleted issues and create tombstone records")
-                .WithExample("clean")
-                .WithExample("clean", "--dry-run")
-                .WithExample("clean", "--include-complete", "--include-archived");
-
             config.AddCommand<ShowCommand>("show")
                 .WithDescription("Show all details of an issue")
                 .WithExample("show", "abc123")
@@ -54,20 +48,6 @@ public static class CliApp
             config.AddCommand<SearchCommand>("search")
                 .WithDescription("Search issues by text")
                 .WithExample("search", "login");
-
-            config.AddCommand<DiffCommand>("diff")
-                .WithDescription("Compare two JSONL issue files")
-                .WithExample("diff", "file1.jsonl", "file2.jsonl");
-
-            config.AddCommand<MergeCommand>("merge")
-                .WithDescription("[yellow]deprecated[/] Find and merge duplicate issues. Use `fleece project` instead.")
-                .WithExample("merge")
-                .WithExample("merge", "--dry-run");
-
-            config.AddCommand<ProjectCommand>("project")
-                .WithDescription("Compact change files into the snapshot. Runs only on the default branch.")
-                .WithExample("project")
-                .WithExample("project", "--json");
 
             config.AddCommand<MigrateCommand>("migrate")
                 .WithDescription("Bring fleece data up to the current schema (e.g. legacy hashed files → event-sourced layout).")
@@ -78,9 +58,30 @@ public static class CliApp
             config.AddCommand<InstallCommand>("install")
                 .WithDescription("Install Claude Code hooks");
 
-            config.AddCommand<LinkCommand>("link")
-                .WithDescription("Write merge marker change files. Use --merge to link the DAG leaves at the current merge in progress.")
-                .WithExample("link", "--merge");
+            config.AddCommand<SealCommand>("seal")
+                .WithDescription("Finish the branch: archive all issues and clear the live issues directory. Refuses while any issue is active.")
+                .WithExample("seal");
+
+            config.AddCommand<AuthCommand>("auth")
+                .WithDescription("Report GitHub authentication status (resolved login and token source)")
+                .WithExample("auth");
+
+            config.AddCommand<PromoteCommand>("promote")
+                .WithDescription("Escalate Fleece issues into a single GitHub issue and mark them promoted")
+                .WithExample("promote", "abc123")
+                .WithExample("promote", "abc123", "def456");
+
+            config.AddCommand<AbsorbCommand>("absorb")
+                .WithDescription("Create a Fleece issue from a GitHub issue (#<github-#>) and assign it back without closing")
+                .WithExample("absorb", "#123");
+
+            config.AddBranch("openspec", openspec =>
+            {
+                openspec.SetDescription("OpenSpec tooling");
+                openspec.AddCommand<OpenSpecDependenciesCommand>("dependencies")
+                    .WithDescription("Render a DAG of OpenSpec changes from their depends-on frontmatter")
+                    .WithExample("openspec", "dependencies");
+            });
 
             config.AddCommand<PrimeCommand>("prime")
                 .WithDescription("Print LLM instructions for issue tracking")
@@ -122,9 +123,9 @@ public static class CliApp
             config.AddCommand<ConfigCommand>("config")
                 .WithDescription("View and modify Fleece configuration settings")
                 .WithExample("config", "--list")
-                .WithExample("config", "--get", "autoMerge")
+                .WithExample("config", "--get", "identity")
                 .WithExample("config", "--set", "identity=John Doe")
-                .WithExample("config", "--global", "--set", "autoMerge=true");
+                .WithExample("config", "--global", "--set", "syncBranch=fleece-sync");
 
             config.AddCommand<OpenCommand>("open")
                 .WithDescription("Set issue status to open")
@@ -146,11 +147,6 @@ public static class CliApp
                 .WithExample("complete", "abc123")
                 .WithExample("complete", "abc123", "def456");
 
-            config.AddCommand<ArchivedCommand>("archived")
-                .WithDescription("Set issue status to archived")
-                .WithExample("archived", "abc123")
-                .WithExample("archived", "abc123", "def456");
-
             config.AddCommand<ClosedCommand>("closed")
                 .WithDescription("Set issue status to closed")
                 .WithExample("closed", "abc123")
@@ -164,7 +160,8 @@ public static class CliApp
         string[] args,
         string? basePath = null,
         IFileSystem? fileSystem = null,
-        IAnsiConsole? console = null)
+        IAnsiConsole? console = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         Console.OutputEncoding = Encoding.UTF8;
 
@@ -173,7 +170,7 @@ public static class CliApp
             ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
             ?? "1.0.0";
 
-        var services = CliComposition.BuildServices(basePath, fileSystem);
+        var services = CliComposition.BuildServices(basePath, fileSystem, configureServices);
         if (console is not null)
         {
             var existing = services.FirstOrDefault(d => d.ServiceType == typeof(IAnsiConsole));
@@ -185,9 +182,7 @@ public static class CliApp
         }
 
         var registrar = new TypeRegistrar(services);
-        var autoMigrateInterceptor = new AutoMigrateInterceptor(() => registrar.GetServiceProvider());
-        var autoMergeInterceptor = new AutoMergeInterceptor(() => registrar.GetServiceProvider());
-        var interceptor = new CompositeCommandInterceptor(autoMigrateInterceptor, autoMergeInterceptor);
+        var interceptor = new AutoMigrateInterceptor(() => registrar.GetServiceProvider());
         var app = BuildApp(registrar, version, interceptor);
         if (console is not null)
         {

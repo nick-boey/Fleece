@@ -9,6 +9,7 @@ namespace Fleece.Core.Tests.Services;
 public class SettingsServiceTests
 {
     private string _tempDir = null!;
+    private string _tempGlobalDir = null!;
     private SettingsService _sut = null!;
 
     [SetUp]
@@ -16,7 +17,9 @@ public class SettingsServiceTests
     {
         _tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
-        _sut = new SettingsService(_tempDir);
+        _tempGlobalDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(_tempGlobalDir);
+        _sut = new SettingsService(_tempDir, globalSettingsDirectory: _tempGlobalDir);
     }
 
     [TearDown]
@@ -25,6 +28,11 @@ public class SettingsServiceTests
         if (Directory.Exists(_tempDir))
         {
             Directory.Delete(_tempDir, recursive: true);
+        }
+
+        if (Directory.Exists(_tempGlobalDir))
+        {
+            Directory.Delete(_tempGlobalDir, recursive: true);
         }
     }
 
@@ -49,7 +57,6 @@ public class SettingsServiceTests
     {
         var settings = new FleeceSettings
         {
-            AutoMerge = true,
             Identity = "Test User",
             SyncBranch = "fleece-sync"
         };
@@ -58,8 +65,7 @@ public class SettingsServiceTests
         var loaded = await _sut.LoadLocalSettingsAsync();
 
         loaded.Should().NotBeNull();
-        loaded!.AutoMerge.Should().BeTrue();
-        loaded.Identity.Should().Be("Test User");
+        loaded!.Identity.Should().Be("Test User");
         loaded.SyncBranch.Should().Be("fleece-sync");
     }
 
@@ -67,7 +73,7 @@ public class SettingsServiceTests
     public async Task SaveSettingsToFileAsync_CreatesDirectoryIfNeeded()
     {
         var nestedPath = Path.Combine(_tempDir, "nested", "dir", "settings.json");
-        var settings = new FleeceSettings { AutoMerge = true };
+        var settings = new FleeceSettings { Identity = "Test User" };
 
         await _sut.SaveSettingsToFileAsync(nestedPath, settings);
 
@@ -79,10 +85,8 @@ public class SettingsServiceTests
     {
         var result = await _sut.GetEffectiveSettingsAsync();
 
-        result.AutoMerge.Should().BeTrue();  // Default is true
         result.Identity.Should().BeNull();
         result.SyncBranch.Should().BeNull();
-        result.Sources.AutoMerge.Should().Be(SettingSource.Default);
         result.Sources.Identity.Should().Be(SettingSource.Default);
         result.Sources.SyncBranch.Should().Be(SettingSource.Default);
     }
@@ -90,14 +94,12 @@ public class SettingsServiceTests
     [Test]
     public async Task GetEffectiveSettingsAsync_LocalOverridesDefault()
     {
-        var localSettings = new FleeceSettings { AutoMerge = true, Identity = "Local User" };
+        var localSettings = new FleeceSettings { Identity = "Local User" };
         await _sut.SaveLocalSettingsAsync(localSettings);
 
         var result = await _sut.GetEffectiveSettingsAsync();
 
-        result.AutoMerge.Should().BeTrue();
         result.Identity.Should().Be("Local User");
-        result.Sources.AutoMerge.Should().Be(SettingSource.Local);
         result.Sources.Identity.Should().Be(SettingSource.Local);
     }
 
@@ -117,14 +119,14 @@ public class SettingsServiceTests
     [Test]
     public async Task GetEffectiveSettingsAsync_PartialLocalSettings_OnlyOverridesSpecified()
     {
-        // Local only specifies identity, leaves autoMerge as default
+        // Local only specifies identity, leaves syncBranch as default
         var localSettings = new FleeceSettings { Identity = "Local User" };
         await _sut.SaveLocalSettingsAsync(localSettings);
 
         var result = await _sut.GetEffectiveSettingsAsync();
 
-        result.AutoMerge.Should().BeTrue();  // Default is true
-        result.Sources.AutoMerge.Should().Be(SettingSource.Default);
+        result.SyncBranch.Should().BeNull();  // Default
+        result.Sources.SyncBranch.Should().Be(SettingSource.Default);
         result.Identity.Should().Be("Local User");
         result.Sources.Identity.Should().Be(SettingSource.Local);
     }
@@ -142,46 +144,14 @@ public class SettingsServiceTests
     [Test]
     public async Task SetSettingAsync_UpdatesExistingFile()
     {
-        var initialSettings = new FleeceSettings { AutoMerge = true };
+        var initialSettings = new FleeceSettings { SyncBranch = "fleece-sync" };
         await _sut.SaveLocalSettingsAsync(initialSettings);
 
         await _sut.SetSettingAsync("identity", "Updated User", global: false);
 
         var settings = await _sut.LoadLocalSettingsAsync();
-        settings!.AutoMerge.Should().BeTrue(); // Preserved
+        settings!.SyncBranch.Should().Be("fleece-sync"); // Preserved
         settings.Identity.Should().Be("Updated User"); // Updated
-    }
-
-    [Test]
-    public async Task SetSettingAsync_AutoMerge_ParsesBoolean()
-    {
-        await _sut.SetSettingAsync("autoMerge", "true", global: false);
-        var settings = await _sut.LoadLocalSettingsAsync();
-        settings!.AutoMerge.Should().BeTrue();
-
-        await _sut.SetSettingAsync("autoMerge", "false", global: false);
-        settings = await _sut.LoadLocalSettingsAsync();
-        settings!.AutoMerge.Should().BeFalse();
-    }
-
-    [Test]
-    public async Task SetSettingAsync_AutoMerge_AcceptsAlternativeBooleanFormats()
-    {
-        await _sut.SetSettingAsync("autoMerge", "yes", global: false);
-        var settings = await _sut.LoadLocalSettingsAsync();
-        settings!.AutoMerge.Should().BeTrue();
-
-        await _sut.SetSettingAsync("autoMerge", "no", global: false);
-        settings = await _sut.LoadLocalSettingsAsync();
-        settings!.AutoMerge.Should().BeFalse();
-
-        await _sut.SetSettingAsync("autoMerge", "1", global: false);
-        settings = await _sut.LoadLocalSettingsAsync();
-        settings!.AutoMerge.Should().BeTrue();
-
-        await _sut.SetSettingAsync("autoMerge", "0", global: false);
-        settings = await _sut.LoadLocalSettingsAsync();
-        settings!.AutoMerge.Should().BeFalse();
     }
 
     [Test]
@@ -206,15 +176,6 @@ public class SettingsServiceTests
     }
 
     [Test]
-    public void SetSettingAsync_ThrowsForInvalidBoolean()
-    {
-        Func<Task> act = async () => await _sut.SetSettingAsync("autoMerge", "invalid", global: false);
-
-        act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*Invalid boolean value*");
-    }
-
-    [Test]
     public void GetLocalSettingsPath_ReturnsExpectedPath()
     {
         var path = _sut.GetLocalSettingsPath();
@@ -225,7 +186,9 @@ public class SettingsServiceTests
     [Test]
     public void GetGlobalSettingsPath_ReturnsExpectedPath()
     {
-        var path = _sut.GetGlobalSettingsPath();
+        var sut = new SettingsService(_tempDir);
+
+        var path = sut.GetGlobalSettingsPath();
 
         var expectedPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),

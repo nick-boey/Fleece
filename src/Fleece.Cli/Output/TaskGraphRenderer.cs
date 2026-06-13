@@ -256,7 +256,7 @@ public static class TaskGraphRenderer
         return node.Node.Status switch
         {
             IssueStatus.Complete => CompleteMarker,
-            IssueStatus.Deleted or IssueStatus.Archived or IssueStatus.Closed => ClosedMarker,
+            IssueStatus.Promoted or IssueStatus.Closed => ClosedMarker,
             _ => actionableIds.Contains(node.Node.Id) ? ActionableMarker : OpenMarker
         };
     }
@@ -265,12 +265,11 @@ public static class TaskGraphRenderer
     {
         return status switch
         {
-            IssueStatus.Draft => "dim",
             IssueStatus.Open => "cyan",
             IssueStatus.Progress => "blue",
             IssueStatus.Review => "purple",
             IssueStatus.Complete => "green",
-            IssueStatus.Archived => "dim",
+            IssueStatus.Promoted => "dim",
             IssueStatus.Closed => "dim",
             _ => "white"
         };

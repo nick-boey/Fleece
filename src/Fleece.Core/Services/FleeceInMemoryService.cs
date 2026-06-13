@@ -198,9 +198,8 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
         ObjectDisposedException.ThrowIf(_disposed, this);
         await EnsureCacheLoadedAsync(ct);
 
-        // Determine effective status: if not provided, use Draft for issues without description, Open otherwise
-        var effectiveStatus = status ?? (string.IsNullOrWhiteSpace(description)
-            ? IssueStatus.Draft : IssueStatus.Open);
+        // Determine effective status: defaults to Open when not provided.
+        var effectiveStatus = status ?? IssueStatus.Open;
 
         // Create via the underlying service (which writes to disk)
         var issue = await _fleeceService.CreateAsync(
@@ -432,20 +431,11 @@ public sealed class FleeceInMemoryService : IFleeceInMemoryService
 
         if (deleted)
         {
-            // DeleteAsync soft-deletes (sets status to Deleted), so reload the issue
-            var updatedIssue = await _fleeceService.GetByIdAsync(issueId, ct);
-
+            // DeleteAsync hard-removes the issue (deletes its log file), so drop it from the cache.
             _cacheLock.EnterWriteLock();
             try
             {
-                if (updatedIssue is not null)
-                {
-                    _cache[issueId] = updatedIssue;
-                }
-                else
-                {
-                    _cache.TryRemove(issueId, out _);
-                }
+                _cache.TryRemove(issueId, out _);
             }
             finally
             {

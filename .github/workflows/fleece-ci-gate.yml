@@ -1,0 +1,40 @@
+name: Fleece CI Gate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: No live Fleece issues
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check .fleece/issues is empty (bash)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          if ls .fleece/issues/*.jsonl >/dev/null 2>&1; then
+            echo "::error::Live Fleece issues found under .fleece/issues/. Run 'fleece seal' to archive and clear them before merging."
+            exit 1
+          fi
+          echo "No live Fleece issues. Gate passed."
+
+      - name: Check .fleece/issues is empty (PowerShell)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path '.fleece/issues' -Filter '*.jsonl' -File -ErrorAction SilentlyContinue
+          if ($files) {
+            Write-Output "::error::Live Fleece issues found under .fleece/issues/. Run 'fleece seal' to archive and clear them before merging."
+            exit 1
+          }
+          Write-Output "No live Fleece issues. Gate passed."

@@ -6,11 +6,6 @@ namespace Fleece.Core.Models;
 public enum IssueStatus
 {
     /// <summary>
-    /// Issue is in draft state, not yet fully specified.
-    /// </summary>
-    Draft,
-
-    /// <summary>
     /// Issue is open and available to be worked on.
     /// Replaces the previous Idea, Spec, and Next statuses.
     /// </summary>
@@ -32,19 +27,15 @@ public enum IssueStatus
     Complete,
 
     /// <summary>
-    /// Issue is no longer relevant.
+    /// Issue has been escalated to a GitHub issue. Terminal; carries a
+    /// <c>promoted=&lt;github-#&gt;</c> keyed tag.
     /// </summary>
-    Archived,
+    Promoted,
 
     /// <summary>
     /// Issue has been verified as complete.
     /// </summary>
-    Closed,
-
-    /// <summary>
-    /// Issue has been deleted (soft delete).
-    /// </summary>
-    Deleted
+    Closed
 }
 
 /// <summary>
@@ -53,28 +44,46 @@ public enum IssueStatus
 public static class IssueStatusExtensions
 {
     /// <summary>
+    /// The active set: a branch is not mergeable/sealable while any issue holds one of these.
+    /// </summary>
+    public static readonly IssueStatus[] ActiveStatuses =
+        [IssueStatus.Open, IssueStatus.Progress, IssueStatus.Review];
+
+    /// <summary>
+    /// The inactive set: terminal statuses that do not block seal/merge.
+    /// </summary>
+    public static readonly IssueStatus[] InactiveStatuses =
+        [IssueStatus.Complete, IssueStatus.Closed, IssueStatus.Promoted];
+
+    /// <summary>
     /// Statuses that indicate an issue is "done" for dependency purposes.
     /// </summary>
     public static readonly IssueStatus[] DoneStatuses =
-        [IssueStatus.Complete, IssueStatus.Archived, IssueStatus.Closed];
+        [IssueStatus.Complete, IssueStatus.Closed, IssueStatus.Promoted];
 
     /// <summary>
     /// Terminal statuses that are excluded from listings by default.
     /// </summary>
     public static readonly IssueStatus[] TerminalStatuses =
-        [IssueStatus.Complete, IssueStatus.Archived, IssueStatus.Closed, IssueStatus.Deleted];
+        [IssueStatus.Complete, IssueStatus.Closed, IssueStatus.Promoted];
+
+    /// <summary>
+    /// Returns true if the status is in the active set ({Open, Progress, Review}).
+    /// </summary>
+    public static bool IsActive(this IssueStatus status) =>
+        status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review;
 
     /// <summary>
     /// Returns true if the status indicates the issue is "done" for dependency resolution.
     /// </summary>
     public static bool IsDone(this IssueStatus status) =>
-        status is IssueStatus.Complete or IssueStatus.Archived or IssueStatus.Closed;
+        status is IssueStatus.Complete or IssueStatus.Closed or IssueStatus.Promoted;
 
     /// <summary>
     /// Returns true if the status is a terminal status (excluded from listings by default).
     /// </summary>
     public static bool IsTerminal(this IssueStatus status) =>
-        status is IssueStatus.Complete or IssueStatus.Archived or IssueStatus.Closed or IssueStatus.Deleted;
+        status is IssueStatus.Complete or IssueStatus.Closed or IssueStatus.Promoted;
 
     /// <summary>
     /// Returns true if the status indicates the issue is actionable (can be worked on).

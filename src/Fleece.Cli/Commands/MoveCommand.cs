@@ -12,13 +12,6 @@ public sealed class MoveCommand(IFleeceService fleeceService, IAnsiConsole conso
 {
     public override async Task<int> ExecuteAsync(CommandContext context, MoveSettings settings)
     {
-        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
-        if (hasMultiple)
-        {
-            console.MarkupLine($"[red]Error:[/] {message}");
-            return 1;
-        }
-
         try
         {
             // Resolve the parent ID

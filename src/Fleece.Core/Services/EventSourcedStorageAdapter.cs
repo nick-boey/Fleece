@@ -10,33 +10,30 @@ namespace Fleece.Core.Services;
 
 /// <summary>
 /// Adapts the event-sourced storage layer to the legacy <see cref="IStorageService"/>
-/// surface. Reads come from snapshot+replay; writes are translated into event
-/// emissions on the active change file.
+/// surface. Reads replay every per-issue log independently; writes are diffed against
+/// current state and translated into events appended to each issue's own log. An issue
+/// that disappears from a save is removed by deleting its log file.
 /// </summary>
 /// <remarks>
 /// Hashed-file methods (<c>GetAllIssueFilesAsync</c>, <c>SaveIssuesWithHashAsync</c>, etc.)
 /// return empty/no-op results — they describe the legacy multi-machine layout that
-/// no longer exists. Tombstone writes go directly to the snapshot sidecar via
-/// <see cref="ISnapshotStore"/>; ordinary <c>fleece project</c> rebuilds the sidecar
-/// during compaction.
+/// no longer exists. Tombstones are not maintained under the v4 per-issue log model, so
+/// the tombstone methods are no-ops.
 /// </remarks>
 internal sealed class EventSourcedStorageAdapter : IStorageService
 {
     private readonly IEventSourcedStorageService _eventSourced;
-    private readonly ISnapshotStore _snapshot;
     private readonly IGitConfigService _gitConfig;
     private readonly string _basePath;
     private readonly IFileSystem _fileSystem;
 
     public EventSourcedStorageAdapter(
         IEventSourcedStorageService eventSourced,
-        ISnapshotStore snapshot,
         IGitConfigService gitConfig,
         string basePath,
         IFileSystem fileSystem)
     {
         _eventSourced = eventSourced;
-        _snapshot = snapshot;
         _gitConfig = gitConfig;
         _basePath = basePath;
         _fileSystem = fileSystem;
@@ -62,17 +59,12 @@ internal sealed class EventSourcedStorageAdapter : IStorageService
 
         var newById = issues.ToDictionary(i => i.Id, StringComparer.Ordinal);
 
-        // Emit hard-delete for issues present before but absent now.
+        // Issues present before but absent now are removed by deleting their log file.
         foreach (var oldId in current.Keys)
         {
             if (!newById.ContainsKey(oldId))
             {
-                events.Add(new HardDeleteEvent
-                {
-                    At = DateTimeOffset.UtcNow,
-                    By = by,
-                    IssueId = oldId,
-                });
+                await _eventSourced.DeleteIssueAsync(oldId, cancellationToken);
             }
         }
 
@@ -135,20 +127,16 @@ internal sealed class EventSourcedStorageAdapter : IStorageService
         };
     }
 
+    // Tombstones are not maintained under the v4 per-issue log model: deletes remove the
+    // issue's log file outright. These remain to satisfy the IStorageService surface.
     public Task<IReadOnlyList<Tombstone>> LoadTombstonesAsync(CancellationToken cancellationToken = default) =>
-        _eventSourced.GetTombstonesAsync(cancellationToken);
+        Task.FromResult<IReadOnlyList<Tombstone>>([]);
 
-    public async Task SaveTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default)
-    {
-        await _snapshot.WriteTombstonesAsync(tombstones, cancellationToken);
-    }
+    public Task SaveTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
 
-    public async Task AppendTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default)
-    {
-        var existing = await _eventSourced.GetTombstonesAsync(cancellationToken);
-        var combined = existing.Concat(tombstones).ToList();
-        await _snapshot.WriteTombstonesAsync(combined, cancellationToken);
-    }
+    public Task AppendTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
 
     public Task<IReadOnlyList<string>> GetAllTombstoneFilesAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<string>>([]);

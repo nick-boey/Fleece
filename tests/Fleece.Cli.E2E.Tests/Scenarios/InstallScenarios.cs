@@ -22,42 +22,40 @@ public class InstallScenarios : CliScenarioTestBase
         var content = await Fs.File.ReadAllTextAsync(hookPath);
         content.Should().Contain(InstallCommand.FleeceHookBlockStart);
         content.Should().Contain(InstallCommand.FleeceHookBlockEnd);
-        content.Should().Contain("git add .fleece/changes/");
-        content.Should().Contain("fleece link --merge");
-        content.Should().Contain(".git/MERGE_HEAD");
+        // v4 stages the whole .fleece/ directory; there are no merge markers to write.
+        content.Should().Contain("git add .fleece");
+        content.Should().Contain("fleece seal");
+        content.Should().NotContain("fleece link --merge");
+        content.Should().NotContain(".git/MERGE_HEAD");
     }
 
     [Test]
-    public async Task Install_creates_pre_merge_commit_hook_with_fleece_block()
+    public async Task Install_does_not_create_pre_merge_commit_hook()
     {
         Fs.Directory.CreateDirectory(Path.Combine(BasePath, ".git"));
 
         var exit = await RunAsync("install");
         exit.Should().Be(0);
 
+        // v4 removed the merge-marker mechanism, so no pre-merge-commit hook is installed.
         var hookPath = Path.Combine(BasePath, ".git", "hooks", "pre-merge-commit");
-        Fs.File.Exists(hookPath).Should().BeTrue();
-        var content = await Fs.File.ReadAllTextAsync(hookPath);
-        content.Should().Contain(InstallCommand.FleeceHookBlockStart);
-        content.Should().Contain(InstallCommand.FleeceHookBlockEnd);
-        content.Should().Contain("fleece link --merge");
+        Fs.File.Exists(hookPath).Should().BeFalse();
     }
 
     [Test]
-    public async Task Install_is_idempotent_for_pre_merge_commit_hook()
+    public async Task Install_strips_legacy_pre_merge_commit_fleece_block()
     {
-        Fs.Directory.CreateDirectory(Path.Combine(BasePath, ".git"));
+        var hooksDir = Path.Combine(BasePath, ".git", "hooks");
+        Fs.Directory.CreateDirectory(hooksDir);
+        var hookPath = Path.Combine(hooksDir, "pre-merge-commit");
+        // A v3 install left a fleece-managed block here; re-running install removes it.
+        await Fs.File.WriteAllTextAsync(hookPath,
+            $"#!/bin/sh\n{InstallCommand.FleeceHookBlockStart}\nfleece link --merge\n{InstallCommand.FleeceHookBlockEnd}\n");
 
         await RunAsync("install");
-        var hookPath = Path.Combine(BasePath, ".git", "hooks", "pre-merge-commit");
-        var first = await Fs.File.ReadAllTextAsync(hookPath);
 
-        await RunAsync("install");
-        var second = await Fs.File.ReadAllTextAsync(hookPath);
-
-        second.Should().Be(first);
-        second.Split(InstallCommand.FleeceHookBlockStart).Length.Should().Be(2,
-            because: "the fleece block must appear exactly once");
+        // Only the shebang remained after stripping, so the hook file is removed entirely.
+        Fs.File.Exists(hookPath).Should().BeFalse();
     }
 
     [Test]
@@ -102,33 +100,23 @@ public class InstallScenarios : CliScenarioTestBase
     }
 
     [Test]
-    public async Task Install_adds_gitignore_entries_for_active_change_and_replay_cache()
+    public async Task Install_adds_no_gitignore_pointer_or_cache_entries()
     {
         var exit = await RunAsync("install");
         exit.Should().Be(0);
 
+        // v4 per-issue logs keep no gitignored pointer/cache files, so install adds none.
         var gitignorePath = Path.Combine(BasePath, ".gitignore");
-        Fs.File.Exists(gitignorePath).Should().BeTrue();
-        var content = await Fs.File.ReadAllTextAsync(gitignorePath);
-        content.Should().Contain(".fleece/.active-change");
-        content.Should().Contain(".fleece/.replay-cache");
+        if (Fs.File.Exists(gitignorePath))
+        {
+            var content = await Fs.File.ReadAllTextAsync(gitignorePath);
+            content.Should().NotContain(".fleece/.active-change");
+            content.Should().NotContain(".fleece/.replay-cache");
+        }
     }
 
     [Test]
-    public async Task Install_does_not_duplicate_existing_gitignore_entries()
-    {
-        var gitignorePath = Path.Combine(BasePath, ".gitignore");
-        await Fs.File.WriteAllTextAsync(gitignorePath, "bin/\n.fleece/.active-change\n.fleece/.replay-cache\n");
-
-        await RunAsync("install");
-
-        var content = await Fs.File.ReadAllTextAsync(gitignorePath);
-        content.Split('\n').Count(l => l.Trim() == ".fleece/.active-change").Should().Be(1);
-        content.Split('\n').Count(l => l.Trim() == ".fleece/.replay-cache").Should().Be(1);
-    }
-
-    [Test]
-    public async Task Install_writes_github_action_when_remote_is_github_and_workflows_dir_exists()
+    public async Task Install_writes_ci_gate_workflow_when_remote_is_github_and_workflows_dir_exists()
     {
         var gitDir = Path.Combine(BasePath, ".git");
         Fs.Directory.CreateDirectory(gitDir);
@@ -140,9 +128,26 @@ public class InstallScenarios : CliScenarioTestBase
         var workflowPath = Path.Combine(BasePath, ".github", "workflows", InstallCommand.GitHubWorkflowFileName);
         Fs.File.Exists(workflowPath).Should().BeTrue();
         var content = await Fs.File.ReadAllTextAsync(workflowPath);
-        content.Should().Contain("schedule:");
-        content.Should().Contain("workflow_dispatch:");
-        content.Should().Contain("fleece project");
+        content.Should().Contain("pull_request:");
+        content.Should().Contain(".fleece/issues");
+        content.Should().NotContain("fleece project");
+        content.Should().NotContain("schedule:");
+    }
+
+    [Test]
+    public async Task Install_removes_obsolete_projection_workflow()
+    {
+        var gitDir = Path.Combine(BasePath, ".git");
+        Fs.Directory.CreateDirectory(gitDir);
+        await Fs.File.WriteAllTextAsync(Path.Combine(gitDir, "config"), GitConfigGitHubRemote);
+        var workflowsDir = Path.Combine(BasePath, ".github", "workflows");
+        Fs.Directory.CreateDirectory(workflowsDir);
+        var legacyPath = Path.Combine(workflowsDir, InstallCommand.LegacyGitHubWorkflowFileName);
+        await Fs.File.WriteAllTextAsync(legacyPath, "jobs:\n  project:\n    steps:\n      - run: fleece project\n");
+
+        await RunAsync("install");
+
+        Fs.File.Exists(legacyPath).Should().BeFalse();
     }
 
     [Test]
@@ -175,5 +180,18 @@ public class InstallScenarios : CliScenarioTestBase
 
         var workflowPath = Path.Combine(BasePath, ".github", "workflows", InstallCommand.GitHubWorkflowFileName);
         Fs.File.Exists(workflowPath).Should().BeFalse();
+    }
+
+    [Test]
+    public async Task Install_writes_claude_memory_block_with_v4_philosophy()
+    {
+        await RunAsync("install");
+
+        var memoryPath = Path.Combine(BasePath, "CLAUDE.md");
+        Fs.File.Exists(memoryPath).Should().BeTrue();
+        var content = await Fs.File.ReadAllTextAsync(memoryPath);
+        content.Should().Contain(InstallCommand.ClaudeMemoryBlockStart);
+        content.Should().Contain("ephemeral");
+        content.Should().Contain("fleece seal");
     }
 }

@@ -29,8 +29,6 @@ public class ListCommandTests
     public void SetUp()
     {
         _fleeceService = Substitute.For<IFleeceService>();
-        _fleeceService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
-            .Returns((false, string.Empty));
         _fleeceService.LoadIssuesWithDiagnosticsAsync(Arg.Any<CancellationToken>())
             .Returns(new LoadIssuesResult());
 
@@ -41,12 +39,10 @@ public class ListCommandTests
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
             .Returns(new EffectiveSettings
             {
-                AutoMerge = false,
                 Identity = "testuser",
                 SyncBranch = null,
                 Sources = new SettingsSources
                 {
-                    AutoMerge = SettingSource.Default,
                     Identity = SettingSource.Default,
                     SyncBranch = SettingSource.Default
                 }

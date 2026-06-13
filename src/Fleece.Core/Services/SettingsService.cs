@@ -17,10 +17,10 @@ public sealed class SettingsService : ISettingsService
     private readonly string _globalSettingsFilePath;
     private readonly string _localSettingsPath;
 
-    public SettingsService(string basePath, IFileSystem? fileSystem = null)
+    public SettingsService(string basePath, IFileSystem? fileSystem = null, string? globalSettingsDirectory = null)
     {
         _fileSystem = fileSystem ?? new Testably.Abstractions.RealFileSystem();
-        _globalSettingsDirectory = _fileSystem.Path.Combine(
+        _globalSettingsDirectory = globalSettingsDirectory ?? _fileSystem.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".fleece");
         _globalSettingsFilePath = _fileSystem.Path.Combine(_globalSettingsDirectory, "settings.json");
@@ -96,29 +96,12 @@ public sealed class SettingsService : ISettingsService
 
         var updated = key.ToLowerInvariant() switch
         {
-            "automerge" => existing with { AutoMerge = ParseBool(value) },
             "identity" => existing with { Identity = string.IsNullOrEmpty(value) ? null : value },
             "syncbranch" => existing with { SyncBranch = string.IsNullOrEmpty(value) ? null : value },
-            "defaultbranch" => existing with { DefaultBranch = string.IsNullOrEmpty(value) ? null : value },
-            _ => throw new ArgumentException($"Unknown setting: {key}. Valid settings are: autoMerge, identity, syncBranch, defaultBranch")
+            _ => throw new ArgumentException($"Unknown setting: {key}. Valid settings are: identity, syncBranch")
         };
 
         await SaveSettingsToFileAsync(filePath, updated, cancellationToken);
-    }
-
-    private static bool? ParseBool(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return null;
-        }
-
-        return value.ToLowerInvariant() switch
-        {
-            "true" or "1" or "yes" => true,
-            "false" or "0" or "no" => false,
-            _ => throw new ArgumentException($"Invalid boolean value: {value}. Use true/false, yes/no, or 1/0.")
-        };
     }
 
     private static EffectiveSettings MergeSettings(
@@ -126,50 +109,21 @@ public sealed class SettingsService : ISettingsService
         FleeceSettings? local,
         FleeceSettings? cli)
     {
-        var (autoMerge, autoMergeSource) = ResolveBoolValue(
-            cli?.AutoMerge, local?.AutoMerge, global?.AutoMerge, true);
         var (identity, identitySource) = ResolveValue(
             cli?.Identity, local?.Identity, global?.Identity, (string?)null);
         var (syncBranch, syncBranchSource) = ResolveValue(
             cli?.SyncBranch, local?.SyncBranch, global?.SyncBranch, (string?)null);
-        var (defaultBranch, defaultBranchSource) = ResolveValue(
-            cli?.DefaultBranch, local?.DefaultBranch, global?.DefaultBranch, "main");
 
         return new EffectiveSettings
         {
-            AutoMerge = autoMerge,
             Identity = identity,
             SyncBranch = syncBranch,
-            DefaultBranch = defaultBranch,
             Sources = new SettingsSources
             {
-                AutoMerge = autoMergeSource,
                 Identity = identitySource,
-                SyncBranch = syncBranchSource,
-                DefaultBranch = defaultBranchSource
+                SyncBranch = syncBranchSource
             }
         };
-    }
-
-    private static (bool value, SettingSource source) ResolveBoolValue(
-        bool? cliValue, bool? localValue, bool? globalValue, bool defaultValue)
-    {
-        if (cliValue.HasValue)
-        {
-            return (cliValue.Value, SettingSource.CommandLine);
-        }
-
-        if (localValue.HasValue)
-        {
-            return (localValue.Value, SettingSource.Local);
-        }
-
-        if (globalValue.HasValue)
-        {
-            return (globalValue.Value, SettingSource.Global);
-        }
-
-        return (defaultValue, SettingSource.Default);
     }
 
     private static (T value, SettingSource source) ResolveValue<T>(

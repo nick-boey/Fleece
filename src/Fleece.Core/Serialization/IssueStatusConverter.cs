@@ -25,14 +25,15 @@ public sealed class IssueStatusConverter : JsonConverter<IssueStatus>
             "idea" => IssueStatus.Open,
             "spec" => IssueStatus.Open,
             "next" => IssueStatus.Open,
-            "draft" => IssueStatus.Draft,
+            "draft" => IssueStatus.Open,
             "open" => IssueStatus.Open,
             "progress" => IssueStatus.Progress,
             "review" => IssueStatus.Review,
             "complete" => IssueStatus.Complete,
-            "archived" => IssueStatus.Archived,
+            "archived" => IssueStatus.Promoted,
+            "promoted" => IssueStatus.Promoted,
             "closed" => IssueStatus.Closed,
-            "deleted" => IssueStatus.Deleted,
+            "deleted" => IssueStatus.Closed,
             _ => throw new JsonException($"Unknown IssueStatus value: {value}")
         };
     }

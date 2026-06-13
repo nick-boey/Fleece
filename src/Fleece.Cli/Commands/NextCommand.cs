@@ -14,13 +14,6 @@ public sealed class NextCommand(IFleeceService fleeceService, IAnsiConsole conso
 {
     public override async Task<int> ExecuteAsync(CommandContext context, NextSettings settings)
     {
-        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
-        if (hasMultiple)
-        {
-            console.MarkupLine($"[red]Error:[/] {message}");
-            return 1;
-        }
-
         string? resolvedParentId = null;
         if (!string.IsNullOrWhiteSpace(settings.Parent))
         {

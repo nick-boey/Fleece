@@ -77,20 +77,24 @@ public class CrudScenarios : CliScenarioTestBase
     }
 
     [Test]
-    public async Task Delete_removes_issue_from_active_list()
+    public async Task Delete_removes_issue_and_its_log_file()
     {
         await RunAsync("create", "-t", "To delete", "-y", "task", "-d", "x");
         var id = LoadIssues()[0].Id;
 
+        var logPath = Path.Combine(BasePath, ".fleece", "issues", $"{id}.jsonl");
+        Fs.File.Exists(logPath).Should().BeTrue();
+
         var exit = await RunAsync("delete", id);
         exit.Should().Be(0);
 
-        var after = LoadIssues().Single(i => i.Id == id);
-        after.Status.Should().Be(IssueStatus.Deleted);
+        // The issue is gone entirely and its log file has been removed.
+        LoadIssues().Should().NotContain(i => i.Id == id);
+        Fs.File.Exists(logPath).Should().BeFalse();
     }
 
     [Test]
-    public async Task Show_after_delete_soft_succeeds_but_unknown_id_errors()
+    public async Task Show_after_delete_errors_for_unknown_id()
     {
         var exit = await RunAsync("show", "nonexistent");
         exit.Should().Be(1);

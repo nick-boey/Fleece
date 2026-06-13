@@ -12,13 +12,6 @@ public sealed class DependencyCommand(IFleeceService fleeceService, IAnsiConsole
 {
     public override async Task<int> ExecuteAsync(CommandContext context, DependencySettings settings)
     {
-        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
-        if (hasMultiple)
-        {
-            console.MarkupLine($"[red]Error:[/] {message}");
-            return 1;
-        }
-
         try
         {
             Issue result;

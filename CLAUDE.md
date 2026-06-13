@@ -4,19 +4,28 @@ This file provides guidance for AI assistants working on the Fleece codebase.
 
 ## Project Architecture
 
-Fleece is a local-first issue tracking system with two main components:
+Fleece is a local-first, **branch-scoped ephemeral working-memory** issue tracker (v4). Issues are
+branch-local scratch memory created while working a branch and cleared before the PR merges —
+durable work escapes to GitHub Issues via `promote`. It has three components:
 
 ### Fleece.Core (Library)
 The core library (`src/Fleece.Core/`) contains all business logic and is designed for external consumption:
-- **Services**: `IIssueService`, `IStorageService`, `ICleanService`, etc.
-- **Models**: `Issue`, `Tombstone`, enums like `IssueStatus`, `IssueType`
+- **Services**: `IFleeceService`, `IStorageService`, `ISealService`, `IGitHubService` (interface only — impl lives in `Fleece.GitHub`), etc.
+- **Models**: `Issue`, enums like `IssueStatus`, `IssueType`
 - **Serialization**: JSON handling for issue storage
+- **Purity contract**: no I/O statics, everything mockable via `MockFileSystem` (System.IO.Abstractions); no OctoKit reference.
 
 ### Fleece.Cli (CLI Application)
 The command-line interface (`src/Fleece.Cli/`) is a thin wrapper around Core APIs:
 - **Commands**: Each command (e.g., `ListCommand`, `CreateCommand`) delegates to Core services
 - **Settings**: Command option definitions (e.g., `ListSettings`)
 - **Output**: Formatters for table and JSON output
+
+### Fleece.GitHub (GitHub integration)
+`src/Fleece.GitHub/` holds the OctoKit-backed `IGitHubService` implementation so `Fleece.Core`
+stays OctoKit-free and the E2E suite can substitute a fake. Token resolution order is
+`gh auth token` → `GH_TOKEN`/`GITHUB_TOKEN` → config PAT; the target repo is inferred from
+`git remote get-url origin`.
 
 ## Key Design Principles
 
@@ -71,8 +80,11 @@ dotnet test tests/Fleece.Core.Tests
 |---------|-------|
 | `tests/Fleece.Core.Tests` | Unit tests for `Fleece.Core` services. |
 | `tests/Fleece.Cli.Tests` | DI composition + command-resolution checks for the CLI. |
-| `tests/Fleece.Cli.E2E.Tests` | In-process CLI scenarios against `MockFileSystem` + `TestConsole` (fast). |
-| `tests/Fleece.Cli.Integration.Tests` | Real-disk + real-git scenarios (`commit`, `merge`). `[NonParallelizable]`. |
+| `tests/Fleece.Cli.E2E.Tests` | In-process CLI scenarios against `MockFileSystem` + `TestConsole` + a fake `IGitHubService` (`Fakes/FakeGitHubService.cs`). Hermetic & offline. |
+| `tests/Fleece.Cli.Integration.Tests` | Real-disk + real-git scenarios (`commit`). `[NonParallelizable]`. |
+
+GitHub command tests (`promote`/`absorb`/`auth`) drive the fake via `RunWithGitHubAsync` on
+`CliScenarioTestBase`, which substitutes `IGitHubService` in DI (the last registration wins).
 
 ### Verify snapshots (CLI E2E suite)
 
@@ -82,96 +94,86 @@ dotnet test tests/Fleece.Core.Tests
 - **Reviewing snapshot diffs in a PR**: treat `.verified.txt` diffs as user-facing output changes — they should be reviewed like any other UX change.
 - **JSON output is not snapshotted**: tests parse `--json` output structurally. Only stable human-readable stdout uses snapshots.
 
-### Event-sourced storage (current)
+### Storage: per-issue append-only logs (v4)
 
-Fleece persists issues as a snapshot plus per-commit change files:
+Each issue is **one append-only event log** at `.fleece/issues/<id>.jsonl`. **File order is truth** —
+there is no projected snapshot, no `.fleece/changes/` directory, no `follows`-DAG, no merge markers,
+no `.active-change` pointer, no `.replay-cache`, and no tombstones.
 
-- `.fleece/issues.jsonl` — projected snapshot of all issues at the most recent `fleece project` run. The lean `Issue` shape (no per-property `*LastUpdate`/`*ModifiedBy`).
-- `.fleece/tombstones.jsonl` — sidecar of hard-deleted issues (`IssueId`, `OriginalTitle`, `CleanedAt`, `CleanedBy`).
-- `.fleece/changes/change_{guid}.jsonl` — append-only event files, one per commit (multiple edits inside the same commit accumulate into one file). First line is a `meta` event whose `follows` is one of: `null` (the file is a DAG root), a string GUID (a single-parent chain), or an array of GUIDs (a merge marker linking multiple chains). Subsequent lines are `create`/`set`/`add`/`remove`/`hard-delete` events.
-- `.fleece/.active-change` — gitignored pointer file naming the current session's change-file GUID.
-- `.fleece/.replay-cache` — gitignored cache of the projected state at the current HEAD SHA, used to skip re-replaying committed change files.
+- The first line of a log is a `create` event; later lines are `set`/`add`/`remove` events.
+- Reads enumerate `.fleece/issues/*.jsonl` and replay **each file independently** in its own append
+  order. There is no cross-file ordering or tiebreak (`ReplayEngine`).
+- Writes diff the new state against current and append events to each issue's own log
+  (`EventSourcedStorageAdapter` → `EventStore`). Distinct issues are distinct files, so they never
+  conflict; the same issue edited on two branches conflicts on that one file (rare, semantically correct).
+- `delete` removes the issue's log file directly. `fleece delete <id>` hard-removes
+  `.fleece/issues/<id>.jsonl` at the storage layer (no tombstone, no soft-delete status); the file is
+  also removed when an issue is dropped from a save or via `EventStore.DeleteIssueLogAsync`.
 
-Reads load the snapshot, replay all change files in topological order over the `follows`-DAG (with commit-order tiebreak then GUID-alphabetical tiebreak), and answer the query in-memory. Writes append events to the active change file.
+Layering: `FleeceService` → `IStorageService` (`EventSourcedStorageAdapter`) →
+`IEventSourcedStorageService` → { `EventStore`, `ReplayEngine` }. DI is centralised in
+`ServiceCollectionExtensions.AddFleeceCore`.
 
-#### Change files are commit-scoped and immutable
+### Statuses & types (v4)
 
-Once a change file lands in a git commit, no further events are appended to it. The next write rotates to a fresh GUID whose meta `follows` chains back to the just-sealed file. This invariant is enforced by `EventStore.ResolveActiveOrRotateAsync` via `IEventGitContext.IsFileCommittedAtHead`: the rotation trigger fires whenever the active pointer references a file that is tracked at HEAD. Outside a git repository (`NullEventGitContext`) the trigger is always false and rotation reverts to per-session.
+- **Statuses**: `Open`, `Progress`, `Review`, `Complete`, `Promoted`, `Closed`.
+  Active set = `{Open, Progress, Review}` (blocks `seal`); inactive set = `{Complete, Closed, Promoted}`.
+  `Promoted` is terminal and means "escaped to a GitHub issue" (carries the `promoted=<#>` keyed tag).
+  `Draft` was removed; `Archived` was renamed to `Promoted`.
+- **Types**: `Task`, `Bug`, `Chore`, `Feature`, `Verify`. `Idea` was removed.
 
-The immutability invariant eliminates the merge-conflict failure mode that arose when the same change-file GUID was appended to by two branches before merging.
+### Branch lifecycle: `seal` + CI gate
 
-#### Merge markers
+`fleece seal` is the "finish the branch" operation. It refuses (exit 1, listing the offending active
+issues) unless **every** issue is inactive. On success it writes
+`.fleece/archive/issues_<contenthash>.jsonl` (content-addressed over the canonicalised issue set, so
+identical logical state yields one stable name) and removes every `.fleece/issues/*.jsonl`. An empty
+issue set is a no-op success. The `.fleece/archive/` audit log is the **only** Fleece issue data
+permitted to land on the default branch.
 
-Multi-parent meta events (`follows` as an array) are written by `fleece link --merge` from the git `pre-merge-commit` (clean auto-merges) and `pre-commit` (conflict-resolution merges) hooks installed by `fleece install`. The marker file's body is empty; its only payload is the multi-parent `follows` listing the DAG leaves on HEAD and on each MERGE_HEAD side. The order of parents in the array is load-bearing: replay adds Pi → Pi+1 ordering edges between them so the merge topology survives a downstream squash.
+The CI gate installed by `fleece install` (`fleece-ci-gate.yml`) is a tool-free, cross-platform
+(bash + PowerShell) workflow that **fails the PR iff `.fleece/issues/` contains any `*.jsonl`**.
+`active issues → seal refuses → files remain → CI fails`; `all inactive → seal clears → CI passes`.
 
-```
-Commit boundary makes change files immutable.
-Merge marker captures topology.
+### GitHub integration: `promote` / `absorb` / `auth`
 
-         change_x ←─── follows=null
-              │
-         (M0 commits change_x)                main branch
-              │
-              ▼
-         change_y ←─── follows="x"
-              │
-         (M1 commits change_y)
-              │
-              ▼
+- `fleece auth` — reports the resolved login + token source; exits non-zero when unauthenticated.
+- `fleece promote <id> [<id>...]` — creates **one** GitHub issue (root title, task-list body of the
+  bundle), then sets each issue `Promoted` + tag `promoted=<#>`. Idempotent: already-promoted issues
+  are skipped with a warning.
+- `fleece absorb #<github-#>` — creates a Fleece issue from the GitHub issue (tag `absorbed-from=<#>`),
+  comments on and assigns (does **not** close) the GitHub issue. A bare `absorb 123` (no `#`) performs
+  no action and warns.
 
-Two feature branches off main, both edited:
+### `fleece migrate` (one-time legacy bring-forward)
 
-   main: ─── M1 ─────────────────── (merge a) ───── (merge b) ───
-              \                    /              /
-   feature/a:  change_a (follows=y) ────────── /
-                                              /
-   feature/b:  change_b (follows=y) ────────/
+Converts a pre-event-sourced **legacy hashed-file** repository
+(`.fleece/issues_{hash}.jsonl` + `tombstones_{hash}.jsonl`) into the v4 per-issue log layout:
 
-At the "merge a" commit, pre-merge-commit fires:
-   → writes change_link_a (follows=["y","a"])  ←─ in same commit
+1. **Pre-3.0.0 intra-shape fixups** per legacy issue (`LegacyMigration.Migrate`): timestamp backfill,
+   `LinkedPR` scalar → keyed-tag fold-in, parent-ref `LastUpdated` backfill, unknown-property strip.
+2. **Cross-file merge** of duplicates via `LegacyMerging`.
+3. **Projection** to the lean `Issue` shape (drops `*LastUpdate`/`*ModifiedBy`; removed enum members
+   like type `Idea` are remapped by `IssueTypeConverter`).
+4. **Write per-issue logs** under `.fleece/issues/`; legacy hashed files deleted. No snapshot, no
+   `.fleece/changes/`, no tombstone sidecar, no gitignore entries.
 
-At the "merge b" commit, pre-merge-commit fires:
-   → writes change_link_b (follows=["link_a","b"])  ←─ in same commit
+Idempotent: a second run exits cleanly with "no migration needed." A legacy **durable
+`.fleece/issues.jsonl` snapshot** is NOT auto-migrated — `AutoMigrateInterceptor` prints a
+non-destructive warning routing the user to `fleece prime v4-migration` (promote long-running issues
+to GitHub, then seal).
 
-Replay DAG:
-   y → a → link_a
-            │
-            └→ link_b → (next main commit)
-   y → b → link_b
+### Removed commands
 
-Even after squash of this whole branch into another:
-all five files ride along; the link files force linear order. ✓
-```
+`project`, `merge`, `diff`, `link` (and all merge-marker code), and `clean` are gone in v4, along with
+`config defaultBranch`. `seal` supersedes `project` + `clean`.
 
-#### `fleece project`
+### `openspec dependencies`
 
-Compacts events into the snapshot. Refuses to run anywhere except the configured default branch (`fleece config --set defaultBranch=...`, default `main`). Replays everything, applies 30-day auto-cleanup for soft-deleted issues, writes a fresh snapshot/tombstones, deletes every file under `.fleece/changes/`, and stages the result. Wired to a daily GitHub Action template by `fleece install`.
-
-#### `fleece merge` (deprecated)
-
-Prints a deprecation notice on stderr pointing at `fleece project`. Existing behavior is preserved for one release cycle and will be removed.
-
-#### `fleece migrate`
-
-The canonical "bring my data up to the current schema" command. Runs a pipeline of schema migrations end-to-end:
-
-1. **Pre-3.0.0 intra-shape fixups** on each parsed legacy issue (`LegacyMigration.Migrate`): timestamp backfill, `LinkedPR` scalar → `hsp-linked-pr=<n>` keyed-tag fold-in, parent-ref `LastUpdated` backfill, unknown-property strip.
-2. **Cross-file merge** of legacy hashed files via `LegacyMerging` (uses the per-property timestamps populated in step 1 to resolve conflicts).
-3. **Projection** to the lean `Issue` shape — drops `*LastUpdate`/`*ModifiedBy` metadata (it survives in git history if anyone needs it).
-4. **Write event-sourced layout** — `.fleece/issues.jsonl`, `.fleece/tombstones.jsonl`, `.fleece/changes/`, gitignore entries; legacy `issues_{hash}.jsonl` and `tombstones_{hash}.jsonl` deleted.
-
-Idempotent: a second run on an already-migrated repo exits cleanly with "no migration needed." Future schema migrations on the lean `Issue` extend this pipeline rather than introducing new commands.
-
-### Clean Command and Tombstones
-
-The `fleece clean` command soft-or-hard deletes issues. Soft-deletes go through the standard event path (`set status=Deleted`); hard-deletes emit `hard-delete` events and the tombstones land in `.fleece/tombstones.jsonl` after the next `fleece project`.
-
-Key details:
-- **Tombstone records** store `IssueId`, `OriginalTitle`, `CleanedAt`, and `CleanedBy`. The title is preserved for historical reference.
-- **ID collision prevention**: IDs are random GUIDs (first 5 bytes, Base62-encoded to 6 chars). When `CreateAsync` generates an ID that matches an existing issue or tombstone, it retries with a new random ID, up to 10 attempts.
-- **Reference stripping**: By default, `clean` removes dangling `LinkedIssues` and `ParentIssues` references from remaining issues. Use `--no-strip-refs` to skip this.
-- **Optional flags**: `--include-complete`, `--include-closed`, `--include-archived` extend cleaning beyond just `Deleted` issues.
-- **Core service**: `ICleanService` / `CleanService` contains all business logic. The CLI `CleanCommand` is a thin wrapper.
+`fleece openspec dependencies` is a pure read-only visualizer: it parses `depends-on:` YAML
+frontmatter from `openspec/changes/<name>/dependencies.md` (ignoring HTML-comment soft deps), builds
+a change-name DAG, reuses `validate`'s cycle detection to warn on cycles, and renders via the `next`
+graph-layout renderer.
 
 ## File Locations
 
@@ -181,8 +183,82 @@ Key details:
 | Core service implementations | `src/Fleece.Core/Services/` |
 | Event-sourced services | `src/Fleece.Core/EventSourcing/Services/` |
 | Event DTOs | `src/Fleece.Core/EventSourcing/Events/` |
+| Seal service | `src/Fleece.Core/Services/SealService.cs` |
+| `IGitHubService` interface + GitHub models | `src/Fleece.Core/Services/Interfaces/IGitHubService.cs`, `src/Fleece.Core/Models/GitHub/` |
+| OctoKit-backed GitHub impl | `src/Fleece.GitHub/` |
 | Lean issue model | `src/Fleece.Core/Models/Issue.cs` |
 | Legacy issue model (migration only) | `src/Fleece.Core/Models/Legacy/` |
 | CLI commands | `src/Fleece.Cli/Commands/` |
 | CLI settings | `src/Fleece.Cli/Settings/` |
 | Core unit tests | `tests/Fleece.Core.Tests/` |
+
+<!-- rp1:start:v0.7.1 -->
+## rp1 Knowledge Base
+
+**Use Progressive Disclosure Pattern**
+
+Location: `.rp1/context/`
+
+Files:
+- index.md (always load first)
+- architecture.md
+- modules.md
+- patterns.md
+- concept_map.md
+
+Loading rules:
+1. Always read index.md first.
+2. Then load based on task type:
+   - Code review: patterns.md
+   - Bug investigation: architecture.md, modules.md
+   - Feature work: modules.md, patterns.md
+   - Strategic or system-wide analysis: all files
+
+## rp1 Skill Awareness
+
+You have access to rp1 skills. When you notice the user working on a task
+that an rp1 skill addresses, briefly suggest it.
+
+### Skill Categories
+| Category | Skills | Suggest When |
+|----------|--------|--------------|
+| Development | /task, /bootstrap, /build, /build-fast, /feature-archive, /feature-edit, /feature-unarchive, /phase-plan, /speedrun | User starts a new feature, describes a change, or needs to scaffold a project |
+| Investigation | /code-investigate, /validate-hypothesis | User is debugging, examining errors, or testing a design hypothesis |
+| Quality | /code-comments, /code-audit, /code-check, /code-clean-comments | User finishes implementation and needs hygiene checks, audits, or comment cleanup |
+| Review | /address-pr-feedback, /arcade-collab, /pr-review, /pr-stack, /pr-visual, /pr-walkthrough | User prepares a PR, receives review feedback, or needs visual diff understanding |
+| Documentation | /fix-mermaid, /generate-user-docs, /markdown-preview, /mermaid, /project-birds-eye-view, /write-content | User writes, updates, or previews docs, diagrams, or project overviews |
+| Knowledge | /guide, /knowledge-build, /knowledge-load, /self-update | User needs codebase context, KB is stale, or wants KB templates |
+| Strategy | /analyse-security, /deep-research, /socratic-duel, /socratic-duel-run, /strategize | User faces architectural decisions, security concerns, or needs deep research |
+| Planning | /blueprint, /blueprint-archive, /blueprint-audit | User plans a project, audits a PRD, or manages blueprint lifecycle |
+| Prompt | /prompt-writer | User authors, rewrites, or evaluates agent prompts |
+
+### Suggestion Rules
+- Limit to 1 suggestion per turn. Format: skill name, one sentence why, offer to run.
+- Do not re-suggest a skill the user declined this session.
+- Do not suggest while an rp1 workflow is already running.
+- Only suggest when there is a clear match to the user's current activity.
+- For deeper questions about rp1, suggest the user invoke /guide.
+<!-- rp1:end:v0.7.1 -->
+
+<!-- >>> fleece memory >>> -->
+## Fleece: ephemeral working memory
+
+Fleece issues are **branch-local working memory**, not a durable backlog. They exist to
+track the work in flight on the current branch and are expected to be cleared before the
+branch merges. Anything that must outlive the branch belongs in GitHub Issues.
+
+- **Plan/track on the branch**: create issues with `fleece create`, decompose with
+  `--parent-issues`, and pick the next item with `fleece next`.
+- **Resolve before a PR**: every issue must reach an inactive status
+  (`complete`, `closed`, or `promoted`) before the branch is sealed.
+- **Promote durable work**: anything worth keeping past this branch goes to GitHub Issues
+  via `fleece promote <id> [<id>...]`. The issue is marked `promoted` and tagged
+  `promoted=<#>`.
+- **Seal before merging**: run `fleece seal` to archive the inactive issues to
+  `.fleece/archive/` and clear `.fleece/issues/`. The CI gate fails any PR that still has
+  live logs under `.fleece/issues/`.
+- **Absorb when needed**: `fleece absorb #<github-#>` pulls a GitHub issue back into
+  branch-local working memory.
+
+In short: branch-local memory in, durable work out to GitHub, seal, then merge.
+<!-- <<< fleece memory <<< -->

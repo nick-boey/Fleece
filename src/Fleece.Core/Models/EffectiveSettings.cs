@@ -7,11 +7,6 @@ namespace Fleece.Core.Models;
 public sealed record EffectiveSettings
 {
     /// <summary>
-    /// Whether to automatically merge issues before operations.
-    /// </summary>
-    public required bool AutoMerge { get; init; }
-
-    /// <summary>
     /// User identity for ModifiedBy fields, or null to use git config.
     /// </summary>
     public required string? Identity { get; init; }
@@ -20,11 +15,6 @@ public sealed record EffectiveSettings
     /// Branch for issue synchronization, or null to use current branch.
     /// </summary>
     public required string? SyncBranch { get; init; }
-
-    /// <summary>
-    /// Branch where <c>fleece project</c> is allowed to run.
-    /// </summary>
-    public string DefaultBranch { get; init; } = "main";
 
     /// <summary>
     /// Source of each setting for debugging/display purposes.
@@ -37,10 +27,8 @@ public sealed record EffectiveSettings
 /// </summary>
 public sealed record SettingsSources
 {
-    public required SettingSource AutoMerge { get; init; }
     public required SettingSource Identity { get; init; }
     public required SettingSource SyncBranch { get; init; }
-    public SettingSource DefaultBranch { get; init; } = SettingSource.Default;
 }
 
 /// <summary>

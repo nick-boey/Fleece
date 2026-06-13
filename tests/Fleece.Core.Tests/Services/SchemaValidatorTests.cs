@@ -49,7 +49,7 @@ public class SchemaValidatorTests
     public void ValidateJsonlContent_WithValidContent_ReturnsNoIssues()
     {
         var content = """
-            {"id":"abc","title":"Test","status":"Idea","type":"Task","lastUpdate":"2024-01-01T00:00:00Z"}
+            {"id":"abc","title":"Test","status":"Open","type":"Task","lastUpdate":"2024-01-01T00:00:00Z"}
             {"id":"def","title":"Test 2","status":"Next","type":"Bug","lastUpdate":"2024-01-02T00:00:00Z"}
             """;
 
@@ -65,7 +65,7 @@ public class SchemaValidatorTests
     [Test]
     public void ValidateJsonlContent_WithUnknownProperty_ReturnsWarning()
     {
-        var content = """{"id":"abc","title":"Test","status":"Idea","type":"Task","lastUpdate":"2024-01-01T00:00:00Z","unknownField":"value"}""";
+        var content = """{"id":"abc","title":"Test","status":"Open","type":"Task","lastUpdate":"2024-01-01T00:00:00Z","unknownField":"value"}""";
 
         var result = _sut.ValidateJsonlContent("test.jsonl", content);
 
@@ -77,7 +77,7 @@ public class SchemaValidatorTests
     [Test]
     public void ValidateJsonlContent_WithMultipleUnknownProperties_ReturnsAll()
     {
-        var content = """{"id":"abc","futureField":"x","anotherUnknown":"y","title":"Test","status":"Idea","type":"Task","lastUpdate":"2024-01-01T00:00:00Z"}""";
+        var content = """{"id":"abc","futureField":"x","anotherUnknown":"y","title":"Test","status":"Open","type":"Task","lastUpdate":"2024-01-01T00:00:00Z"}""";
 
         var result = _sut.ValidateJsonlContent("test.jsonl", content);
 
@@ -105,7 +105,7 @@ public class SchemaValidatorTests
     public void ValidateJsonlContent_WithMixedContent_ReportsAll()
     {
         var content = """
-            {"id":"abc","title":"Valid","status":"Idea","type":"Task","lastUpdate":"2024-01-01T00:00:00Z"}
+            {"id":"abc","title":"Valid","status":"Open","type":"Task","lastUpdate":"2024-01-01T00:00:00Z"}
             invalid json line
             {"id":"def","title":"With Unknown","status":"Next","type":"Bug","lastUpdate":"2024-01-01T00:00:00Z","futureProperty":"x"}
             """;
@@ -123,7 +123,7 @@ public class SchemaValidatorTests
     public void ValidateJsonlContent_WithEmptyLines_IgnoresThem()
     {
         var content = """
-            {"id":"abc","title":"Test","status":"Idea","type":"Task","lastUpdate":"2024-01-01T00:00:00Z"}
+            {"id":"abc","title":"Test","status":"Open","type":"Task","lastUpdate":"2024-01-01T00:00:00Z"}
 
             {"id":"def","title":"Test 2","status":"Next","type":"Bug","lastUpdate":"2024-01-02T00:00:00Z"}
             """;

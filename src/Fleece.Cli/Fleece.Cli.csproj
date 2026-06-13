@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Fleece.Core\Fleece.Core.csproj" />
+    <ProjectReference Include="..\Fleece.GitHub\Fleece.GitHub.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -13,7 +13,7 @@ public static class Issues
     /// Terminal statuses that are excluded from results by default (when includeTerminal is false).
     /// </summary>
     private static readonly IssueStatus[] TerminalStatuses =
-        [IssueStatus.Complete, IssueStatus.Archived, IssueStatus.Closed, IssueStatus.Deleted];
+        [IssueStatus.Complete, IssueStatus.Closed, IssueStatus.Promoted];
 
     /// <summary>
     /// Filters issues by various criteria.
@@ -535,12 +535,6 @@ public static class Issues
     internal static bool IsActionable(IssueGraphNode node)
     {
         var issue = node.Issue;
-
-        // Ideas are never actionable
-        if (issue.Type == IssueType.Idea)
-        {
-            return false;
-        }
 
         // Must be Open or Review status to be actionable
         if (issue.Status != IssueStatus.Open && issue.Status != IssueStatus.Review)

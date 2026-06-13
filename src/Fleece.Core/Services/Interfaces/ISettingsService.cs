@@ -50,7 +50,7 @@ public interface ISettingsService
     /// Update a single setting value in a settings file.
     /// Creates the file if it doesn't exist.
     /// </summary>
-    /// <param name="key">The setting key (e.g., "autoMerge", "identity", "syncBranch").</param>
+    /// <param name="key">The setting key (e.g., "identity", "syncBranch").</param>
     /// <param name="value">The value to set. Empty string clears the setting.</param>
     /// <param name="global">If true, modifies global settings; otherwise modifies local settings.</param>
     Task SetSettingAsync(

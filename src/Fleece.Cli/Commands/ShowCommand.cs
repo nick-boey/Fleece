@@ -21,13 +21,6 @@ public sealed class ShowCommand(
             fleece = FleeceService.ForFile(settings.IssuesFile, settingsService, gitConfigService);
         }
 
-        var (hasMultiple, message) = await fleece.HasMultipleUnmergedFilesAsync();
-        if (hasMultiple)
-        {
-            console.MarkupLine($"[red]Error:[/] {message}");
-            return 1;
-        }
-
         var matches = await fleece.ResolveByPartialIdAsync(settings.Id);
 
         if (matches.Count == 0)

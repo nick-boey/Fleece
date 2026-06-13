@@ -3,9 +3,7 @@
 ## Purpose
 
 Defines how `fleece create` and `fleece edit` accept issue data. All inputs are passed via CLI flags; no external text editor is ever launched.
-
 ## Requirements
-
 ### Requirement: Create command SHALL require title and type via CLI flags
 
 The `fleece create` command SHALL obtain all issue fields exclusively from CLI flags. It SHALL NOT launch an external text editor under any invocation.
@@ -67,54 +65,15 @@ On `fleece edit`, supplying `--linked-pr` alone (no other field flags) SHALL be 
 
 ### Requirement: Write commands SHALL emit events to the active change file
 
-Every fleece command that mutates issue state (`create`, `edit`, `delete`, `move`, `dependency`, `clean`, status change commands, and any future write commands) SHALL persist its mutation by appending one or more events to the active `change_{guid}.jsonl` file (selecting or creating that file per the active-change rules defined in the event-sourced-storage capability).
+Write commands (`create`, `edit`, status commands, `dependency`, `move`, and the like) SHALL persist changes by appending events to the affected issue's own `.fleece/issues/<id>.jsonl` log. `create` SHALL write a new file beginning with a `create` event; subsequent mutations SHALL append `set`/`add`/`remove` events to that file. There is no shared active change file and no `.active-change` pointer.
 
-Specifically:
+#### Scenario: Create writes a new per-issue log
+- **WHEN** `fleece create --title "x" --type task` runs
+- **THEN** a new `.fleece/issues/<id>.jsonl` file is created whose first line is a `create` event
 
-- `fleece create` SHALL emit a single `create` event whose `data` payload contains every property supplied on the command line, plus `createdAt` and `createdBy`.
-- `fleece edit` SHALL emit one `set` event per scalar field flag supplied. For array field flags, it SHALL emit `add` and `remove` events as appropriate to reach the requested final state.
-- `fleece delete` (soft-delete) SHALL emit a `set` event for the `status` property with value `Deleted`.
-- `fleece clean` (hard-delete) SHALL emit a `hard-delete` event per issue removed.
-- Dependency manipulation SHALL emit `add`/`remove` events for the `parentIssues` array property.
-
-Write commands SHALL NOT directly modify `.fleece/issues.jsonl` outside of `fleece project`. They SHALL NOT write to any legacy `.fleece/issues_*.jsonl` file.
-
-After emitting events, the command SHALL surface the resulting in-memory state to the user (e.g., `fleece create` echoes the created issue's ID; `fleece show` reflects the just-emitted edits) by replaying through the event store, not by re-reading the snapshot.
-
-#### Scenario: Create emits a single create event
-- **GIVEN** the user is on a fresh feature branch (no existing change file)
-- **WHEN** the user runs `fleece create --title "Foo" --type task`
-- **THEN** `.fleece/changes/change_{guid}.jsonl` exists with a meta event followed by exactly one `create` event
-- **AND** the `create` event's `data` payload contains `title="Foo"`, `type="Task"`, `status="Open"`, plus `createdAt` and `createdBy`
-
-#### Scenario: Edit emits one set event per scalar field
-- **GIVEN** an issue `abc123` exists
-- **WHEN** the user runs `fleece edit abc123 --title "Renamed" --status complete`
-- **THEN** the active change file contains two new events: a `set` for `title` with value `"Renamed"` and a `set` for `status` with value `"Complete"`
-
-#### Scenario: Edit emits add and remove events for array field updates
-- **GIVEN** an issue `abc123` has `tags=["foo","bar"]`
-- **WHEN** the user runs `fleece edit abc123 --tags "bar,baz"`
-- **THEN** the active change file contains a `remove` event for `tags` with value `"foo"` and an `add` event for `tags` with value `"baz"`
-- **AND** no event is emitted for `bar` (unchanged element)
-
-#### Scenario: Delete (soft) emits a status set event
-- **WHEN** the user runs `fleece delete abc123`
-- **THEN** the active change file contains a `set` event for `status` with value `"Deleted"`
-
-#### Scenario: Clean (hard) emits a hard-delete event
-- **WHEN** the user runs `fleece clean` and issue `xyz` is hard-deleted
-- **THEN** the active change file contains a `hard-delete` event for issue `xyz`
-
-#### Scenario: Read after write reflects in-memory replay
-- **GIVEN** the user has just run `fleece edit abc123 --title "New"` (no commit yet)
-- **WHEN** the user runs `fleece show abc123`
-- **THEN** the displayed title is `"New"`
-
-#### Scenario: Write commands do not modify legacy files
-- **WHEN** any fleece write command runs in a repository that has been migrated to event sourcing
-- **THEN** no `.fleece/issues_*.jsonl` or `.fleece/tombstones_*.jsonl` file is created or modified
-- **AND** `.fleece/issues.jsonl` is not modified by the command (only by `fleece project`)
+#### Scenario: Edit appends to the issue's own log
+- **WHEN** `fleece edit <id> -s progress` runs
+- **THEN** a `set` event is appended to `.fleece/issues/<id>.jsonl`
 
 ### Requirement: CLI SHALL not depend on external editors or a templates directory
 
@@ -131,3 +90,29 @@ The CLI SHALL NOT ship an `EditorService` or any equivalent abstraction whose pu
 #### Scenario: Templates directory is not created
 - **WHEN** any `fleece` subcommand is executed on a machine with no pre-existing `~/.fleece/templates/` directory
 - **THEN** the directory is not created by the CLI
+
+### Requirement: Issue status set SHALL be the v4 ephemeral lifecycle
+
+The issue status set SHALL be `Open`, `Progress`, `Review`, `Complete`, `Closed`, and `Promoted`. There SHALL be no `Draft` status. The **active** set (a branch is not mergeable while any exist) SHALL be `{Open, Progress, Review}`. The **inactive** set SHALL be `{Complete, Closed, Promoted}`. `Promoted` is a terminal status meaning the issue has been escalated to a GitHub issue and SHALL carry a `promoted=<github-#>` keyed tag.
+
+#### Scenario: Draft is not an accepted status
+- **WHEN** any command attempts to set status to `Draft`
+- **THEN** the command rejects the value as unknown
+
+#### Scenario: Active vs inactive classification
+- **WHEN** issues exist with statuses across the set
+- **THEN** only `Open`, `Progress`, and `Review` count as active for seal and CI-gate purposes
+- **AND** `Complete`, `Closed`, and `Promoted` count as inactive
+
+### Requirement: Issue type set SHALL exclude Idea
+
+The issue type set SHALL be `Task`, `Bug`, `Chore`, `Feature`, and `Verify`. There SHALL be no `Idea` type.
+
+#### Scenario: Idea is not an accepted type
+- **WHEN** `fleece create --title "x" --type idea` runs
+- **THEN** the command rejects `idea` as an unknown type
+
+#### Scenario: Supported types are accepted
+- **WHEN** `fleece create` is invoked with type `task`, `bug`, `chore`, `feature`, or `verify`
+- **THEN** the issue is created with that type
+

@@ -25,8 +25,6 @@ public class EditCommandTests
     public void SetUp()
     {
         _fleeceService = Substitute.For<IFleeceService>();
-        _fleeceService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
-            .Returns((false, string.Empty));
 
         var existing = new IssueBuilder()
             .WithId("abc123")

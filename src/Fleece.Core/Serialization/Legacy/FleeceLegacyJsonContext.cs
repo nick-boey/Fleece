@@ -14,7 +14,7 @@ namespace Fleece.Core.Serialization.Legacy;
     WriteIndented = false,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     UseStringEnumConverter = true,
-    Converters = [typeof(IssueStatusConverter)])]
+    Converters = [typeof(IssueStatusConverter), typeof(IssueTypeConverter)])]
 [JsonSerializable(typeof(LegacyIssue))]
 [JsonSerializable(typeof(LegacyParentIssueRef))]
 [JsonSerializable(typeof(IReadOnlyList<LegacyIssue>))]

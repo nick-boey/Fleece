@@ -73,12 +73,10 @@ public class ConfigCommandTests
     {
         var effectiveSettings = new EffectiveSettings
         {
-            AutoMerge = true,
             Identity = "Test User",
             SyncBranch = null,
             Sources = new SettingsSources
             {
-                AutoMerge = SettingSource.Local,
                 Identity = SettingSource.Global,
                 SyncBranch = SettingSource.Default
             }
@@ -91,8 +89,6 @@ public class ConfigCommandTests
 
         result.Should().Be(0);
         var output = CombinedOutput();
-        output.Should().Contain("autoMerge");
-        output.Should().Contain("true");
         output.Should().Contain("identity");
         output.Should().Contain("Test User");
     }
@@ -102,12 +98,10 @@ public class ConfigCommandTests
     {
         var effectiveSettings = new EffectiveSettings
         {
-            AutoMerge = false,
             Identity = "Test User",
             SyncBranch = "sync-branch",
             Sources = new SettingsSources
             {
-                AutoMerge = SettingSource.Default,
                 Identity = SettingSource.Local,
                 SyncBranch = SettingSource.Global
             }
@@ -120,35 +114,32 @@ public class ConfigCommandTests
 
         result.Should().Be(0);
         var output = CombinedOutput();
-        output.Should().Contain("\"autoMerge\"");
         output.Should().Contain("\"identity\"");
         output.Should().Contain("\"syncBranch\"");
         output.Should().Contain("\"source\"");
     }
 
     [Test]
-    public async Task ExecuteAsync_GetAutoMerge_ReturnsValue()
+    public async Task ExecuteAsync_GetSyncBranch_ReturnsValue()
     {
         var effectiveSettings = new EffectiveSettings
         {
-            AutoMerge = true,
             Identity = null,
-            SyncBranch = null,
+            SyncBranch = "fleece-sync",
             Sources = new SettingsSources
             {
-                AutoMerge = SettingSource.Local,
                 Identity = SettingSource.Default,
-                SyncBranch = SettingSource.Default
+                SyncBranch = SettingSource.Local
             }
         };
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
             .Returns(effectiveSettings);
 
-        var settings = new ConfigSettings { Get = "autoMerge" };
+        var settings = new ConfigSettings { Get = "syncBranch" };
         var result = await _command.ExecuteAsync(_context, settings);
 
         result.Should().Be(0);
-        _consoleOutput.ToString().Trim().Should().Be("true");
+        _consoleOutput.ToString().Trim().Should().Be("fleece-sync");
     }
 
     [Test]
@@ -156,12 +147,10 @@ public class ConfigCommandTests
     {
         var effectiveSettings = new EffectiveSettings
         {
-            AutoMerge = false,
             Identity = "John Doe",
             SyncBranch = null,
             Sources = new SettingsSources
             {
-                AutoMerge = SettingSource.Default,
                 Identity = SettingSource.Global,
                 SyncBranch = SettingSource.Default
             }
@@ -181,12 +170,10 @@ public class ConfigCommandTests
     {
         var effectiveSettings = new EffectiveSettings
         {
-            AutoMerge = false,
             Identity = null,
             SyncBranch = null,
             Sources = new SettingsSources
             {
-                AutoMerge = SettingSource.Default,
                 Identity = SettingSource.Default,
                 SyncBranch = SettingSource.Default
             }
@@ -214,11 +201,11 @@ public class ConfigCommandTests
     [Test]
     public async Task ExecuteAsync_SetGlobal_CallsSetSettingAsyncWithGlobalFlag()
     {
-        var settings = new ConfigSettings { Set = "autoMerge=true", Global = true };
+        var settings = new ConfigSettings { Set = "syncBranch=fleece-sync", Global = true };
         var result = await _command.ExecuteAsync(_context, settings);
 
         result.Should().Be(0);
-        await _settingsService.Received(1).SetSettingAsync("autoMerge", "true", true, Arg.Any<CancellationToken>());
+        await _settingsService.Received(1).SetSettingAsync("syncBranch", "fleece-sync", true, Arg.Any<CancellationToken>());
     }
 
     [Test]

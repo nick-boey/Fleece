@@ -11,10 +11,15 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
 {
     internal const string FleeceHookBlockStart = "# >>> fleece block >>>";
     internal const string FleeceHookBlockEnd = "# <<< fleece block <<<";
-    internal const string GitHubWorkflowFileName = "fleece-project.yml";
+    internal const string GitHubWorkflowFileName = "fleece-ci-gate.yml";
+    internal const string LegacyGitHubWorkflowFileName = "fleece-project.yml";
+
+    internal const string ClaudeMemoryBlockStart = "<!-- >>> fleece memory >>> -->";
+    internal const string ClaudeMemoryBlockEnd = "<!-- <<< fleece memory <<< -->";
 
     private const string ClaudeDirectory = ".claude";
     private const string SettingsFileName = "settings.json";
+    private const string ClaudeMemoryFileName = "CLAUDE.md";
 
     private readonly IAnsiConsole _console;
     private readonly IFileSystem _fileSystem;
@@ -30,8 +35,9 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
     public override async Task<int> ExecuteAsync(CommandContext context, InstallSettings settings)
     {
         await InstallClaudeHooksAsync();
+        await InstallClaudeMemoryBlockAsync();
         await InstallPreCommitHookAsync();
-        await InstallPreMergeCommitHookAsync();
+        await RemovePreMergeCommitHookAsync();
         await EnsureGitignoreEntriesAsync();
         await MaybeInstallGitHubWorkflowAsync();
         return 0;
@@ -105,6 +111,62 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
         _console.MarkupLine($"[dim]  Settings: {settingsPath}[/]");
     }
 
+    /// <summary>
+    /// Writes (or refreshes) a fleece-managed block in the project's CLAUDE.md that states the
+    /// v4 ephemeral-memory philosophy: issues are branch-local working memory; before opening a
+    /// PR you resolve, promote durable work to GitHub Issues, then seal. The block is delimited by
+    /// marker comments so re-running install updates it in place and never clobbers user content.
+    /// </summary>
+    private async Task InstallClaudeMemoryBlockAsync()
+    {
+        var memoryPath = _fileSystem.Path.Combine(_basePath, ClaudeMemoryFileName);
+        var block = BuildClaudeMemoryBlock();
+
+        string newContent;
+        if (_fileSystem.File.Exists(memoryPath))
+        {
+            var existing = await _fileSystem.File.ReadAllTextAsync(memoryPath);
+            newContent = ReplaceOrAppendBlock(existing, block, ClaudeMemoryBlockStart, ClaudeMemoryBlockEnd);
+        }
+        else
+        {
+            newContent = block;
+        }
+
+        await _fileSystem.File.WriteAllTextAsync(memoryPath, newContent);
+        _console.MarkupLine($"[green]Fleece memory block written:[/] {memoryPath}");
+    }
+
+    internal static string BuildClaudeMemoryBlock()
+    {
+        return string.Join('\n', new[]
+        {
+            ClaudeMemoryBlockStart,
+            "## Fleece: ephemeral working memory",
+            "",
+            "Fleece issues are **branch-local working memory**, not a durable backlog. They exist to",
+            "track the work in flight on the current branch and are expected to be cleared before the",
+            "branch merges. Anything that must outlive the branch belongs in GitHub Issues.",
+            "",
+            "- **Plan/track on the branch**: create issues with `fleece create`, decompose with",
+            "  `--parent-issues`, and pick the next item with `fleece next`.",
+            "- **Resolve before a PR**: every issue must reach an inactive status",
+            "  (`complete`, `closed`, or `promoted`) before the branch is sealed.",
+            "- **Promote durable work**: anything worth keeping past this branch goes to GitHub Issues",
+            "  via `fleece promote <id> [<id>...]`. The issue is marked `promoted` and tagged",
+            "  `promoted=<#>`.",
+            "- **Seal before merging**: run `fleece seal` to archive the inactive issues to",
+            "  `.fleece/archive/` and clear `.fleece/issues/`. The CI gate fails any PR that still has",
+            "  live logs under `.fleece/issues/`.",
+            "- **Absorb when needed**: `fleece absorb #<github-#>` pulls a GitHub issue back into",
+            "  branch-local working memory.",
+            "",
+            "In short: branch-local memory in, durable work out to GitHub, seal, then merge.",
+            ClaudeMemoryBlockEnd,
+            "",
+        });
+    }
+
     private async Task InstallPreCommitHookAsync()
     {
         var hooksDir = _fileSystem.Path.Combine(_basePath, ".git", "hooks");
@@ -136,20 +198,19 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
 
     private static string BuildFleeceHookBlock()
     {
-        // Stage event-sourcing change files on every commit. Snapshot/tombstones are
-        // staged opportunistically on the default branch (the projection writes there).
-        // On conflict-resolved merges (where pre-merge-commit does NOT fire) write the
-        // merge marker before staging so it lands in the same commit as the resolution.
+        // v4 ephemeral memory: stage the whole .fleece/ directory so branch-local issue logs ride
+        // along with this commit. There are no merge markers to write (the follows-DAG is gone).
+        // The active-issue reminder is purely informational — it never exits non-zero, so the
+        // commit always proceeds.
         return string.Join('\n', new[]
         {
             FleeceHookBlockStart,
-            "if [ -f .git/MERGE_HEAD ]; then fleece link --merge || exit 1; fi",
-            "if [ -d .fleece/changes ]; then git add .fleece/changes/; fi",
-            "current_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo \"\")",
-            "default_branch=$(git config --get fleece.defaultBranch 2>/dev/null || echo \"main\")",
-            "if [ \"$current_branch\" = \"$default_branch\" ]; then",
-            "  if [ -f .fleece/issues.jsonl ]; then git add .fleece/issues.jsonl; fi",
-            "  if [ -f .fleece/tombstones.jsonl ]; then git add .fleece/tombstones.jsonl; fi",
+            "if [ -d .fleece ]; then git add .fleece; fi",
+            "if [ -d .fleece/issues ]; then",
+            "  active=$(ls .fleece/issues/*.jsonl 2>/dev/null | wc -l | tr -d ' ')",
+            "  if [ \"$active\" != \"0\" ]; then",
+            "    echo \"fleece: $active active issue log(s) under .fleece/issues/. Run 'fleece seal' before opening a PR.\" 1>&2",
+            "  fi",
             "fi",
             FleeceHookBlockEnd,
             "",
@@ -157,57 +218,47 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
     }
 
     /// <summary>
-    /// pre-merge-commit fires for clean auto-merges (no conflicts); pre-commit covers
-    /// the conflict-resolution path. Both invoke `fleece link --merge` so a marker
-    /// always lands in the merge commit.
+    /// v4 removes the merge-marker mechanism, so the pre-merge-commit hook is no longer installed.
+    /// Re-running install strips any fleece-managed block left over from a v3 install; if that
+    /// leaves only the shebang behind, the hook file is removed entirely.
     /// </summary>
-    private static string BuildFleecePreMergeCommitBlock()
+    private async Task RemovePreMergeCommitHookAsync()
     {
-        return string.Join('\n', new[]
-        {
-            FleeceHookBlockStart,
-            "if [ -f .git/MERGE_HEAD ]; then fleece link --merge || exit 1; fi",
-            "if [ -d .fleece/changes ]; then git add .fleece/changes/ 2>/dev/null || true; fi",
-            FleeceHookBlockEnd,
-            "",
-        });
-    }
-
-    private async Task InstallPreMergeCommitHookAsync()
-    {
-        var hooksDir = _fileSystem.Path.Combine(_basePath, ".git", "hooks");
-        if (!_fileSystem.Directory.Exists(_fileSystem.Path.Combine(_basePath, ".git")))
+        var hookPath = _fileSystem.Path.Combine(_basePath, ".git", "hooks", "pre-merge-commit");
+        if (!_fileSystem.File.Exists(hookPath))
         {
             return;
         }
-        _fileSystem.Directory.CreateDirectory(hooksDir);
 
-        var hookPath = _fileSystem.Path.Combine(hooksDir, "pre-merge-commit");
-        var fleeceBlock = BuildFleecePreMergeCommitBlock();
-
-        string newContent;
-        if (_fileSystem.File.Exists(hookPath))
+        var existing = await _fileSystem.File.ReadAllTextAsync(hookPath);
+        if (!existing.Contains(FleeceHookBlockStart, StringComparison.Ordinal))
         {
-            var existing = await _fileSystem.File.ReadAllTextAsync(hookPath);
-            newContent = ReplaceOrAppendBlock(existing, fleeceBlock);
-        }
-        else
-        {
-            newContent = "#!/bin/sh\n" + fleeceBlock;
+            return;
         }
 
-        await _fileSystem.File.WriteAllTextAsync(hookPath, newContent);
-        TryMarkExecutable(hookPath);
-        _console.MarkupLine($"[green]pre-merge-commit hook installed:[/] {hookPath}");
+        var stripped = RemoveBlock(existing, FleeceHookBlockStart, FleeceHookBlockEnd);
+        if (string.IsNullOrWhiteSpace(stripped) ||
+            string.Equals(stripped.TrimEnd('\n'), "#!/bin/sh", StringComparison.Ordinal))
+        {
+            _fileSystem.File.Delete(hookPath);
+            _console.MarkupLine($"[green]removed obsolete pre-merge-commit hook:[/] {hookPath}");
+            return;
+        }
+
+        await _fileSystem.File.WriteAllTextAsync(hookPath, stripped);
+        _console.MarkupLine($"[green]removed obsolete fleece block from pre-merge-commit hook:[/] {hookPath}");
     }
 
     internal static string ReplaceOrAppendBlock(string existing, string block)
+        => ReplaceOrAppendBlock(existing, block, FleeceHookBlockStart, FleeceHookBlockEnd);
+
+    internal static string ReplaceOrAppendBlock(string existing, string block, string start, string end)
     {
-        var startIdx = existing.IndexOf(FleeceHookBlockStart, StringComparison.Ordinal);
-        var endIdx = existing.IndexOf(FleeceHookBlockEnd, StringComparison.Ordinal);
+        var startIdx = existing.IndexOf(start, StringComparison.Ordinal);
+        var endIdx = existing.IndexOf(end, StringComparison.Ordinal);
         if (startIdx >= 0 && endIdx > startIdx)
         {
-            var afterEnd = endIdx + FleeceHookBlockEnd.Length;
+            var afterEnd = endIdx + end.Length;
             // Consume one trailing newline to avoid accumulating blank lines on each install.
             if (afterEnd < existing.Length && existing[afterEnd] == '\n')
             {
@@ -217,6 +268,29 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
         }
         var trimmed = existing.TrimEnd('\n');
         return trimmed + "\n\n" + block;
+    }
+
+    internal static string RemoveBlock(string existing, string start, string end)
+    {
+        var startIdx = existing.IndexOf(start, StringComparison.Ordinal);
+        var endIdx = existing.IndexOf(end, StringComparison.Ordinal);
+        if (startIdx < 0 || endIdx <= startIdx)
+        {
+            return existing;
+        }
+        var afterEnd = endIdx + end.Length;
+        if (afterEnd < existing.Length && existing[afterEnd] == '\n')
+        {
+            afterEnd++;
+        }
+        // Trim a blank separator line preceding the block, if any.
+        var before = existing[..startIdx].TrimEnd('\n');
+        var after = existing[afterEnd..];
+        if (before.Length == 0)
+        {
+            return after.TrimStart('\n');
+        }
+        return after.Length == 0 ? before + "\n" : before + "\n" + after.TrimStart('\n');
     }
 
     private void TryMarkExecutable(string path)
@@ -246,11 +320,10 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
     private async Task EnsureGitignoreEntriesAsync()
     {
         var gitignorePath = _fileSystem.Path.Combine(_basePath, ".gitignore");
-        var entries = new[]
-        {
-            ".fleece/.active-change",
-            ".fleece/.replay-cache",
-        };
+        // v4 per-issue logs keep no gitignored pointer/cache files. The per-issue logs
+        // under .fleece/issues/ and the archives under .fleece/archive/ are tracked, so
+        // there are no entries to add.
+        var entries = Array.Empty<string>();
 
         var existing = _fileSystem.File.Exists(gitignorePath)
             ? await _fileSystem.File.ReadAllTextAsync(gitignorePath)
@@ -306,6 +379,18 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
             return;
         }
 
+        // Remove the obsolete v3 daily-projection workflow if it was previously installed by fleece.
+        var legacyWorkflowPath = _fileSystem.Path.Combine(workflowsDir, LegacyGitHubWorkflowFileName);
+        if (_fileSystem.File.Exists(legacyWorkflowPath))
+        {
+            var legacy = await _fileSystem.File.ReadAllTextAsync(legacyWorkflowPath);
+            if (legacy.Contains("fleece project", StringComparison.Ordinal))
+            {
+                _fileSystem.File.Delete(legacyWorkflowPath);
+                _console.MarkupLine($"[green]removed obsolete projection workflow:[/] {legacyWorkflowPath}");
+            }
+        }
+
         var workflowPath = _fileSystem.Path.Combine(workflowsDir, GitHubWorkflowFileName);
         if (_fileSystem.File.Exists(workflowPath))
         {
@@ -328,47 +413,50 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
 
     internal static string BuildWorkflowYaml()
     {
+        // CI gate: fail any PR whose branch still carries live Fleece issue logs. The check is
+        // tool-free (no fleece binary on the runner) and cross-platform — bash on Linux/macOS,
+        // PowerShell on Windows — so it enforces "a mergeable branch has no live issues" everywhere.
         return """
-name: Fleece Daily Projection
+name: Fleece CI Gate
 
 on:
-  schedule:
-    - cron: "0 6 * * *"
-  workflow_dispatch:
+  pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  project:
-    runs-on: ubuntu-latest
+  gate:
+    name: No live Fleece issues
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Install Fleece
-        run: dotnet tool install --global Fleece.Cli
-
-      - name: Project events
-        run: fleece project
-
-      - name: Commit and push
+      - name: Check .fleece/issues is empty (bash)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
-          git config user.name "fleece-bot"
-          git config user.email "fleece-bot@users.noreply.github.com"
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: project fleece events"
-            git push
-          else
-            echo "Nothing to project."
+          if ls .fleece/issues/*.jsonl >/dev/null 2>&1; then
+            echo "::error::Live Fleece issues found under .fleece/issues/. Run 'fleece seal' to archive and clear them before merging."
+            exit 1
           fi
+          echo "No live Fleece issues. Gate passed."
+
+      - name: Check .fleece/issues is empty (PowerShell)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path '.fleece/issues' -Filter '*.jsonl' -File -ErrorAction SilentlyContinue
+          if ($files) {
+            Write-Output "::error::Live Fleece issues found under .fleece/issues/. Run 'fleece seal' to archive and clear them before merging."
+            exit 1
+          }
+          Write-Output "No live Fleece issues. Gate passed."
 """;
     }
 }
