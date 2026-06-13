@@ -3,56 +3,18 @@
 ## Purpose
 
 Defines how Fleece migrates from the legacy hashed-file storage layout to the event-sourced layout via `fleece migrate`, including pre-3.0.0 intra-shape fixups, cross-file conflict reconciliation, and isolation of legacy types.
-
 ## Requirements
-
 ### Requirement: `fleece migrate` SHALL convert legacy hashed files into the event-sourced layout
 
-Fleece SHALL convert the legacy storage layout into the event-sourced layout via the existing `fleece migrate` command (the canonical "bring my data up to the current schema" command). No new sibling command (e.g. `migrate-events`) SHALL be introduced. The command SHALL:
+`fleece migrate` SHALL remain available for converting pre-event-sourced legacy hashed files, but its help text SHALL be reframed for v4: all maintained repositories are already on the event-sourced layout, so `migrate` is a one-time bring-forward for old hashed-file repositories only. `migrate` SHALL NOT be the path for moving long-running issues to GitHub Issues — that is handled by `fleece prime v4-migration` and `fleece promote`. The command SHALL remain idempotent, exiting cleanly with "no migration needed" on an already-migrated repository.
 
-1. Locate every `.fleece/issues_*.jsonl` file in the working tree.
-2. Parse them using the legacy issue shape (the pre-migration `Issue` model with all `*LastUpdate` and `*ModifiedBy` fields).
-3. **Apply pre-3.0.0 intra-shape fixups** to each parsed legacy issue *before* cross-file reconciliation (see "Pre-3.0.0 fixups SHALL run before merge" below).
-4. Reconcile per-issue conflicts using the existing property-by-property timestamp-based merge logic, producing a single merged set of issues.
-5. Write the merged set to `.fleece/issues.jsonl` in the new lean format (no `*LastUpdate` or `*ModifiedBy` fields, retaining `id`, `title`, `description`, `status`, `type`, `linkedPR`, `linkedIssues`, `parentIssues`, `priority`, `assignedTo`, `tags`, `workingBranchId`, `executionMode`, `createdBy`, `createdAt`, `lastUpdate`).
-6. Locate every `.fleece/tombstones_*.jsonl` file, union their entries, and write them to `.fleece/tombstones.jsonl`.
-7. Delete every legacy `.fleece/issues_*.jsonl` and `.fleece/tombstones_*.jsonl` file.
-8. Create the `.fleece/changes/` directory if it does not exist.
-9. Add `.fleece/.active-change` and `.fleece/.replay-cache` to the repository's `.gitignore` if not already present.
+#### Scenario: Migrate help reflects v4 framing
+- **WHEN** `fleece migrate --help` is shown
+- **THEN** the help describes a one-time legacy hashed-file bring-forward, not GitHub migration
 
-The migration SHALL NOT emit any events. Per-property timestamps and modifier history SHALL be discarded during projection to the lean shape.
-
-The migration SHALL be safe to invoke on a repository that has already been migrated (no legacy files present): it SHALL detect this and exit with status code 0 and a message indicating no work was needed.
-
-#### Scenario: `fleece migrate` converts legacy files into new format
-- **GIVEN** a repository with `.fleece/issues_aaa.jsonl` (3 issues) and `.fleece/issues_bbb.jsonl` (2 issues, 1 overlapping with `issues_aaa.jsonl`)
-- **WHEN** `fleece migrate` runs
-- **THEN** `.fleece/issues.jsonl` exists with 4 distinct issues (overlap reconciled by property-level timestamp merge)
-- **AND** `.fleece/issues_aaa.jsonl` and `.fleece/issues_bbb.jsonl` are deleted
-- **AND** no JSON object in `.fleece/issues.jsonl` contains keys ending in `LastUpdate` or `ModifiedBy`
-
-#### Scenario: `fleece migrate` unions tombstones
-- **GIVEN** a repository with `.fleece/tombstones_aaa.jsonl` (2 entries) and `.fleece/tombstones_bbb.jsonl` (1 entry)
-- **WHEN** `fleece migrate` runs
-- **THEN** `.fleece/tombstones.jsonl` contains the union of all 3 entries (deduplicated by issue ID)
-- **AND** the legacy tombstone files are deleted
-
-#### Scenario: `fleece migrate` is idempotent on already-migrated repository
-- **GIVEN** a repository with `.fleece/issues.jsonl` and no `.fleece/issues_*.jsonl` files
-- **WHEN** `fleece migrate` runs
-- **THEN** the command exits with status code 0
-- **AND** prints a message indicating no migration was needed
-- **AND** no files are modified
-
-#### Scenario: `fleece migrate` adds gitignore entries
-- **GIVEN** a repository whose `.gitignore` does not contain `.fleece/.active-change`
-- **WHEN** `fleece migrate` runs
-- **THEN** the resulting `.gitignore` contains entries for `.fleece/.active-change` and `.fleece/.replay-cache`
-
-#### Scenario: No separate `migrate-events` command exists
-- **WHEN** the user runs `fleece migrate-events`
-- **THEN** the command is unrecognised (no `migrate-events` registration in the CLI)
-- **AND** `fleece migrate` is the only command that performs schema migration
+#### Scenario: Idempotent on migrated repos
+- **WHEN** `fleece migrate` runs on a repo already in the current layout
+- **THEN** it exits cleanly reporting no migration needed
 
 ### Requirement: Pre-3.0.0 fixups SHALL run before merge
 
@@ -85,3 +47,17 @@ Code under `Fleece.Core.Models.Legacy` SHALL be referenced only by the migration
 - **WHEN** the codebase is searched for references to `Fleece.Core.Models.Legacy.LegacyIssue`
 - **THEN** the only references are within the migration command and its tests
 - **AND** no other CLI command or Core service references the legacy namespace
+
+### Requirement: Legacy durable snapshot SHALL trigger a v4-migration warning
+
+When any `fleece` command runs in a repository that still contains a legacy durable `.fleece/issues.jsonl` snapshot, Fleece SHALL print a warning informing the user that legacy Fleece issues are present and instructing them to run `fleece prime v4-migration` to migrate long-running issues to GitHub Issues. The warning SHALL be non-destructive — no legacy data is automatically converted or deleted.
+
+#### Scenario: Warning on legacy snapshot presence
+- **WHEN** a `fleece` command runs and `.fleece/issues.jsonl` exists
+- **THEN** a warning is printed pointing the user to `fleece prime v4-migration`
+- **AND** the legacy snapshot is not modified or deleted
+
+#### Scenario: No warning once the legacy snapshot is gone
+- **WHEN** a `fleece` command runs and no `.fleece/issues.jsonl` exists
+- **THEN** no legacy-migration warning is printed
+

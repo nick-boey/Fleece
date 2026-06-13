@@ -3,9 +3,7 @@
 ## Purpose
 
 The `fleece prime` command provides AI agents and humans with concise onboarding content about how to use Fleece in the current repository. It emits an overview of issue workflow, types, statuses, hierarchy, filtering, and JSON output by default, and can surface dedicated topic guidance (for example, OpenSpec integration) when invoked with a topic argument. The command adapts its output based on which directories are present in the current working directory (`.fleece/`, `openspec/`).
-
 ## Requirements
-
 ### Requirement: Silent exit when Fleece is not initialised
 
 The `fleece prime` command SHALL produce no output and exit successfully when the current working directory does not contain a `.fleece/` directory. This applies regardless of whether an `openspec/` directory is present or a topic argument was provided.
@@ -20,64 +18,21 @@ The `fleece prime` command SHALL produce no output and exit successfully when th
 
 ### Requirement: Overview output when Fleece is initialised
 
-When a `.fleece/` directory is present in the current working directory and no topic argument is supplied, `fleece prime` SHALL emit the Fleece overview content (covering issue workflow, types, statuses, hierarchy, filtering, JSON, and the list of available detailed topics).
+When the current working directory contains a `.fleece/` directory, `fleece prime` (invoked with no topic) SHALL emit onboarding content describing Fleece as **branch-local, ephemeral agent working memory** — not a durable tracker. The output SHALL state that issues must be resolved (`Complete`/`Closed`), `promote`d to a GitHub issue, or `seal`ed before a PR merges, and that the CI gate fails a PR while live issues remain. The output SHALL include the current count of incomplete (active) issues and guidance to commit `.fleece/` changes. It SHALL describe the v4 status set (with `Promoted`, without `Draft`) and type set (without `Idea`).
 
-#### Scenario: Overview in a Fleece-only repository
-- **WHEN** `fleece prime` is invoked in a directory containing `.fleece/` but no `openspec/`
-- **THEN** the command writes the Fleece overview content to stdout
-- **AND** the command returns exit code 0
-- **AND** the output does NOT contain the OpenSpec Integration section
+#### Scenario: Overview reflects the ephemeral model
+- **WHEN** `fleece prime` runs in an initialised repo
+- **THEN** output describes Fleece as ephemeral branch-local memory
+- **AND** states issues must be resolved, promoted, or sealed before a PR merges
+- **AND** includes the count of active issues
 
 ### Requirement: OpenSpec integration section when openspec/ is present
 
-When both a `.fleece/` directory and an `openspec/` directory exist in the current working directory and no topic argument is supplied, `fleece prime` SHALL append an "OpenSpec Integration" section to the overview output. This section MUST instruct the agent on:
+`fleece prime` SHALL NOT emit the legacy OpenSpec-per-change issue-linking section. Guidance for linking one Fleece issue per OpenSpec change is removed; OpenSpec dependency visualisation is provided by the separate `fleece openspec dependencies` command rather than by prime onboarding text.
 
-- The `openspec={change-name}` keyed tag convention for linking a Fleece issue to an OpenSpec change, including that multiple `openspec=` tags on one issue are permitted but discouraged.
-- The decision tree for selecting an existing Fleece issue to link when proposing a new OpenSpec change in a single-change session.
-- The rule for multi-change sessions (one issue per change, arranged using Fleece hierarchy features).
-- The rule that Fleece issues MUST NOT be created per task or per phase of an OpenSpec change.
-
-#### Scenario: Overview in a repository with both Fleece and OpenSpec
-- **WHEN** `fleece prime` is invoked in a directory containing both `.fleece/` and `openspec/`
-- **THEN** the command writes the Fleece overview content to stdout
-- **AND** the output additionally contains an "OpenSpec Integration" section
-- **AND** the section names the `openspec={change-name}` tag convention
-- **AND** the section describes the branch-suffix (`+<id>`) decision path
-- **AND** the section describes the open-unlinked-issue scan fallback
-- **AND** the section instructs the agent to ask the user when issue relevance is ambiguous
-- **AND** the section describes hierarchy usage for multi-change sessions
-- **AND** the section states that issues are per-change, never per-task
-
-#### Scenario: Branch suffix issue selection logic
-- **WHEN** the OpenSpec Integration section describes the single-change linking flow
-- **THEN** it specifies that a branch name ending in `+<id>` refers to the Fleece issue with that 6-character id
-- **AND** it specifies that the referenced issue is linked only if it is open, has no existing `openspec=` tag, and is relevant to the change being proposed
-- **AND** it specifies that if any of those conditions fail, the agent falls through to scanning open issues for an unlinked relevant match
-- **AND** it specifies that a new issue is created only if no suitable existing issue is found
-
-#### Scenario: Multi-change hierarchy guidance
-- **WHEN** the OpenSpec Integration section describes the multi-change flow
-- **THEN** it states that one Fleece issue is created per change
-- **AND** it states that issues are organised using `--parent-issues` with lex-order and `--execution-order`
-- **AND** it states that flat fan-out is the default and intermediate grouping parents are created only when the hierarchy genuinely requires them
-
-### Requirement: Dedicated openspec topic
-
-`fleece prime openspec` SHALL print the OpenSpec integration guidance regardless of whether an `openspec/` directory exists in the current working directory. This requires only that `.fleece/` exists (per the silent-exit requirement).
-
-#### Scenario: Explicit openspec topic with openspec directory present
-- **WHEN** `fleece prime openspec` is invoked in a directory containing `.fleece/` and `openspec/`
-- **THEN** the command writes the OpenSpec integration guidance content to stdout
-- **AND** the command returns exit code 0
-
-#### Scenario: Explicit openspec topic without openspec directory
-- **WHEN** `fleece prime openspec` is invoked in a directory containing `.fleece/` but not `openspec/`
-- **THEN** the command writes the OpenSpec integration guidance content to stdout
-- **AND** the command returns exit code 0
-
-#### Scenario: openspec listed among available topics in overview
-- **WHEN** `fleece prime` is invoked in a directory containing `.fleece/`
-- **THEN** the overview output's list of detailed topics at the end of the document includes `openspec`
+#### Scenario: No per-change linking guidance
+- **WHEN** `fleece prime` runs in a repo containing an `openspec/` directory
+- **THEN** the output contains no instruction to create or link one Fleece issue per OpenSpec change
 
 ### Requirement: Unknown topic handling is unchanged
 
@@ -88,3 +43,20 @@ When a topic argument is supplied that is not in the known topics dictionary, `f
 - **THEN** the command writes a message indicating the topic is unknown
 - **AND** the printed list of available topics contains `openspec`
 - **AND** the command returns a non-zero exit code
+
+### Requirement: Dedicated github topic
+
+`fleece prime github` SHALL emit guidance on the GitHub round-trip workflow: how to `promote` one or many Fleece issues into a single GitHub issue, how to `absorb` a GitHub issue (`#<number>`) into Fleece, and how to check credentials with `fleece auth`.
+
+#### Scenario: github topic explains promote and absorb
+- **WHEN** `fleece prime github` runs
+- **THEN** output explains `promote`, `absorb #<number>`, and `auth`
+
+### Requirement: Dedicated v4-migration topic
+
+`fleece prime v4-migration` SHALL emit instructions for migrating a repository that still holds a legacy durable `.fleece/issues.jsonl` snapshot: how to review the legacy issues and `promote` the long-running ones to GitHub Issues, then `seal` to archive and clear remaining inactive issues.
+
+#### Scenario: v4-migration topic guides legacy migration
+- **WHEN** `fleece prime v4-migration` runs
+- **THEN** output instructs the agent to promote long-running legacy issues to GitHub Issues and then seal
+
