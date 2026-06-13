@@ -51,7 +51,7 @@ public class PrimeCommandTests
     }
 
     [Test]
-    public async Task Execute_NoFleeceDirectory_NoTopic_ExitsSilentlyWithCodeZero()
+    public async Task Execute_NoFleeceDirectory_ExitsSilentlyWithCodeZero()
     {
         var result = await _command.ExecuteAsync(_context, new PrimeSettings());
 
@@ -60,29 +60,36 @@ public class PrimeCommandTests
     }
 
     [Test]
-    public async Task Execute_NoFleeceDirectory_WithTopic_ExitsSilentlyWithCodeZero()
-    {
-        var result = await _command.ExecuteAsync(_context, new PrimeSettings { Topic = "commands" });
-
-        result.Should().Be(0);
-        _console.Output.Should().BeEmpty();
-    }
-
-    [Test]
-    public async Task Execute_FleecePresent_NoTopic_EmitsEphemeralMemoryOverview()
+    public async Task Execute_FleecePresent_ZeroIssues_EmitsNothing()
     {
         CreateFleeceDirectory();
 
         var result = await _command.ExecuteAsync(_context, new PrimeSettings());
 
         result.Should().Be(0);
-        var output = _console.Output;
-        output.Should().Contain("Ephemeral Agent Working Memory");
-        output.Should().Contain("active issue(s)");
+        _console.Output.Should().BeEmpty();
     }
 
     [Test]
-    public async Task Execute_FleecePresent_NoTopic_ReportsActiveIssueCount()
+    public async Task Execute_FleecePresent_AllIssuesInactive_EmitsNothing()
+    {
+        CreateFleeceDirectory();
+        _fleece.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<Issue>>(
+            [
+                new IssueBuilder().WithId("aaaaaa").WithTitle("Done").WithStatus(IssueStatus.Complete).WithType(IssueType.Task).Build(),
+                new IssueBuilder().WithId("bbbbbb").WithTitle("Gone").WithStatus(IssueStatus.Closed).WithType(IssueType.Task).Build(),
+                new IssueBuilder().WithId("cccccc").WithTitle("Up").WithStatus(IssueStatus.Promoted).WithType(IssueType.Task).Build()
+            ]));
+
+        var result = await _command.ExecuteAsync(_context, new PrimeSettings());
+
+        result.Should().Be(0);
+        _console.Output.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task Execute_FleecePresent_ActiveIssues_EmitsCountAndSkillPointer()
     {
         CreateFleeceDirectory();
         _fleece.GetAllAsync(Arg.Any<CancellationToken>())
@@ -96,30 +103,12 @@ public class PrimeCommandTests
         var result = await _command.ExecuteAsync(_context, new PrimeSettings());
 
         result.Should().Be(0);
-        _console.Output.Should().Contain("2 active issue(s)");
-    }
-
-    [Test]
-    public async Task Execute_FleecePresent_KnownTopic_EmitsTopicContent()
-    {
-        CreateFleeceDirectory();
-
-        var result = await _command.ExecuteAsync(_context, new PrimeSettings { Topic = "v4-migration" });
-
-        result.Should().Be(0);
-        _console.Output.Should().NotBeEmpty();
-    }
-
-    [Test]
-    public async Task Execute_FleecePresent_UnknownTopic_ListsAvailableTopics()
-    {
-        CreateFleeceDirectory();
-
-        var result = await _command.ExecuteAsync(_context, new PrimeSettings { Topic = "not-a-real-topic" });
-
-        result.Should().NotBe(0);
         var output = _console.Output;
-        output.Should().Contain("Unknown topic: not-a-real-topic");
-        output.Should().Contain("Available topics:");
+        output.Should().Contain("2 active issue(s)");
+        output.Should().Contain(".claude/skills/fleece");
+        // The slim hook no longer carries the static reference — that lives in the skill.
+        output.Should().NotContain("Issue Types");
+        output.Should().NotContain("Detailed Topics");
+        output.Should().NotContain("Storage model");
     }
 }

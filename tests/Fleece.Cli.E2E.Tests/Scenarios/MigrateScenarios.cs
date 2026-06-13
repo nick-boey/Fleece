@@ -216,14 +216,16 @@ public class MigrateScenarios : CliScenarioTestBase
     private static string GetExamplesDir(string subDir)
     {
         // Walk up from the test assembly to the repo root, then into tests/examples/.
+        // Anchor on the solution file rather than `.git`: in a git worktree `.git` is a FILE,
+        // not a directory, so a Directory.Exists(".git") check fails to find the root there.
         var dir = System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
-        while (dir != null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir, ".git")))
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir, "Fleece.slnx")))
         {
             dir = System.IO.Path.GetDirectoryName(dir);
         }
         if (dir == null)
         {
-            throw new InvalidOperationException("Could not find repo root from assembly location");
+            throw new InvalidOperationException("Could not find repo root (Fleece.slnx) from assembly location");
         }
         return System.IO.Path.Combine(dir, "tests", "examples", subDir);
     }

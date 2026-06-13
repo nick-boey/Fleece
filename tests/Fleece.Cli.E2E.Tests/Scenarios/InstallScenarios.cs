@@ -183,7 +183,7 @@ public class InstallScenarios : CliScenarioTestBase
     }
 
     [Test]
-    public async Task Install_writes_claude_memory_block_with_v4_philosophy()
+    public async Task Install_writes_claude_memory_block_with_philosophy_decision_rule_and_skill_pointer()
     {
         await RunAsync("install");
 
@@ -193,5 +193,54 @@ public class InstallScenarios : CliScenarioTestBase
         content.Should().Contain(InstallCommand.ClaudeMemoryBlockStart);
         content.Should().Contain("ephemeral");
         content.Should().Contain("fleece seal");
+        // The blocks-this-PR → Fleece / durable → GitHub decision rule.
+        content.Should().Contain("GitHub issue");
+        // Pointer to the installed skill so a pull-based agent knows it exists.
+        content.Should().Contain(".claude/skills/fleece");
+    }
+
+    [Test]
+    public async Task Install_writes_fleece_skill_with_description_and_managed_header()
+    {
+        await RunAsync("install");
+
+        var skillPath = Path.Combine(BasePath, ".claude", "skills", "fleece", "SKILL.md");
+        Fs.File.Exists(skillPath).Should().BeTrue();
+        var content = await Fs.File.ReadAllTextAsync(skillPath);
+        content.Should().Contain("name: fleece");
+        content.Should().Contain("description:");
+        content.Should().Contain("managed by `fleece install`");
+    }
+
+    [Test]
+    public async Task Install_writes_all_nine_skill_reference_topics()
+    {
+        await RunAsync("install");
+
+        var referencesDir = Path.Combine(BasePath, ".claude", "skills", "fleece", "references");
+        foreach (var topic in new[]
+                 {
+                     "hierarchy", "commands", "statuses", "sync", "json",
+                     "next", "tree", "github", "v4-migration"
+                 })
+        {
+            var path = Path.Combine(referencesDir, topic + ".md");
+            Fs.File.Exists(path).Should().BeTrue(because: $"the '{topic}' reference should be installed");
+        }
+    }
+
+    [Test]
+    public async Task Install_overwrites_stale_skill_content_wholesale()
+    {
+        var skillDir = Path.Combine(BasePath, ".claude", "skills", "fleece");
+        Fs.Directory.CreateDirectory(skillDir);
+        var skillPath = Path.Combine(skillDir, "SKILL.md");
+        await Fs.File.WriteAllTextAsync(skillPath, "STALE CONTENT FROM AN OLD VERSION");
+
+        await RunAsync("install");
+
+        var content = await Fs.File.ReadAllTextAsync(skillPath);
+        content.Should().NotContain("STALE CONTENT");
+        content.Should().Contain("name: fleece");
     }
 }

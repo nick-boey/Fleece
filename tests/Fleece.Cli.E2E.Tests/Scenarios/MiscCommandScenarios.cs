@@ -1,3 +1,6 @@
+using Fleece.Cli;
+using Spectre.Console.Testing;
+
 namespace Fleece.Cli.E2E.Tests.Scenarios;
 
 [TestFixture]
@@ -58,6 +61,35 @@ public class MiscCommandScenarios : CliScenarioTestBase
             Directory.SetCurrentDirectory(originalCwd);
             Directory.Delete(tmp, recursive: true);
         }
+    }
+
+    [Test]
+    public async Task Prime_with_active_issue_emits_signal_pointing_at_skill()
+    {
+        await RunAsync("create", "-t", "Live", "-y", "task", "-d", "b", "-s", "open");
+
+        // Isolate prime's output from the create command's output.
+        var primeConsole = new TestConsole();
+        var exit = await CliApp.RunAsync(["prime"], BasePath, Fs, primeConsole);
+
+        exit.Should().Be(0);
+        var output = primeConsole.Output;
+        output.Should().Contain("1 active issue(s)");
+        output.Should().Contain(".claude/skills/fleece");
+    }
+
+    [Test]
+    public async Task Prime_with_no_active_issues_emits_nothing()
+    {
+        await RunAsync("create", "-t", "Done", "-y", "task", "-d", "b", "-s", "open");
+        var id = LoadIssues().Single().Id;
+        await RunAsync("edit", id, "-s", "complete");
+
+        var primeConsole = new TestConsole();
+        var exit = await CliApp.RunAsync(["prime"], BasePath, Fs, primeConsole);
+
+        exit.Should().Be(0);
+        primeConsole.Output.Should().BeEmpty();
     }
 
     [Test]

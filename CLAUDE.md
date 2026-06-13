@@ -192,73 +192,25 @@ graph-layout renderer.
 | CLI settings | `src/Fleece.Cli/Settings/` |
 | Core unit tests | `tests/Fleece.Core.Tests/` |
 
-<!-- rp1:start:v0.7.1 -->
-## rp1 Knowledge Base
-
-**Use Progressive Disclosure Pattern**
-
-Location: `.rp1/context/`
-
-Files:
-- index.md (always load first)
-- architecture.md
-- modules.md
-- patterns.md
-- concept_map.md
-
-Loading rules:
-1. Always read index.md first.
-2. Then load based on task type:
-   - Code review: patterns.md
-   - Bug investigation: architecture.md, modules.md
-   - Feature work: modules.md, patterns.md
-   - Strategic or system-wide analysis: all files
-
-## rp1 Skill Awareness
-
-You have access to rp1 skills. When you notice the user working on a task
-that an rp1 skill addresses, briefly suggest it.
-
-### Skill Categories
-| Category | Skills | Suggest When |
-|----------|--------|--------------|
-| Development | /task, /bootstrap, /build, /build-fast, /feature-archive, /feature-edit, /feature-unarchive, /phase-plan, /speedrun | User starts a new feature, describes a change, or needs to scaffold a project |
-| Investigation | /code-investigate, /validate-hypothesis | User is debugging, examining errors, or testing a design hypothesis |
-| Quality | /code-comments, /code-audit, /code-check, /code-clean-comments | User finishes implementation and needs hygiene checks, audits, or comment cleanup |
-| Review | /address-pr-feedback, /arcade-collab, /pr-review, /pr-stack, /pr-visual, /pr-walkthrough | User prepares a PR, receives review feedback, or needs visual diff understanding |
-| Documentation | /fix-mermaid, /generate-user-docs, /markdown-preview, /mermaid, /project-birds-eye-view, /write-content | User writes, updates, or previews docs, diagrams, or project overviews |
-| Knowledge | /guide, /knowledge-build, /knowledge-load, /self-update | User needs codebase context, KB is stale, or wants KB templates |
-| Strategy | /analyse-security, /deep-research, /socratic-duel, /socratic-duel-run, /strategize | User faces architectural decisions, security concerns, or needs deep research |
-| Planning | /blueprint, /blueprint-archive, /blueprint-audit | User plans a project, audits a PRD, or manages blueprint lifecycle |
-| Prompt | /prompt-writer | User authors, rewrites, or evaluates agent prompts |
-
-### Suggestion Rules
-- Limit to 1 suggestion per turn. Format: skill name, one sentence why, offer to run.
-- Do not re-suggest a skill the user declined this session.
-- Do not suggest while an rp1 workflow is already running.
-- Only suggest when there is a clear match to the user's current activity.
-- For deeper questions about rp1, suggest the user invoke /guide.
-<!-- rp1:end:v0.7.1 -->
-
 <!-- >>> fleece memory >>> -->
 ## Fleece: ephemeral working memory
 
-Fleece issues are **branch-local working memory**, not a durable backlog. They exist to
-track the work in flight on the current branch and are expected to be cleared before the
-branch merges. Anything that must outlive the branch belongs in GitHub Issues.
+Fleece issues are **branch-local, ephemeral working memory** for the current branch — not
+a durable backlog. They track the work in flight and must be cleared before the branch
+merges.
 
-- **Plan/track on the branch**: create issues with `fleece create`, decompose with
-  `--parent-issues`, and pick the next item with `fleece next`.
-- **Resolve before a PR**: every issue must reach an inactive status
-  (`complete`, `closed`, or `promoted`) before the branch is sealed.
-- **Promote durable work**: anything worth keeping past this branch goes to GitHub Issues
-  via `fleece promote <id> [<id>...]`. The issue is marked `promoted` and tagged
-  `promoted=<#>`.
-- **Seal before merging**: run `fleece seal` to archive the inactive issues to
-  `.fleece/archive/` and clear `.fleece/issues/`. The CI gate fails any PR that still has
-  live logs under `.fleece/issues/`.
-- **Absorb when needed**: `fleece absorb #<github-#>` pulls a GitHub issue back into
-  branch-local working memory.
+**Where does a piece of work go?**
 
-In short: branch-local memory in, durable work out to GitHub, seal, then merge.
+- **Blocks this branch / PR** → a Fleece issue (`fleece create`). Branch-local memory.
+- **Non-blocking follow-up, a new feature, or anything that must outlive this branch** → a
+  **GitHub issue**, not Fleece. Use `fleece promote <id> [<id>...]` to escalate an existing
+  Fleece issue (it becomes `promoted`).
+
+**Before opening a PR**, every Fleece issue must reach an inactive status (`complete`,
+`closed`, or `promoted`), or be archived with `fleece seal`. A CI gate fails the PR while
+any live issue remains under `.fleece/issues/`.
+
+For commands, hierarchy, statuses, JSON output, and the GitHub round-trip, use the
+**`fleece` skill** (installed at `.claude/skills/fleece/`). The `fleece prime` SessionStart
+hook surfaces the live count of active issues when the branch is dirty.
 <!-- <<< fleece memory <<< -->

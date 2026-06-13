@@ -1,4 +1,5 @@
 using System.IO.Abstractions;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Fleece.Cli.Settings;
@@ -21,6 +22,11 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
     private const string SettingsFileName = "settings.json";
     private const string ClaudeMemoryFileName = "CLAUDE.md";
 
+    // Embedded skill resources are named "fleece-skill/<relative-path>" (forward slashes,
+    // set via LogicalName in the csproj) so the output path reconstructs the same on every OS.
+    internal const string SkillResourcePrefix = "fleece-skill/";
+    internal const string SkillDirectoryName = "fleece";
+
     private readonly IAnsiConsole _console;
     private readonly IFileSystem _fileSystem;
     private readonly string _basePath;
@@ -36,6 +42,7 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
     {
         await InstallClaudeHooksAsync();
         await InstallClaudeMemoryBlockAsync();
+        await InstallClaudeSkillAsync();
         await InstallPreCommitHookAsync();
         await RemovePreMergeCommitHookAsync();
         await EnsureGitignoreEntriesAsync();
@@ -139,32 +146,92 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
 
     internal static string BuildClaudeMemoryBlock()
     {
+        // Philosophy only — the "why". The full static reference (commands, statuses, hierarchy,
+        // GitHub round-trip, …) lives in the installed `fleece` skill, and the dynamic active-issue
+        // count comes from the `fleece prime` SessionStart hook. This block must not duplicate the
+        // skill; its job is to state the model and the where-does-this-work-go decision rule, and to
+        // point at the skill so a pull-based agent knows it exists.
         return string.Join('\n', new[]
         {
             ClaudeMemoryBlockStart,
             "## Fleece: ephemeral working memory",
             "",
-            "Fleece issues are **branch-local working memory**, not a durable backlog. They exist to",
-            "track the work in flight on the current branch and are expected to be cleared before the",
-            "branch merges. Anything that must outlive the branch belongs in GitHub Issues.",
+            "Fleece issues are **branch-local, ephemeral working memory** for the current branch — not",
+            "a durable backlog. They track the work in flight and must be cleared before the branch",
+            "merges.",
             "",
-            "- **Plan/track on the branch**: create issues with `fleece create`, decompose with",
-            "  `--parent-issues`, and pick the next item with `fleece next`.",
-            "- **Resolve before a PR**: every issue must reach an inactive status",
-            "  (`complete`, `closed`, or `promoted`) before the branch is sealed.",
-            "- **Promote durable work**: anything worth keeping past this branch goes to GitHub Issues",
-            "  via `fleece promote <id> [<id>...]`. The issue is marked `promoted` and tagged",
-            "  `promoted=<#>`.",
-            "- **Seal before merging**: run `fleece seal` to archive the inactive issues to",
-            "  `.fleece/archive/` and clear `.fleece/issues/`. The CI gate fails any PR that still has",
-            "  live logs under `.fleece/issues/`.",
-            "- **Absorb when needed**: `fleece absorb #<github-#>` pulls a GitHub issue back into",
-            "  branch-local working memory.",
+            "**Where does a piece of work go?**",
             "",
-            "In short: branch-local memory in, durable work out to GitHub, seal, then merge.",
+            "- **Blocks this branch / PR** → a Fleece issue (`fleece create`). Branch-local memory.",
+            "- **Non-blocking follow-up, a new feature, or anything that must outlive this branch** → a",
+            "  **GitHub issue**, not Fleece. Use `fleece promote <id> [<id>...]` to escalate an existing",
+            "  Fleece issue (it becomes `promoted`).",
+            "",
+            "**Before opening a PR**, every Fleece issue must reach an inactive status (`complete`,",
+            "`closed`, or `promoted`), or be archived with `fleece seal`. A CI gate fails the PR while",
+            "any live issue remains under `.fleece/issues/`.",
+            "",
+            "For commands, hierarchy, statuses, JSON output, and the GitHub round-trip, use the",
+            "**`fleece` skill** (installed at `.claude/skills/fleece/`). The `fleece prime` SessionStart",
+            "hook surfaces the live count of active issues when the branch is dirty.",
             ClaudeMemoryBlockEnd,
             "",
         });
+    }
+
+    /// <summary>
+    /// Writes the Fleece reference skill into the project at <c>.claude/skills/fleece/</c>. The
+    /// skill files ship as embedded resources (named <c>fleece-skill/&lt;relative-path&gt;</c>) and
+    /// are overwritten wholesale on every install — the skill is a fleece-owned generated artifact,
+    /// so reference content stays current with the installed Fleece version. Each file already
+    /// carries a "managed by fleece install" header baked into the source.
+    /// </summary>
+    private async Task InstallClaudeSkillAsync()
+    {
+        var assembly = typeof(InstallCommand).Assembly;
+        var resourceNames = assembly.GetManifestResourceNames()
+            .Where(n => n.StartsWith(SkillResourcePrefix, StringComparison.Ordinal))
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+
+        if (resourceNames.Count == 0)
+        {
+            _console.MarkupLine("[yellow]No embedded skill resources found; skipping skill install.[/]");
+            return;
+        }
+
+        var skillRoot = _fileSystem.Path.Combine(_basePath, ClaudeDirectory, "skills", SkillDirectoryName);
+        var written = 0;
+        foreach (var resourceName in resourceNames)
+        {
+            var relativePath = resourceName[SkillResourcePrefix.Length..];
+
+            await using var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream is null)
+            {
+                continue;
+            }
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+
+            // The LogicalName uses '/'; rebuild the output path segment-by-segment so the native
+            // path separator is applied regardless of the host OS.
+            var parts = new List<string> { skillRoot };
+            parts.AddRange(relativePath.Split('/'));
+            var outputPath = _fileSystem.Path.Combine(parts.ToArray());
+
+            var outputDir = _fileSystem.Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(outputDir))
+            {
+                _fileSystem.Directory.CreateDirectory(outputDir);
+            }
+
+            // Overwrite wholesale.
+            await _fileSystem.File.WriteAllTextAsync(outputPath, content);
+            written++;
+        }
+
+        _console.MarkupLine($"[green]Fleece skill installed:[/] {skillRoot} [dim]({written} file(s))[/]");
     }
 
     private async Task InstallPreCommitHookAsync()

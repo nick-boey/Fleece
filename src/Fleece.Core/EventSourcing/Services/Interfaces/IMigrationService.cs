@@ -9,7 +9,7 @@ namespace Fleece.Core.EventSourcing.Services.Interfaces;
 /// (<c>.fleece/issues.jsonl</c> + <c>.fleece/changes/</c>). v4 keeps no tombstone sidecar and no
 /// <c>.fleece/changes/</c> directory. Only the hashed-file layout is auto-migrated by the command
 /// interceptor; the durable snapshot is converted only on an explicit <c>fleece migrate</c> (the
-/// interceptor merely warns and routes the user to <c>fleece prime v4-migration</c>).
+/// interceptor merely warns and routes the user to the <c>fleece</c> skill's v4-migration reference).
 /// </summary>
 public interface IMigrationService
 {

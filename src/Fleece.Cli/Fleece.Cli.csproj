@@ -16,6 +16,25 @@
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <!--
+    The Fleece reference skill is shipped as embedded resources and written to
+    .claude/skills/fleece/ by `fleece install`. Each resource gets an explicit
+    forward-slash LogicalName so install can reconstruct the output path
+    deterministically on every OS (avoids MSBuild's dotted-name mangling).
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Skill\SKILL.md" LogicalName="fleece-skill/SKILL.md" />
+    <EmbeddedResource Include="Skill\references\hierarchy.md" LogicalName="fleece-skill/references/hierarchy.md" />
+    <EmbeddedResource Include="Skill\references\commands.md" LogicalName="fleece-skill/references/commands.md" />
+    <EmbeddedResource Include="Skill\references\statuses.md" LogicalName="fleece-skill/references/statuses.md" />
+    <EmbeddedResource Include="Skill\references\sync.md" LogicalName="fleece-skill/references/sync.md" />
+    <EmbeddedResource Include="Skill\references\json.md" LogicalName="fleece-skill/references/json.md" />
+    <EmbeddedResource Include="Skill\references\next.md" LogicalName="fleece-skill/references/next.md" />
+    <EmbeddedResource Include="Skill\references\tree.md" LogicalName="fleece-skill/references/tree.md" />
+    <EmbeddedResource Include="Skill\references\github.md" LogicalName="fleece-skill/references/github.md" />
+    <EmbeddedResource Include="Skill\references\v4-migration.md" LogicalName="fleece-skill/references/v4-migration.md" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Spectre.Console" />
