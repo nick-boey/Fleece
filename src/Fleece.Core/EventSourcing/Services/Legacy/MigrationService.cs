@@ -56,7 +56,7 @@ public sealed class MigrationService : IMigrationService
 
         // This is the interceptor's auto-trigger, so it reports ONLY the hashed-file layout
         // (Layout A). A legacy durable `.fleece/issues.jsonl` snapshot (Layout B) is NOT
-        // auto-migrated — it triggers a `fleece prime v4-migration` warning instead (see
+        // auto-migrated — it triggers a v4-migration warning instead (see
         // AutoMigrateInterceptor) and is converted only by the explicit `fleece migrate`
         // command (MigrateAsync detects it separately).
         var legacyIssues = _fileSystem.Directory.GetFiles(FleeceDirectoryPath, LegacyIssuesPattern);

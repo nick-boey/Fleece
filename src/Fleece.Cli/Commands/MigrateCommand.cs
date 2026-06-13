@@ -14,8 +14,8 @@ namespace Fleece.Cli.Commands;
 /// actively maintained repositories are already on the current layout, so this is a
 /// no-op there. It is idempotent: a second run reports "no migration needed".
 ///
-/// This is NOT the path for moving long-running issues to GitHub Issues — use
-/// <c>fleece prime v4-migration</c> and <c>fleece promote</c> for that.
+/// This is NOT the path for moving long-running issues to GitHub Issues — see the
+/// <c>fleece</c> skill's <c>references/v4-migration.md</c> and use <c>fleece promote</c> for that.
 /// </summary>
 public sealed class MigrateCommand(
     IMigrationService migration,

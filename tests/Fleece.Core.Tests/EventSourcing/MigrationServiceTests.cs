@@ -59,7 +59,7 @@ public sealed class MigrationServiceTests
     public async Task IsMigrationNeeded_returns_false_when_only_a_legacy_snapshot_is_present()
     {
         // A durable `.fleece/issues.jsonl` snapshot is NOT auto-migrated; it is handled by the
-        // `fleece prime v4-migration` warning, so migration reports nothing to do.
+        // v4-migration warning, so migration reports nothing to do.
         _fs.Directory.CreateDirectory(FleeceDir);
         _fs.File.WriteAllText(Path.Combine(FleeceDir, "issues.jsonl"), "");
 

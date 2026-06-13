@@ -12,7 +12,7 @@ namespace Fleece.Cli.Interceptors;
 /// when the snapshot uses a legacy property format (e.g. "sortOrder" instead of "lexOrder").
 /// It also surfaces a non-destructive warning when a legacy durable
 /// <c>.fleece/issues.jsonl</c> snapshot (the pre-v4 durable layout) is present, pointing
-/// the user at <c>fleece prime v4-migration</c>.
+/// the user at the <c>fleece</c> skill's <c>references/v4-migration.md</c>.
 /// </summary>
 public sealed class AutoMigrateInterceptor : ICommandInterceptor
 {
@@ -69,7 +69,8 @@ public sealed class AutoMigrateInterceptor : ICommandInterceptor
         var console = ServiceProvider.GetRequiredService<IAnsiConsole>();
         console.MarkupLine(
             "[yellow]Legacy Fleece issues detected ([/][yellow].fleece/issues.jsonl[/][yellow]).[/] " +
-            "Run [green]fleece prime v4-migration[/] to migrate long-running issues to GitHub Issues. " +
+            "Run [green]fleece migrate[/] then promote long-running issues to GitHub Issues — see the " +
+            "[green]fleece[/] skill's [green]references/v4-migration.md[/] for the full flow. " +
             "[dim](No data has been changed.)[/]");
     }
 

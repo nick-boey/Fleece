@@ -190,25 +190,27 @@ graph-layout renderer.
 | Legacy issue model (migration only) | `src/Fleece.Core/Models/Legacy/` |
 | CLI commands | `src/Fleece.Cli/Commands/` |
 | CLI settings | `src/Fleece.Cli/Settings/` |
-| Core unit tests | `tests/Fleece.Core.Tests/` |<!-- >>> fleece memory >>> -->
+| Core unit tests | `tests/Fleece.Core.Tests/` |
+
+<!-- >>> fleece memory >>> -->
 ## Fleece: ephemeral working memory
 
-Fleece issues are **branch-local working memory**, not a durable backlog. They exist to
-track the work in flight on the current branch and are expected to be cleared before the
-branch merges. Anything that must outlive the branch belongs in GitHub Issues.
+Fleece issues are **branch-local, ephemeral working memory** for the current branch — not
+a durable backlog. They track the work in flight and must be cleared before the branch
+merges.
 
-- **Plan/track on the branch**: create issues with `fleece create`, decompose with
-  `--parent-issues`, and pick the next item with `fleece next`.
-- **Resolve before a PR**: every issue must reach an inactive status
-  (`complete`, `closed`, or `promoted`) before the branch is sealed.
-- **Promote durable work**: anything worth keeping past this branch goes to GitHub Issues
-  via `fleece promote <id> [<id>...]`. The issue is marked `promoted` and tagged
-  `promoted=<#>`.
-- **Seal before merging**: run `fleece seal` to archive the inactive issues to
-  `.fleece/archive/` and clear `.fleece/issues/`. The CI gate fails any PR that still has
-  live logs under `.fleece/issues/`.
-- **Absorb when needed**: `fleece absorb #<github-#>` pulls a GitHub issue back into
-  branch-local working memory.
+**Where does a piece of work go?**
 
-In short: branch-local memory in, durable work out to GitHub, seal, then merge.
+- **Blocks this branch / PR** → a Fleece issue (`fleece create`). Branch-local memory.
+- **Non-blocking follow-up, a new feature, or anything that must outlive this branch** → a
+  **GitHub issue**, not Fleece. Use `fleece promote <id> [<id>...]` to escalate an existing
+  Fleece issue (it becomes `promoted`).
+
+**Before opening a PR**, every Fleece issue must reach an inactive status (`complete`,
+`closed`, or `promoted`), or be archived with `fleece seal`. A CI gate fails the PR while
+any live issue remains under `.fleece/issues/`.
+
+For commands, hierarchy, statuses, JSON output, and the GitHub round-trip, use the
+**`fleece` skill** (installed at `.claude/skills/fleece/`). The `fleece prime` SessionStart
+hook surfaces the live count of active issues when the branch is dirty.
 <!-- <<< fleece memory <<< -->
