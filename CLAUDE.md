@@ -239,3 +239,26 @@ that an rp1 skill addresses, briefly suggest it.
 - Only suggest when there is a clear match to the user's current activity.
 - For deeper questions about rp1, suggest the user invoke /guide.
 <!-- rp1:end:v0.7.1 -->
+
+<!-- >>> fleece memory >>> -->
+## Fleece: ephemeral working memory
+
+Fleece issues are **branch-local working memory**, not a durable backlog. They exist to
+track the work in flight on the current branch and are expected to be cleared before the
+branch merges. Anything that must outlive the branch belongs in GitHub Issues.
+
+- **Plan/track on the branch**: create issues with `fleece create`, decompose with
+  `--parent-issues`, and pick the next item with `fleece next`.
+- **Resolve before a PR**: every issue must reach an inactive status
+  (`complete`, `closed`, or `promoted`) before the branch is sealed.
+- **Promote durable work**: anything worth keeping past this branch goes to GitHub Issues
+  via `fleece promote <id> [<id>...]`. The issue is marked `promoted` and tagged
+  `promoted=<#>`.
+- **Seal before merging**: run `fleece seal` to archive the inactive issues to
+  `.fleece/archive/` and clear `.fleece/issues/`. The CI gate fails any PR that still has
+  live logs under `.fleece/issues/`.
+- **Absorb when needed**: `fleece absorb #<github-#>` pulls a GitHub issue back into
+  branch-local working memory.
+
+In short: branch-local memory in, durable work out to GitHub, seal, then merge.
+<!-- <<< fleece memory <<< -->
