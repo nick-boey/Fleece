@@ -13,9 +13,9 @@ namespace Fleece.Cli.E2E.Tests.Scenarios;
 [Category("absorb")]
 public class GitHubScenarios : CliScenarioTestBase
 {
-    private async Task<string> CreateIssueAsync(string title)
+    private async Task<string> CreateIssueAsync(string title, string description = "body")
     {
-        await RunAsync("create", "-t", title, "-y", "task", "-d", "body");
+        await RunAsync("create", "-t", title, "-y", "task", "-d", description);
         return LoadIssues().Single(i => i.Title == title).Id;
     }
 
@@ -60,12 +60,42 @@ public class GitHubScenarios : CliScenarioTestBase
         GitHub.CreatedIssues[0].Body.Should().Contain(a).And.Contain(b);
 
         var issues = LoadIssues();
+        // Sanity: marks every bundled issue promoted.
         foreach (var id in new[] { a, b })
         {
             var issue = issues.Single(i => i.Id == id);
             issue.Status.Should().Be(IssueStatus.Promoted);
             KeyedTag.HasKey(issue.Tags, "promoted").Should().BeTrue();
         }
+    }
+
+    [Test]
+    public async Task Promote_body_includes_each_issue_description_and_title()
+    {
+        var a = await CreateIssueAsync("Implement widget", "The widget must support resizing and theming.");
+        var b = await CreateIssueAsync("Document widget", "Add a usage guide to the README.");
+
+        var exit = await RunWithGitHubAsync("promote", a, b);
+
+        exit.Should().Be(0);
+        var body = GitHub.CreatedIssues.Single().Body;
+        body.Should().Contain("Implement widget").And.Contain("The widget must support resizing and theming.");
+        body.Should().Contain("Document widget").And.Contain("Add a usage guide to the README.");
+        body.Should().Contain(a).And.Contain(b);
+    }
+
+    [Test]
+    public async Task Promote_body_falls_back_when_description_is_missing()
+    {
+        await RunAsync("create", "-t", "No description here", "-y", "task");
+        var id = LoadIssues().Single(i => i.Title == "No description here").Id;
+
+        var exit = await RunWithGitHubAsync("promote", id);
+
+        exit.Should().Be(0);
+        var body = GitHub.CreatedIssues.Single().Body;
+        body.Should().Contain("No description here");
+        body.Should().Contain("No description provided");
     }
 
     [Test]

@@ -106,12 +106,39 @@ public sealed class PromoteCommand(
         return 0;
     }
 
+    /// <summary>
+    /// Composes the GitHub issue body from the promoted bundle. Each issue is rendered as a
+    /// task-list item (id + title + type/priority) followed by its full description, indented so it
+    /// nests under the checklist item. Issues without a description get an explicit placeholder so
+    /// the GitHub issue is never an empty stub.
+    /// </summary>
     private static string BuildIssueBody(IReadOnlyList<Issue> issues)
     {
         var sb = new StringBuilder();
+        sb.AppendLine("_Promoted from Fleece branch-local working memory._");
+        sb.AppendLine();
+
         foreach (var issue in issues)
         {
-            sb.Append("- [ ] ").Append(issue.Id).Append(' ').AppendLine(issue.Title);
+            var type = issue.Type.ToString().ToLowerInvariant();
+            var meta = issue.Priority is int priority ? $"{type} · priority {priority}" : type;
+
+            sb.Append("- [ ] **").Append(issue.Id).Append("** ")
+                .Append(issue.Title).Append(" _(").Append(meta).AppendLine(")_");
+            sb.AppendLine();
+
+            var description = string.IsNullOrWhiteSpace(issue.Description)
+                ? "_No description provided._"
+                : issue.Description.Trim();
+
+            foreach (var line in description.Replace("\r\n", "\n").Split('\n'))
+            {
+                // Two-space indent keeps the description nested under its checklist item in GitHub
+                // markdown; blank lines stay blank so paragraph breaks survive.
+                sb.AppendLine(line.Length == 0 ? string.Empty : "  " + line.TrimEnd());
+            }
+
+            sb.AppendLine();
         }
 
         return sb.ToString().TrimEnd();
