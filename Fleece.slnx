@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Fleece.Core/Fleece.Core.csproj" />
+    <Project Path="src/Fleece.GitHub/Fleece.GitHub.csproj" />
     <Project Path="src/Fleece.Cli/Fleece.Cli.csproj" />
   </Folder>
   <Folder Name="/tests/">

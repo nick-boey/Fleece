@@ -28,12 +28,6 @@ public sealed class CompleteCommand(IFleeceService fleeceService, IAnsiConsole c
     protected override IssueStatus TargetStatus => IssueStatus.Complete;
 }
 
-public sealed class ArchivedCommand(IFleeceService fleeceService, IAnsiConsole console)
-    : StatusCommandBase(fleeceService, console)
-{
-    protected override IssueStatus TargetStatus => IssueStatus.Archived;
-}
-
 public sealed class ClosedCommand(IFleeceService fleeceService, IAnsiConsole console)
     : StatusCommandBase(fleeceService, console)
 {

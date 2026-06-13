@@ -231,8 +231,8 @@ public class FleeceInMemoryServiceTests
             new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build(),
             new IssueBuilder().WithId("prog1").WithStatus(IssueStatus.Progress).Build(),
             new IssueBuilder().WithId("comp1").WithStatus(IssueStatus.Complete).Build(),
-            new IssueBuilder().WithId("arch1").WithStatus(IssueStatus.Archived).Build(),
-            new IssueBuilder().WithId("del1").WithStatus(IssueStatus.Deleted).Build()
+            new IssueBuilder().WithId("arch1").WithStatus(IssueStatus.Promoted).Build(),
+            new IssueBuilder().WithId("del1").WithStatus(IssueStatus.Closed).Build()
         };
         _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns(issues);
 
@@ -529,23 +529,20 @@ public class FleeceInMemoryServiceTests
     }
 
     [Test]
-    public async Task DeleteIssueAsync_UpdatesCacheAndEnqueuesWrite()
+    public async Task DeleteIssueAsync_RemovesFromCacheAndEnqueuesWrite()
     {
         var original = new IssueBuilder().WithId("issue1").Build();
-        var deleted = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Deleted).Build();
 
         _fleeceService.GetAllAsync(Arg.Any<CancellationToken>()).Returns([original]);
         _fleeceService.DeleteAsync("issue1", Arg.Any<CancellationToken>()).Returns(true);
-        _fleeceService.GetByIdAsync("issue1", Arg.Any<CancellationToken>()).Returns(deleted);
 
         var result = await _sut.DeleteIssueAsync("issue1");
 
         result.Should().BeTrue();
 
-        // Cache should have the soft-deleted version
+        // Cache should no longer contain the hard-deleted issue
         var cached = await _sut.GetIssueAsync("issue1");
-        cached.Should().NotBeNull();
-        cached!.Status.Should().Be(IssueStatus.Deleted);
+        cached.Should().BeNull();
 
         // Verify write was enqueued
         await _serializationQueue.Received(1).EnqueueAsync(

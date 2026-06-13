@@ -1,4 +1,5 @@
 using System.Text;
+using Fleece.Core.EventSourcing.Services;
 using Fleece.Core.EventSourcing.Services.Legacy;
 using Fleece.Core.Models;
 using FluentAssertions;
@@ -23,6 +24,7 @@ public sealed class MigrationServiceTests
     }
 
     private string FleeceDir => Path.Combine(_basePath, ".fleece");
+    private string IssuesDir => Path.Combine(FleeceDir, "issues");
 
     private void WriteLegacyIssuesFile(string hash, params string[] jsonLines)
     {
@@ -44,9 +46,20 @@ public sealed class MigrationServiceTests
         {"id":"{{id}}","title":"{{title}}","titleLastUpdate":"{{lastUpdate}}","status":"{{status}}","statusLastUpdate":"{{lastUpdate}}","type":"task","typeLastUpdate":"{{lastUpdate}}","createdAt":"2026-03-01T10:00:00Z","lastUpdate":"{{lastUpdate}}"}
         """;
 
-    [Test]
-    public async Task IsMigrationNeeded_returns_false_on_already_migrated_repo()
+    /// <summary>Replays the v4 per-issue logs the migration produced.</summary>
+    private async Task<IReadOnlyDictionary<string, Issue>> LoadMigratedIssuesAsync()
     {
+        var store = new EventStore(_basePath, _fs);
+        var replay = new ReplayEngine(store);
+        var paths = await store.GetAllIssueLogPathsAsync();
+        return await replay.ReplayAsync(paths);
+    }
+
+    [Test]
+    public async Task IsMigrationNeeded_returns_false_when_only_a_legacy_snapshot_is_present()
+    {
+        // A durable `.fleece/issues.jsonl` snapshot is NOT auto-migrated; it is handled by the
+        // `fleece prime v4-migration` warning, so migration reports nothing to do.
         _fs.Directory.CreateDirectory(FleeceDir);
         _fs.File.WriteAllText(Path.Combine(FleeceDir, "issues.jsonl"), "");
 
@@ -61,7 +74,7 @@ public sealed class MigrationServiceTests
     }
 
     [Test]
-    public async Task Migrate_consolidates_two_files_into_single_snapshot()
+    public async Task Migrate_consolidates_two_files_into_per_issue_logs()
     {
         WriteLegacyIssuesFile("aaa", LegacyIssueJson("i1", "First"), LegacyIssueJson("i2", "Second"));
         WriteLegacyIssuesFile("bbb", LegacyIssueJson("i3", "Third"));
@@ -71,9 +84,26 @@ public sealed class MigrationServiceTests
         result.WasMigrationNeeded.Should().BeTrue();
         result.LegacyIssueFilesConsumed.Should().Be(2);
         result.IssuesWritten.Should().Be(3);
-        _fs.File.Exists(Path.Combine(FleeceDir, "issues.jsonl")).Should().BeTrue();
+
+        _fs.File.Exists(Path.Combine(IssuesDir, "i1.jsonl")).Should().BeTrue();
+        _fs.File.Exists(Path.Combine(IssuesDir, "i2.jsonl")).Should().BeTrue();
+        _fs.File.Exists(Path.Combine(IssuesDir, "i3.jsonl")).Should().BeTrue();
         _fs.File.Exists(Path.Combine(FleeceDir, "issues_aaa.jsonl")).Should().BeFalse();
         _fs.File.Exists(Path.Combine(FleeceDir, "issues_bbb.jsonl")).Should().BeFalse();
+
+        var issues = await LoadMigratedIssuesAsync();
+        issues.Keys.Should().BeEquivalentTo(["i1", "i2", "i3"]);
+    }
+
+    [Test]
+    public async Task Migrate_does_not_write_legacy_snapshot_or_changes_directory()
+    {
+        WriteLegacyIssuesFile("aaa", LegacyIssueJson("i1", "First"));
+
+        await _sut.MigrateAsync();
+
+        _fs.File.Exists(Path.Combine(FleeceDir, "issues.jsonl")).Should().BeFalse();
+        _fs.Directory.Exists(Path.Combine(FleeceDir, "changes")).Should().BeFalse();
     }
 
     [Test]
@@ -86,64 +116,48 @@ public sealed class MigrationServiceTests
         var result = await _sut.MigrateAsync();
 
         result.IssuesWritten.Should().Be(1);
-        var snapshotContent = await _fs.File.ReadAllTextAsync(Path.Combine(FleeceDir, "issues.jsonl"));
-        snapshotContent.Should().Contain("\"title\":\"New Title\"");
+        var issues = await LoadMigratedIssuesAsync();
+        issues["shared"].Title.Should().Be("New Title");
     }
 
     [Test]
-    public async Task Migrate_strips_per_property_timestamps_from_snapshot()
+    public async Task Migrate_strips_per_property_timestamps_from_logs()
     {
         WriteLegacyIssuesFile("aaa", LegacyIssueJson("i1", "Hello"));
 
         await _sut.MigrateAsync();
 
-        var snapshot = await _fs.File.ReadAllTextAsync(Path.Combine(FleeceDir, "issues.jsonl"));
-        snapshot.Should().NotContain("titleLastUpdate");
-        snapshot.Should().NotContain("statusLastUpdate");
-        snapshot.Should().NotContain("typeLastUpdate");
-        snapshot.Should().NotContain("ModifiedBy");
+        var log = await _fs.File.ReadAllTextAsync(Path.Combine(IssuesDir, "i1.jsonl"));
+        log.Should().NotContain("titleLastUpdate");
+        log.Should().NotContain("statusLastUpdate");
+        log.Should().NotContain("typeLastUpdate");
+        log.Should().NotContain("ModifiedBy");
     }
 
     [Test]
-    public async Task Migrate_unions_tombstones_from_multiple_files()
+    public async Task Migrate_does_not_write_tombstone_sidecar()
     {
         WriteLegacyIssuesFile("aaa", LegacyIssueJson("i1", "Stays"));
         WriteLegacyTombstonesFile("aaa",
             """{"issueId":"t1","originalTitle":"Gone A","cleanedAt":"2026-04-01T10:00:00Z","cleanedBy":"alice"}""");
-        WriteLegacyTombstonesFile("bbb",
-            """{"issueId":"t2","originalTitle":"Gone B","cleanedAt":"2026-04-02T10:00:00Z","cleanedBy":"bob"}""");
 
         var result = await _sut.MigrateAsync();
 
-        result.TombstonesWritten.Should().Be(2);
-        var content = await _fs.File.ReadAllTextAsync(Path.Combine(FleeceDir, "tombstones.jsonl"));
-        content.Should().Contain("t1").And.Contain("t2");
+        result.TombstonesWritten.Should().Be(0);
+        result.LegacyTombstoneFilesConsumed.Should().Be(1);
+        _fs.File.Exists(Path.Combine(FleeceDir, "tombstones.jsonl")).Should().BeFalse();
         _fs.File.Exists(Path.Combine(FleeceDir, "tombstones_aaa.jsonl")).Should().BeFalse();
-        _fs.File.Exists(Path.Combine(FleeceDir, "tombstones_bbb.jsonl")).Should().BeFalse();
     }
 
     [Test]
-    public async Task Migrate_creates_changes_directory()
-    {
-        WriteLegacyIssuesFile("aaa", LegacyIssueJson("i1", "Hello"));
-
-        await _sut.MigrateAsync();
-
-        _fs.Directory.Exists(Path.Combine(FleeceDir, "changes")).Should().BeTrue();
-    }
-
-    [Test]
-    public async Task Migrate_adds_gitignore_entries()
+    public async Task Migrate_adds_no_gitignore_entries()
     {
         WriteLegacyIssuesFile("aaa", LegacyIssueJson("i1", "Hello"));
 
         var result = await _sut.MigrateAsync();
 
-        result.GitignoreEntriesAdded.Should().BeEquivalentTo(
-            [".fleece/.active-change", ".fleece/.replay-cache"]);
-        var gitignore = await _fs.File.ReadAllTextAsync(Path.Combine(_basePath, ".gitignore"));
-        gitignore.Should().Contain(".fleece/.active-change");
-        gitignore.Should().Contain(".fleece/.replay-cache");
+        result.GitignoreEntriesAdded.Should().BeEmpty();
+        _fs.File.Exists(Path.Combine(_basePath, ".gitignore")).Should().BeFalse();
     }
 
     [Test]
@@ -168,26 +182,7 @@ public sealed class MigrationServiceTests
 
         result.WasMigrationNeeded.Should().BeTrue();
         result.IssuesWritten.Should().Be(0);
-        result.TombstonesWritten.Should().Be(1);
-    }
-
-    [Test]
-    public async Task Migrate_invalidates_stale_replay_cache()
-    {
-        // Simulate a stale replay cache written by a pre-migration read on the new
-        // event-sourced reader (empty snapshot at the current HEAD SHA). Without
-        // invalidation, the cache would shadow the freshly written snapshot.
-        _fs.Directory.CreateDirectory(FleeceDir);
-        var cachePath = Path.Combine(FleeceDir, ".replay-cache");
-        await _fs.File.WriteAllTextAsync(cachePath,
-            """{"headSha":"deadbeef","issues":[]}""" + "\n");
-
-        WriteLegacyIssuesFile("aaa", LegacyIssueJson("i1", "Hello"));
-
-        await _sut.MigrateAsync();
-
-        _fs.File.Exists(cachePath).Should().BeFalse(
-            "migration must invalidate any pre-existing replay cache so the fresh snapshot is read on the next query");
+        result.TombstonesWritten.Should().Be(0);
     }
 
     [Test]
@@ -202,10 +197,22 @@ public sealed class MigrationServiceTests
         result.WasMigrationNeeded.Should().BeTrue();
         result.IssuesWritten.Should().Be(1);
 
-        var snapshot = await _fs.File.ReadAllTextAsync(Path.Combine(FleeceDir, "issues.jsonl"));
-        snapshot.Should().Contain($"{KeyedTag.LinkedPrKey}=42",
+        var log = await _fs.File.ReadAllTextAsync(Path.Combine(IssuesDir, "i1.jsonl"));
+        log.Should().Contain($"{KeyedTag.LinkedPrKey}=42",
             "the LinkedPR scalar should be folded into Tags as a keyed-tag entry");
-        snapshot.Should().NotContain("\"linkedPR\":42",
+        log.Should().NotContain("\"linkedPR\":42",
             "the scalar LinkedPR field must be cleared after fold-in");
+    }
+
+    [Test]
+    public async Task Migrate_maps_removed_idea_type_onto_task()
+    {
+        WriteLegacyIssuesFile("aaa",
+            """{"id":"i1","title":"An idea","status":"open","type":"idea","createdAt":"2026-03-01T10:00:00Z","lastUpdate":"2026-03-01T10:00:00Z"}""");
+
+        await _sut.MigrateAsync();
+
+        var issues = await LoadMigratedIssuesAsync();
+        issues["i1"].Type.Should().Be(IssueType.Task);
     }
 }

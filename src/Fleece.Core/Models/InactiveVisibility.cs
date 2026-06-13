@@ -13,7 +13,7 @@ public enum InactiveVisibility
 
     /// <summary>
     /// Show terminal-status issues only if they have at least one descendant
-    /// (at any depth) with an active status (Draft, Open, Progress, Review).
+    /// (at any depth) with an active status (Open, Progress, Review).
     /// </summary>
     IfHasActiveDescendants,
 

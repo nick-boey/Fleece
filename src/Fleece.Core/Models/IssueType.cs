@@ -6,6 +6,5 @@ public enum IssueType
     Bug,
     Chore,
     Feature,
-    Idea,
     Verify
 }

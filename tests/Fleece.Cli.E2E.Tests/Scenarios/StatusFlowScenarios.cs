@@ -7,7 +7,6 @@ namespace Fleece.Cli.E2E.Tests.Scenarios;
 [Category("progress")]
 [Category("review")]
 [Category("complete")]
-[Category("archived")]
 [Category("closed")]
 public class StatusFlowScenarios : CliScenarioTestBase
 {
@@ -17,11 +16,12 @@ public class StatusFlowScenarios : CliScenarioTestBase
         return LoadIssues().Single(i => i.Title == title).Id;
     }
 
+    // Note: Promoted is a terminal status set only by `fleece promote` (GitHub escalation),
+    // so there is no `promoted` status-alias command.
     [TestCase("open", IssueStatus.Open)]
     [TestCase("progress", IssueStatus.Progress)]
     [TestCase("review", IssueStatus.Review)]
     [TestCase("complete", IssueStatus.Complete)]
-    [TestCase("archived", IssueStatus.Archived)]
     [TestCase("closed", IssueStatus.Closed)]
     public async Task Status_alias_updates_issue(string alias, IssueStatus expected)
     {

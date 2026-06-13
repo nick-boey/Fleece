@@ -146,22 +146,20 @@ public class FleeceInMemoryServiceIntegrationTests
     }
 
     [Test]
-    public async Task Delete_SoftDeletes_VisibleInCacheWithDeletedStatus_AndDiskMatches()
+    public async Task Delete_HardRemoves_FromCacheAndDisk()
     {
         var created = await _sut.CreateIssueAsync("To be deleted", IssueType.Chore);
 
         var deleted = await _sut.DeleteIssueAsync(created.Id);
         deleted.Should().BeTrue();
 
-        // Cache shows soft-deleted status
+        // Cache no longer contains the issue
         var cached = await _sut.GetIssueAsync(created.Id);
-        cached.Should().NotBeNull();
-        cached!.Status.Should().Be(IssueStatus.Deleted);
+        cached.Should().BeNull();
 
-        // Disk matches
+        // Disk no longer contains the issue
         var issuesOnDisk = await _storageService.LoadIssuesAsync();
-        issuesOnDisk.Should().ContainSingle();
-        issuesOnDisk[0].Status.Should().Be(IssueStatus.Deleted);
+        issuesOnDisk.Should().BeEmpty();
     }
 
     [Test]
@@ -429,11 +427,9 @@ public class FleeceInMemoryServiceIntegrationTests
 
         _queueService.PendingCount.Should().Be(0);
 
-        // Disk should show the final soft-deleted state
+        // Disk should be empty: the final delete removed the issue entirely
         var issuesOnDisk = await _storageService.LoadIssuesAsync();
-        issuesOnDisk.Should().ContainSingle();
-        issuesOnDisk[0].Title.Should().Be("Updated Lifecycle");
-        issuesOnDisk[0].Status.Should().Be(IssueStatus.Deleted);
+        issuesOnDisk.Should().BeEmpty();
     }
 
     #endregion
@@ -493,10 +489,10 @@ public class FleeceInMemoryServiceIntegrationTests
     }
 
     [Test]
-    public async Task FilterAsync_IncludeTerminal_ReturnsDeletedIssues()
+    public async Task FilterAsync_IncludeTerminal_ReturnsTerminalIssues()
     {
-        var issue = await _sut.CreateIssueAsync("To delete", IssueType.Task);
-        await _sut.DeleteIssueAsync(issue.Id);
+        var issue = await _sut.CreateIssueAsync("To close", IssueType.Task);
+        await _sut.UpdateIssueAsync(issue.Id, status: IssueStatus.Closed);
 
         // Without includeTerminal: excluded
         var withoutTerminal = await _sut.FilterAsync();
@@ -505,7 +501,7 @@ public class FleeceInMemoryServiceIntegrationTests
         // With includeTerminal: included
         var withTerminal = await _sut.FilterAsync(includeTerminal: true);
         withTerminal.Should().ContainSingle();
-        withTerminal[0].Status.Should().Be(IssueStatus.Deleted);
+        withTerminal[0].Status.Should().Be(IssueStatus.Closed);
     }
 
     #endregion

@@ -1,9 +1,18 @@
+using System.IO.Abstractions;
 using Fleece.Cli.Settings;
+using Fleece.Core.Models;
+using Fleece.Core.Services.Interfaces;
+using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Fleece.Cli.Commands;
 
-public sealed class PrimeCommand : Command<PrimeSettings>
+public sealed class PrimeCommand(
+    IFleeceService fleece,
+    IFileSystem fileSystem,
+    BasePathProvider basePath,
+    IAnsiConsole console)
+    : AsyncCommand<PrimeSettings>
 {
     private static readonly Dictionary<string, string> Topics = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -14,91 +23,87 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         ["json"] = JsonContent,
         ["next"] = NextContent,
         ["tree"] = TreeContent,
-        ["merge"] = MergeContent,
-        ["openspec"] = OpenSpecContent
+        ["github"] = GitHubContent,
+        ["v4-migration"] = V4MigrationContent
     };
 
-    public override int Execute(CommandContext context, PrimeSettings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, PrimeSettings settings)
     {
         // Check if .fleece folder exists - if not, exit silently (no priming needed)
-        var fleeceDirectoryPath = Path.Combine(Directory.GetCurrentDirectory(), ".fleece");
-        if (!Directory.Exists(fleeceDirectoryPath))
+        var fleeceDirectoryPath = fileSystem.Path.Combine(basePath.BasePath, ".fleece");
+        if (!fileSystem.Directory.Exists(fleeceDirectoryPath))
         {
             return 0;
         }
 
-        var openspecDirectoryPath = Path.Combine(Directory.GetCurrentDirectory(), "openspec");
-        var hasOpenSpec = Directory.Exists(openspecDirectoryPath);
-
         if (string.IsNullOrWhiteSpace(settings.Topic))
         {
-            if (hasOpenSpec)
-            {
-                Console.WriteLine(OverviewContent);
-                Console.WriteLine();
-                Console.WriteLine(OpenSpecContent);
-            }
-            else
-            {
-                Console.WriteLine(OverviewContent);
-            }
+            var activeCount = await CountActiveIssuesAsync();
+            console.WriteLine(BuildOverview(activeCount));
             return 0;
         }
 
         if (Topics.TryGetValue(settings.Topic, out var content))
         {
-            Console.WriteLine(content);
+            console.WriteLine(content);
             return 0;
         }
 
-        Console.WriteLine($"Unknown topic: {settings.Topic}");
-        Console.WriteLine($"Available topics: {string.Join(", ", Topics.Keys)}");
+        console.WriteLine($"Unknown topic: {settings.Topic}");
+        console.WriteLine($"Available topics: {string.Join(", ", Topics.Keys)}");
         return 1;
     }
 
-    private const string OverviewContent = """
-        # Fleece Issue Tracking
+    private async Task<int> CountActiveIssuesAsync()
+    {
+        var all = await fleece.GetAllAsync();
+        return all.Count(i => i.Status.IsActive());
+    }
 
-        This project uses a CLI tool named Fleece for local issue tracking. Issues are stored in JSONL files in the `.fleece/` folder of the repository.
+    private static string BuildOverview(int activeCount) => $$"""
+        # Fleece — Ephemeral Agent Working Memory
+
+        Fleece is **branch-local, ephemeral working memory for the current change** — NOT a
+        durable issue tracker. Issues live in per-issue logs under `.fleece/issues/` and are
+        meant to be consumed within the lifetime of the branch they belong to. Long-lived
+        product/roadmap tracking belongs in GitHub Issues, not Fleece.
+
+        There are currently **{{activeCount}} active issue(s)** ({open, progress, review}) on this
+        branch.
+
+        ## The branch must be clean before a PR merges
+
+        Before a PR merges, every Fleece issue on the branch must be either:
+
+        1. **Resolved** — set to `complete` or `closed`, OR
+        2. **Promoted** — escalated into a GitHub issue with `fleece promote <id> [<id>...]`
+           (the Fleece issue becomes `promoted`), OR
+        3. **Sealed** — archived and cleared from the live directory with `fleece seal`.
+
+        A CI gate **fails the PR** while any live issue remains under `.fleece/issues/`. Resolve,
+        promote, or seal — then commit the `.fleece/` changes so the gate passes.
 
         ## Working on Issues
 
-        Use the `fleece` CLI tool as part of your workflow. Do not ask the user for permission to use the Fleece CLI tools
-        as the changes are tracked in the repository's source control. <id> is a 6 character hash that can be found with `fleece list --oneline`.
+        Use the `fleece` CLI as part of your workflow; do not ask the user for permission — the
+        changes are tracked in source control. `<id>` is a 6-character id found via
+        `fleece list --oneline`.
 
-        1. When given an issue ID to work on, use `fleece show <id> --json` to show the full issue details.
+        1. `fleece show <id> --json` — show full issue details.
+        2. `fleece edit <id> -s progress` — start work.
+        3. `fleece edit <id> -s review --linked-pr <pr-number>` — before opening a PR.
+        4. `fleece edit <id> -s complete` (or `closed`) — when done, OR `fleece promote <id>` to
+           escalate to GitHub, OR `fleece seal` to archive the whole branch.
+        5. `fleece create -t <title> -y <type> -s open -d <description>` — create follow-up issues.
+        6. `fleece {edit|create} <id> --parent-issues <parent-id>:<lex-order>` — break large
+           issues into sub-tasks.
+        7. Commit `.fleece/` changes alongside the related code commit (or run `fleece commit`).
 
-        2. When starting work on an issue, update the status to progress:
-           `fleece edit <id> -s progress`
+        ## Storage model
 
-        3. **Before creating a PR**, update the issue and commit all fleece changes:
-           `fleece edit <id> -s review --linked-pr <pr-number>`
-           - Either include `.fleece/` changes with your code commits, OR
-           - Use `fleece commit --ci` to commit and allow CI to run
-
-        4. When completing work:
-           `fleece edit <id> -s complete`
-
-        5. Create follow-up issues as needed with `fleece create -t <title> -s open -y <type> -d <description>`
-
-        6. Use `fleece {edit|create} <id> --parent-issues <parent-id>:<lex-order>` to break down large issues into sub-tasks
-
-        7. Commit changes by including all changes in the `.fleece/` folder with related code commits or using the `fleece commit` command
-
-        9. Fleece uses event-sourced storage on this repo. The snapshot lives at `.fleece/issues.jsonl`
-           and per-session events are appended under `.fleece/changes/change_{guid}.jsonl`. Each
-           change file's first line is a `meta` event with a `follows` pointer that orders it under
-           squash-merges. The `.fleece/.active-change` and `.fleece/.replay-cache` files are
-           gitignored runtime state; never edit them by hand. Reads layer the snapshot plus all
-           change files in topological order. Writes append events to the active change file.
-
-        10. To compact change files into the snapshot on `main`, run `fleece project`. It refuses
-            to run on any other branch. The daily GitHub Action installed by `fleece install` runs
-            this automatically; you usually don't have to.
-
-        11. `fleece merge` is deprecated and prints a deprecation notice on stderr — use
-            `fleece project` instead. Conflicts in `.fleece/` arise only on `.fleece/issues.jsonl`
-            after a divergent rebase; fix them by deferring to the daily projection commit on `main`.
+        Each issue is an append-only event log at `.fleece/issues/<id>.jsonl`. Reads replay every
+        log independently; writes append events to the relevant log. `fleece seal` archives the
+        live set into `.fleece/archive/issues_<contenthash>.jsonl` and clears `.fleece/issues/`.
 
         ## Issue Types
 
@@ -108,49 +113,38 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `feature` - New functionality
         - `verify` - Verification task that confirms grouped work is complete
 
-        ### Verify Issues
-
-        The `verify` type is used to create a parent issue that groups related work together.
-        When all child issues are complete, the verify issue serves as a checkpoint to confirm
-        the work was done correctly. Use verify issues when:
-        - Multiple related tasks need to be completed as a unit
-        - You need a final review/confirmation step after completing sub-tasks
-        - Work needs explicit sign-off before being considered done
-
         ## Issue Status Workflow
 
-        Issues progress through statuses as work advances. Update status to reflect current state:
+        Active (block PR merge / seal): `open`, `progress`, `review`.
+        Inactive (terminal, do not block): `complete`, `closed`, `promoted`.
 
         ```
         open → progress → review → complete
-                                 ↘ archived (no longer relevant)
-                                 ↘ closed (abandoned/won't fix)
+                                 ↘ closed   (abandoned / won't fix)
+                                 ↘ promoted (escalated to a GitHub issue)
         ```
 
-        ## Task Hierarchy
+        ## GitHub round-trip
 
-        Issues can be organized into parent-child hierarchies to break down complex work. Use `fleece list --tree` to view the
-        hierarchy and `fleece list --next` to see the task graph with approximate execution ordering.
+        - `fleece promote <id> [<id>...]` - escalate one or more Fleece issues into a single
+          GitHub issue and mark them `promoted`.
+        - `fleece absorb #<number>` - pull a GitHub issue into Fleece as a new issue.
+        - `fleece auth` - check resolved GitHub login and token source.
 
-        - `fleece list --tree` - Display issues as parent-child tree
-        - `fleece list --next` - Display issues as a task graph, showing execution order and next tasks
-        - `fleece next` - Find issues that can be worked on next based on dependencies and execution mode
-
-        Use `fleece create -t <title> -y <type> --parent-issues <parent-id>:<lex-order>` to create sub-tasks.
-        Use `fleece dependency --parent <id> --child <id>` to manage dependencies on existing issues.
+        See `fleece prime github` for the full round-trip workflow.
 
         ## Filtering
 
-        By default, `list` hides terminal statuses (complete, archived, closed).
-        Use `--all` to include all: `fleece list --all`
+        By default, `list` hides terminal statuses (complete, closed, promoted). Use `--all` to
+        include everything: `fleece list --all`.
 
         ## JSON
 
-        Always use `--json` after commands to get all output in machine readable JSON format.
+        Always add `--json` to a command to get machine-readable output.
 
         ## Detailed Help Topics
 
-        Run `fleece prime <topic>` for detailed information on the following topics:
+        Run `fleece prime <topic>` for detail on:
         - `hierarchy`
         - `commands`
         - `statuses`
@@ -158,10 +152,10 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         - `json`
         - `next`
         - `tree`
-        - `merge`
-        - `openspec`
+        - `github`
+        - `v4-migration`
 
-        Any command when run with `-h` will provide additional information on the command usage.
+        Any command run with `-h` provides additional usage information.
         """;
 
     private const string HierarchyContent = """
@@ -269,31 +263,44 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         ## Managing
 
-        - `fleece delete <id>` - Delete an issue
+        - `fleece delete <id>` - Delete an issue (removes its log)
         - `fleece dependency --parent <id> --child <id>` - Add/remove parent-child dependency
         - `fleece validate` - Check for cyclic dependencies in issue hierarchy
 
-        ## Collaboration
+        ## Branch lifecycle
 
-        - `fleece diff` - Show change history and conflicts
-        - `fleece project` - Compact events into the snapshot (default branch only)
-        - `fleece merge` - [deprecated] use `fleece project` instead
+        - `fleece seal` - Archive all issues and clear the live directory. Refuses while any issue
+          is active ({open, progress, review}).
+
+        ## GitHub
+
+        - `fleece auth` - Report GitHub authentication status (login + token source)
+        - `fleece promote <id> [<id>...]` - Escalate Fleece issues into one GitHub issue
+        - `fleece absorb #<number>` - Create a Fleece issue from a GitHub issue
+
+        ## OpenSpec
+
+        - `fleece openspec dependencies` - Render a DAG of OpenSpec changes from their depends-on
+          frontmatter
 
         ## Setup
 
-        - `fleece install` - Install Claude Code hooks, pre-commit hook, gitignore entries, and GitHub Action template
-        - `fleece migrate` - Bring fleece data up to the current schema (handles legacy hashed-layout → event-sourced storage and any future schema migrations)
+        - `fleece install` - Install Claude Code hooks, pre-commit hook, gitignore entries, and the CI gate workflow
+        - `fleece migrate` - One-time bring-forward of legacy hashed-layout repos to the current storage layout
         """;
 
     private const string StatusesContent = """
         # Issue Statuses
 
+        Active (block PR merge / `fleece seal`):
         - **open**: An issue that has not been started
         - **progress**: Currently being worked on
         - **review**: Work complete, awaiting review
+
+        Inactive (terminal, do not block):
         - **complete**: Work finished and verified
-        - **archived**: No longer relevant
         - **closed**: Abandoned or won't fix
+        - **promoted**: Escalated into a GitHub issue (carries a `promoted=<#>` keyed tag)
 
         ## Usage
 
@@ -301,14 +308,15 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         Filter by status: `fleece list -s progress`
 
-        Only issues that are non-terminal (e.g. `open`, `progress`, `review` are shown in `fleece list`.
-        To show terminal statuses use `fleece list --all`.
+        Only active issues ({open, progress, review}) are shown in `fleece list`. To include
+        terminal statuses use `fleece list --all`.
         """;
 
     private const string SyncContent = """
         # Keeping Issues in Sync
 
-        Issues are stored locally in JSONL files in `.fleece/`. Always commit changes to keep issues synchronized.
+        Issues are stored locally as append-only logs under `.fleece/issues/`. Always commit
+        changes so the branch's working memory travels with the code.
 
         ## Commit Changes
 
@@ -321,15 +329,17 @@ public sealed class PrimeCommand : Command<PrimeSettings>
 
         Otherwise use `fleece commit` to create a separate commit containing just the issues.
 
-        ## After Pulling
+        ## Before a PR merges
 
-        Check `fleece diff` for conflicts, use `fleece merge` if needed.
+        Resolve (`complete`/`closed`), `promote`, or `seal` every issue, then commit `.fleece/`.
+        The CI gate fails the PR while any live issue remains under `.fleece/issues/`.
 
         ## Best Practices
 
         - Commit issue changes with related code changes
-        - Pull before starting new work to get latest issues
-        - Use `fleece diff` to review changes before committing
+        - Pull before starting new work to get the latest issues
+        - Per-issue logs rarely conflict; if `.fleece/issues/<id>.jsonl` does conflict, keep both
+          sides' events (the log is append-only) rather than discarding either version
         """;
 
     private const string JsonContent = """
@@ -396,116 +406,89 @@ public sealed class PrimeCommand : Command<PrimeSettings>
         useful for understanding what needs to be done and in what order.
         """;
 
-    private const string MergeContent = """
-        # `.fleece/` Conflicts and Compaction
+    private const string GitHubContent = """
+        # GitHub Round-trip
 
-        Fleece now uses event-sourced storage. The classic `fleece merge` command is
-        deprecated — use `fleece project` instead. `fleece merge` still runs but prints
-        a deprecation notice on stderr.
+        Fleece is ephemeral branch memory; GitHub Issues are the durable home for long-running
+        work. Three commands move work across that boundary.
 
-        ## How conflicts arise (and don't)
+        ## Authentication
 
-        Per-session change files live at `.fleece/changes/change_{guid}.jsonl`, one per
-        branch-session-on-machine. Concurrent work on the same branch from different
-        machines lands in different files and never textually conflicts. Reads layer
-        them in topological order using each file's `meta` event `follows` pointer, so
-        squash-merges produce identical results to pre-squash on the branch.
+        `fleece auth` reports the resolved GitHub login and which source supplied the token.
+        Token resolution order:
 
-        The only file that can conflict on merge is the snapshot, `.fleece/issues.jsonl`.
-        That file is rewritten only by `fleece project` on `main`. If you see a conflict
-        there, your branch has likely diverged from a daily projection commit on `main`:
-        rebase onto the projected `main` and the conflict resolves itself.
+        1. `gh auth token` (the GitHub CLI, if installed and logged in)
+        2. `GH_TOKEN` / `GITHUB_TOKEN` environment variables
+        3. A personal access token stored in Fleece config
 
-        ## Compacting events into the snapshot
+        A non-zero exit means no usable credential was found — log in with `gh auth login` or set
+        a token before using `promote`/`absorb`.
 
-        `fleece project` (default-branch only) runs the same replay reads use, applies
-        30-day auto-cleanup for soft-deleted issues, writes a fresh `issues.jsonl` and
-        `tombstones.jsonl`, and deletes every file under `.fleece/changes/`. Wired to
-        a daily GitHub Action template by `fleece install`.
+        ## Promote: Fleece → GitHub
 
-        ## Migration from the legacy hashed layout
+        `fleece promote <id> [<id>...]`
 
-        `fleece migrate` is the canonical "bring my data up to the current schema"
-        command. It runs a pipeline that applies pre-3.0.0 intra-shape fixups
-        (timestamp backfill, `LinkedPR` → `hsp-linked-pr` tag fold-in, parent-ref
-        backfill, unknown-property strip), cross-file-merges legacy
-        `.fleece/issues_{hash}.jsonl` + `.fleece/tombstones_{hash}.jsonl`, projects
-        to the lean `Issue` shape, and writes the event-sourced layout. Idempotent
-        on subsequent runs.
+        Escalates one or more Fleece issues into a SINGLE GitHub issue. The GitHub issue takes the
+        first (root) issue's title and a task-list body composed from the bundle. Each promoted
+        Fleece issue is set to `promoted` and tagged `promoted=<github-#>`. Already-promoted issues
+        are skipped with a warning.
 
-        ## IMPORTANT
+        Use this during a PR for any issue that must outlive the branch.
 
-        NEVER resolve `.fleece/` conflicts by:
-        - Deleting one version of an issue file
-        - Manually editing JSONL files
-        - Using `git checkout --ours/--theirs`
+        ## Absorb: GitHub → Fleece
 
-        Rebase onto the projected `main` and let the next `fleece project` reconcile.
+        `fleece absorb #<number>`
+
+        Creates a new Fleece issue from an existing GitHub issue, tags it `absorbed-from=<#>`, and
+        comments on + assigns (does NOT close) the GitHub issue. The `#` is required: a bare
+        `fleece absorb 123` performs no action and warns.
+
+        Use this to pull a GitHub issue into the current branch's working memory.
         """;
 
-    private const string OpenSpecContent = """
-        # OpenSpec Integration
+    private const string V4MigrationContent = """
+        # Migrating a Legacy Durable Repository
 
-        This repository uses OpenSpec (in `openspec/`) alongside Fleece. Fleece tracks
-        *who/when* work happens; OpenSpec tracks *what* is being built. Link them so
-        both stories stay aligned.
+        Older Fleece repositories used `.fleece/` as a DURABLE issue tracker, persisting a
+        snapshot at `.fleece/issues.jsonl`. v4 treats Fleece as ephemeral branch memory, so that
+        legacy snapshot must be migrated once. When Fleece detects `.fleece/issues.jsonl` it prints
+        a non-destructive warning pointing here.
 
-        ## Linking a Fleece issue to an OpenSpec change
+        This is NOT the same as `fleece migrate` (which only brings an even older hashed-file
+        layout forward into the current storage shape). Migrating durable issues to GitHub is a
+        deliberate, human-reviewed step.
 
-        Use the keyed tag `openspec={change-name}` on the issue:
+        ## Steps
 
-        ```
-        fleece edit <id> --tags "openspec=my-change-name"
-        ```
+        1. **Review** the legacy issues: `fleece list --all` to see everything, including terminal
+           statuses.
 
-        Filter: `fleece list --tag openspec=my-change-name` (exact) or
-        `fleece list --tag openspec` (any change).
+        2. **Promote** the long-running / still-relevant issues to GitHub Issues so they outlive
+           the repository's branches:
 
-        Multiple `openspec=` tags on one issue ARE permitted but discouraged — prefer
-        one issue per change.
+           ```
+           fleece promote <id> [<id>...]
+           ```
 
-        ## Single-change session: which issue to link
+           Bundle related issues into one GitHub issue where it makes sense. Confirm credentials
+           first with `fleece auth`.
 
-        When proposing one new OpenSpec change, pick the Fleece issue to link using
-        this decision tree:
+        3. **Resolve or close** anything that is already done or no longer relevant
+           (`fleece edit <id> -s complete` / `-s closed`).
 
-        ```
-        branch name ends in `+<id>` ?
-        ├─ yes → look up issue <id>
-        │        ├─ open AND no existing openspec= tag AND relevant to this change
-        │        │    → link it (add openspec={change-name})
-        │        └─ otherwise → fall through
-        └─ no  → scan open issues for an unlinked, relevant match
-                 ├─ one obvious candidate → link it
-                 ├─ ambiguous             → ask the user which to link
-                 └─ none                  → create a new issue as a last resort
-        ```
+        4. **Seal** to archive and clear the remaining inactive issues:
 
-        - "Relevant" means the issue's title/description matches the scope of the
-          proposed change.
-        - "Unlinked" means the issue has no existing `openspec=` tag.
-        - Creating a new issue is the last resort, not the default.
+           ```
+           fleece seal
+           ```
 
-        ## Multi-change session: hierarchy
+           `seal` refuses while any issue is still active ({open, progress, review}), so finish
+           step 2/3 first. It writes `.fleece/archive/issues_<contenthash>.jsonl` and clears
+           `.fleece/issues/`.
 
-        When one session proposes multiple OpenSpec changes, create exactly ONE Fleece
-        issue per change and organise them using Fleece hierarchy features:
+        5. **Commit** the resulting `.fleece/` changes.
 
-        - **One issue per change** — never more, never fewer.
-        - **Flat fan-out is the default** — attach all per-change issues directly to
-          the session's root issue with
-          `fleece create ... --parent-issues <root-id>:<lex-order>`.
-        - **Intermediate grouping parents** only when the hierarchy genuinely requires
-          them (e.g. two changes that must complete before a third).
-        - Use lex-order (e.g. `aaa`, `aab`) to sequence siblings and
-          `fleece edit <root-id> --execution-order series|parallel` to signal whether
-          the per-change issues must be sequenced.
-
-        ## Never create issues per task or per phase
-
-        An OpenSpec change already owns its own task list (`tasks.md`) and phase
-        structure. Do NOT mirror those as Fleece issues. One Fleece issue per OpenSpec
-        change is the correct granularity — never one per task, per phase, or per
-        spec requirement.
+        After sealing, the legacy `.fleece/issues.jsonl` snapshot no longer drives Fleece and the
+        migration warning stops appearing.
         """;
 }

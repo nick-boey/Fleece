@@ -21,14 +21,13 @@ public class ConfigScenarios : CliScenarioTestBase
         var exit = await RunAsync("config", "--list");
         exit.Should().Be(0);
         Console.Output.Should().Contain("identity");
-        Console.Output.Should().Contain("autoMerge");
         Console.Output.Should().Contain("syncBranch");
     }
 
     [Test]
     public async Task Config_global_set_writes_to_global_path()
     {
-        var exit = await RunAsync("config", "--global", "--set", "autoMerge=true");
+        var exit = await RunAsync("config", "--global", "--set", "syncBranch=fleece-sync");
         exit.Should().Be(0);
 
         var globalRoot = Path.Combine(

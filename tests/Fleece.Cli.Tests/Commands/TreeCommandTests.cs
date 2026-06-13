@@ -53,8 +53,6 @@ public class TreeCommandTests
         _fleeceService = Substitute.For<IFleeceService>();
         _fleeceService.GetSyncStatusesAsync(Arg.Any<CancellationToken>())
             .Returns(new Dictionary<string, SyncStatus>());
-        _fleeceService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
-            .Returns((false, string.Empty));
         _fleeceService.LoadIssuesWithDiagnosticsAsync(Arg.Any<CancellationToken>())
             .Returns(new LoadIssuesResult());
 
@@ -62,12 +60,10 @@ public class TreeCommandTests
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
             .Returns(new EffectiveSettings
             {
-                AutoMerge = false,
                 Identity = "testuser",
                 SyncBranch = null,
                 Sources = new SettingsSources
                 {
-                    AutoMerge = SettingSource.Default,
                     Identity = SettingSource.Default,
                     SyncBranch = SettingSource.Default
                 }

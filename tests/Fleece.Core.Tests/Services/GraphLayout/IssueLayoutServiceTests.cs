@@ -231,24 +231,24 @@ public class IssueLayoutServiceTests
     }
 
     [Test]
-    public void LayoutForTree_IdeaTypeRootIssue_IncludedInRoots()
+    public void LayoutForTree_FeatureTypeRootIssue_IncludedInRoots()
     {
-        var idea = new IssueBuilder().WithId("idea1").WithTitle("Idea Issue")
-            .WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
+        var feature = new IssueBuilder().WithId("feature1").WithTitle("Feature Issue")
+            .WithStatus(IssueStatus.Open).WithType(IssueType.Feature).Build();
         var task = new IssueBuilder().WithId("task1").WithTitle("Task Issue")
             .WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
 
-        var result = NewService().LayoutForTree(new[] { idea, task });
+        var result = NewService().LayoutForTree(new[] { feature, task });
         result.Nodes.Should().HaveCount(2);
-        result.Nodes.Select(n => n.Node.Id).Should().Contain(new[] { "idea1", "task1" });
+        result.Nodes.Select(n => n.Node.Id).Should().Contain(new[] { "feature1", "task1" });
     }
 
     [Test]
-    public void LayoutForTree_IncludesDraftByDefault()
+    public void LayoutForTree_IncludesReviewByDefault()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
-        var draft = new IssueBuilder().WithId("draft1").WithStatus(IssueStatus.Draft).Build();
-        var result = NewService().LayoutForTree(new[] { open, draft });
+        var review = new IssueBuilder().WithId("review1").WithStatus(IssueStatus.Review).Build();
+        var result = NewService().LayoutForTree(new[] { open, review });
         result.Nodes.Should().HaveCount(2);
     }
 
@@ -256,12 +256,12 @@ public class IssueLayoutServiceTests
     public void LayoutForTree_IncludeTerminal_IncludesTerminalStatuses()
     {
         var open = new IssueBuilder().WithId("open1").WithStatus(IssueStatus.Open).Build();
-        var draft = new IssueBuilder().WithId("draft1").WithStatus(IssueStatus.Draft).Build();
+        var review = new IssueBuilder().WithId("review1").WithStatus(IssueStatus.Review).Build();
         var complete = new IssueBuilder().WithId("complete1").WithStatus(IssueStatus.Complete).Build();
         var closed = new IssueBuilder().WithId("closed1").WithStatus(IssueStatus.Closed).Build();
 
         var result = NewService().LayoutForTree(
-            new[] { open, draft, complete, closed }, visibility: InactiveVisibility.Always);
+            new[] { open, review, complete, closed }, visibility: InactiveVisibility.Always);
         result.Nodes.Should().HaveCount(4);
     }
 

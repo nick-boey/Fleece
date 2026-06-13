@@ -193,30 +193,9 @@ public interface IFleeceService
     #region Maintenance
 
     /// <summary>
-    /// Cleans deleted issues, creating tombstones and optionally stripping dangling references.
-    /// </summary>
-    Task<CleanResult> CleanAsync(
-        bool includeComplete = false,
-        bool includeClosed = false,
-        bool includeArchived = false,
-        bool stripReferences = true,
-        bool dryRun = false,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Merges duplicate issue files, resolving conflicts. Returns the number of duplicates found.
-    /// </summary>
-    Task<int> MergeAsync(bool dryRun = false, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Validates that there are no cyclic dependencies in the issue graph.
     /// </summary>
     Task<DependencyValidationResult> ValidateDependenciesAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Checks whether there are multiple unmerged issue files.
-    /// </summary>
-    Task<(bool HasMultiple, string Message)> HasMultipleUnmergedFilesAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the hierarchy of an issue, optionally including parents and/or children.

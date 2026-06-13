@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>Fleece.GitHub</PackageId>
+    <Description>GitHub integration for Fleece issue tracking (OctoKit-backed)</Description>
+    <Authors>Fleece Contributors</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Octokit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fleece.Core\Fleece.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Fleece.Cli.Tests" />
+    <InternalsVisibleTo Include="Fleece.Cli.E2E.Tests" />
+  </ItemGroup>
+
+</Project>

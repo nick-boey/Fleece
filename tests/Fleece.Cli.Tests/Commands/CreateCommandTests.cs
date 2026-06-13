@@ -25,8 +25,6 @@ public class CreateCommandTests
     public void SetUp()
     {
         _fleeceService = Substitute.For<IFleeceService>();
-        _fleeceService.HasMultipleUnmergedFilesAsync(Arg.Any<CancellationToken>())
-            .Returns((false, string.Empty));
 
         _settingsService = Substitute.For<ISettingsService>();
         _gitConfigService = Substitute.For<IGitConfigService>();

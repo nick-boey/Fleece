@@ -74,7 +74,6 @@ public sealed class ConfigCommand(ISettingsService settingsService, IAnsiConsole
             var effective = await settingsService.GetEffectiveSettingsAsync();
             var (value, source) = settings.Get.ToLowerInvariant() switch
             {
-                "automerge" => (effective.AutoMerge.ToString().ToLowerInvariant(), effective.Sources.AutoMerge),
                 "identity" => (effective.Identity ?? "", effective.Sources.Identity),
                 "syncbranch" => (effective.SyncBranch ?? "", effective.Sources.SyncBranch),
                 _ => (null, SettingSource.Default)
@@ -82,7 +81,7 @@ public sealed class ConfigCommand(ISettingsService settingsService, IAnsiConsole
 
             if (value is null)
             {
-                console.MarkupLine($"[red]Error:[/] Unknown setting: {settings.Get}. Valid settings are: autoMerge, identity, syncBranch");
+                console.MarkupLine($"[red]Error:[/] Unknown setting: {settings.Get}. Valid settings are: identity, syncBranch");
                 return 1;
             }
 
@@ -109,7 +108,6 @@ public sealed class ConfigCommand(ISettingsService settingsService, IAnsiConsole
         console.MarkupLine("  fleece config --global --path     Show global settings file path");
         console.MarkupLine("");
         console.MarkupLine("[bold]Available settings:[/]");
-        console.MarkupLine("  autoMerge   Auto-merge issues before operations (true/false)");
         console.MarkupLine("  identity    User identity for ModifiedBy fields");
         console.MarkupLine("  syncBranch  Branch for issue synchronization");
 
@@ -122,11 +120,6 @@ public sealed class ConfigCommand(ISettingsService settingsService, IAnsiConsole
         table.AddColumn("Setting");
         table.AddColumn("Value");
         table.AddColumn("Source");
-
-        table.AddRow(
-            "autoMerge",
-            effective.AutoMerge.ToString().ToLowerInvariant(),
-            FormatSource(effective.Sources.AutoMerge));
 
         table.AddRow(
             "identity",
@@ -145,7 +138,6 @@ public sealed class ConfigCommand(ISettingsService settingsService, IAnsiConsole
     {
         var output = new
         {
-            autoMerge = new { value = effective.AutoMerge, source = effective.Sources.AutoMerge.ToString().ToLowerInvariant() },
             identity = new { value = effective.Identity, source = effective.Sources.Identity.ToString().ToLowerInvariant() },
             syncBranch = new { value = effective.SyncBranch, source = effective.Sources.SyncBranch.ToString().ToLowerInvariant() }
         };

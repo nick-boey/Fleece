@@ -18,11 +18,11 @@ public sealed class ListSettings : FleeceCommandSettings
     public bool ChildrenOnly { get; init; }
 
     [CommandOption("-s|--status <STATUS>")]
-    [Description("Filter by status: draft, open, progress, review, complete, archived, closed")]
+    [Description("Filter by status: open, progress, review, complete, promoted, closed")]
     public string? Status { get; init; }
 
     [CommandOption("-y|--type <TYPE>")]
-    [Description("Filter by type: task, bug, chore, feature, idea, verify")]
+    [Description("Filter by type: task, bug, chore, feature, verify")]
     public string? Type { get; init; }
 
     [CommandOption("-p|--priority <PRIORITY>")]

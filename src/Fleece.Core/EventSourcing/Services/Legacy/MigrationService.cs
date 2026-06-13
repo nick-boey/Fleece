@@ -1,5 +1,6 @@
 using System.IO.Abstractions;
 using System.Text.Json;
+using Fleece.Core.EventSourcing.Events;
 using Fleece.Core.EventSourcing.Services.Interfaces;
 using Fleece.Core.FunctionalCore.Legacy;
 using Fleece.Core.Models;
@@ -12,69 +13,44 @@ namespace Fleece.Core.EventSourcing.Services.Legacy;
 /// Default <see cref="IMigrationService"/>. Reads legacy hashed files using
 /// the <see cref="LegacyIssue"/> shape, applies pre-3.0.0 intra-shape fixups via
 /// <see cref="LegacyMigration.Migrate"/>, runs <see cref="LegacyMerging"/> to produce
-/// a single consolidated set, projects each <see cref="LegacyIssue"/> into the
-/// lean <see cref="Issue"/> shape, writes the new snapshot/tombstones, deletes the
-/// legacy files, ensures <c>.fleece/changes/</c> exists, and adds the runtime
-/// gitignore entries.
+/// a single consolidated set, projects each <see cref="LegacyIssue"/> into the lean
+/// <see cref="Issue"/> shape, and writes the v4 event-sourced layout: one append-only
+/// per-issue log at <c>.fleece/issues/&lt;id&gt;.jsonl</c>. The legacy hashed files are then
+/// deleted. v4 keeps no tombstone sidecar, no <c>.fleece/changes/</c> directory, and no
+/// gitignored pointer/cache files, so none are written.
 /// </summary>
 public sealed class MigrationService : IMigrationService
 {
     private const string FleeceDirectory = ".fleece";
-    private const string ChangesDirectory = "changes";
-    private const string IssuesSnapshotFileName = "issues.jsonl";
-    private const string TombstonesSnapshotFileName = "tombstones.jsonl";
     private const string LegacyIssuesPattern = "issues_*.jsonl";
     private const string LegacyTombstonesPattern = "tombstones_*.jsonl";
 
-    private static readonly string[] GitignoreEntries =
-    [
-        ".fleece/.active-change",
-        ".fleece/.replay-cache",
-    ];
-
     private readonly string _basePath;
     private readonly IFileSystem _fileSystem;
-    private readonly IReplayCache _replayCache;
+    private readonly IEventStore _eventStore;
 
-    public MigrationService(string basePath, IFileSystem? fileSystem = null, IReplayCache? replayCache = null)
+    public MigrationService(string basePath, IFileSystem? fileSystem = null)
     {
         _basePath = basePath;
         _fileSystem = fileSystem ?? new Testably.Abstractions.RealFileSystem();
-        _replayCache = replayCache ?? new ReplayCache(_basePath, _fileSystem);
+        _eventStore = new EventStore(basePath, _fileSystem);
     }
 
     private string FleeceDirectoryPath => _fileSystem.Path.Combine(_basePath, FleeceDirectory);
-    private string ChangesDirectoryPath => _fileSystem.Path.Combine(FleeceDirectoryPath, ChangesDirectory);
-    private string SnapshotPath => _fileSystem.Path.Combine(FleeceDirectoryPath, IssuesSnapshotFileName);
-    private string TombstonesPath => _fileSystem.Path.Combine(FleeceDirectoryPath, TombstonesSnapshotFileName);
-    private string GitignorePath => _fileSystem.Path.Combine(_basePath, ".gitignore");
 
-    public async Task<bool> IsMigrationNeededAsync(CancellationToken cancellationToken = default)
+    public Task<bool> IsMigrationNeededAsync(CancellationToken cancellationToken = default)
     {
         if (!_fileSystem.Directory.Exists(FleeceDirectoryPath))
         {
-            return false;
+            return Task.FromResult(false);
         }
 
+        // v4 migration is the one-time bring-forward of pre-event-sourced hashed files only.
+        // A legacy durable `.fleece/issues.jsonl` snapshot is NOT auto-migrated — it triggers a
+        // `fleece prime v4-migration` warning instead (see AutoMigrateInterceptor).
         var legacyIssues = _fileSystem.Directory.GetFiles(FleeceDirectoryPath, LegacyIssuesPattern);
         var legacyTombs = _fileSystem.Directory.GetFiles(FleeceDirectoryPath, LegacyTombstonesPattern);
-        if (legacyIssues.Length > 0 || legacyTombs.Length > 0)
-        {
-            return true;
-        }
-
-        return await IsSnapshotNormalizationNeededAsync(cancellationToken);
-    }
-
-    private async Task<bool> IsSnapshotNormalizationNeededAsync(CancellationToken cancellationToken)
-    {
-        if (!_fileSystem.File.Exists(SnapshotPath))
-        {
-            return false;
-        }
-
-        var content = await _fileSystem.File.ReadAllTextAsync(SnapshotPath, cancellationToken);
-        return content.Contains("\"sortOrder\":");
+        return Task.FromResult(legacyIssues.Length > 0 || legacyTombs.Length > 0);
     }
 
     public async Task<MigrationResult> MigrateAsync(
@@ -101,109 +77,56 @@ public sealed class MigrationService : IMigrationService
         var legacyTombFiles = _fileSystem.Directory.GetFiles(FleeceDirectoryPath, LegacyTombstonesPattern);
         Array.Sort(legacyTombFiles, StringComparer.Ordinal);
 
-        int issuesWritten = 0;
-        int tombstonesWritten = 0;
-
-        if (legacyIssueFiles.Length > 0 || legacyTombFiles.Length > 0)
+        // 1. Read legacy issues per file, applying pre-3.0.0 intra-shape fixups
+        //    (timestamp backfill, LinkedPR → Tags fold, parent-ref LastUpdated backfill,
+        //    unknown-property strip) before any cross-file merging.
+        var fileGroups = new List<(string, IReadOnlyList<LegacyIssue>)>();
+        foreach (var path in legacyIssueFiles)
         {
-            // Legacy file migration path: read hashed files, merge, project to lean shape.
-
-            // 1. Read legacy issues per file, applying pre-3.0.0 intra-shape fixups
-            //    (timestamp backfill, LinkedPR → Tags fold, parent-ref LastUpdated backfill,
-            //    unknown-property strip) before any cross-file merging.
-            var fileGroups = new List<(string, IReadOnlyList<LegacyIssue>)>();
-            foreach (var path in legacyIssueFiles)
-            {
-                var issues = await ReadLegacyIssuesAsync(path, cancellationToken);
-                var fixedUp = LegacyMigration.Migrate(issues);
-                fileGroups.Add((path, fixedUp));
-            }
-
-            // 2. Merge cross-file duplicates with the legacy property-level merger.
-            var plan = LegacyMerging.Plan(fileGroups, mergedBy);
-            var consolidatedLegacy = LegacyMerging.Apply(plan);
-
-            // 3. Project legacy → lean Issue.
-            var leanIssues = consolidatedLegacy.Select(ToLeanIssue).ToList();
-
-            // 4. Read & union tombstones.
-            var tombstones = new Dictionary<string, Tombstone>(StringComparer.Ordinal);
-            foreach (var path in legacyTombFiles)
-            {
-                foreach (var t in await ReadLegacyTombstonesAsync(path, cancellationToken))
-                {
-                    if (!tombstones.ContainsKey(t.IssueId))
-                    {
-                        tombstones[t.IssueId] = t;
-                    }
-                }
-            }
-
-            // 5. Write the new snapshot & tombstones. Invalidate any stale replay cache
-            //    so a pre-migration empty cache at the current HEAD SHA doesn't shadow
-            //    the freshly written snapshot on the next read.
-            await WriteSnapshotAsync(leanIssues, cancellationToken);
-            await WriteTombstonesAsync(tombstones.Values.OrderBy(t => t.IssueId, StringComparer.Ordinal).ToList(), cancellationToken);
-            await _replayCache.InvalidateAsync(cancellationToken);
-
-            issuesWritten = leanIssues.Count;
-            tombstonesWritten = tombstones.Count;
-
-            // 6. Delete legacy files.
-            foreach (var path in legacyIssueFiles)
-            {
-                _fileSystem.File.Delete(path);
-            }
-            foreach (var path in legacyTombFiles)
-            {
-                _fileSystem.File.Delete(path);
-            }
-        }
-        else
-        {
-            // Snapshot-only normalization: rename legacy "sortOrder" → "lexOrder" in-place.
-            await NormalizeSnapshotAsync(cancellationToken);
+            var issues = await ReadLegacyIssuesAsync(path, cancellationToken);
+            var fixedUp = LegacyMigration.Migrate(issues);
+            fileGroups.Add((path, fixedUp));
         }
 
-        // Ensure changes directory exists.
-        if (!_fileSystem.Directory.Exists(ChangesDirectoryPath))
+        // 2. Merge cross-file duplicates with the legacy property-level merger.
+        var plan = LegacyMerging.Plan(fileGroups, mergedBy);
+        var consolidatedLegacy = LegacyMerging.Apply(plan);
+
+        // 3. Project legacy → lean Issue.
+        var leanIssues = consolidatedLegacy.Select(ToLeanIssue).ToList();
+
+        // 4. Write one append-only per-issue log per issue (v4 layout). A single `create`
+        //    event captures the issue's whole state; later edits append on the same branch.
+        if (leanIssues.Count > 0)
         {
-            _fileSystem.Directory.CreateDirectory(ChangesDirectoryPath);
+            var events = leanIssues
+                .OrderBy(i => i.Id, StringComparer.Ordinal)
+                .Select(i => BuildCreateEvent(i, mergedBy))
+                .Cast<IssueEvent>()
+                .ToList();
+            await _eventStore.AppendEventsAsync(events, cancellationToken);
         }
 
-        // Add gitignore entries.
-        var gitignoreAdded = await EnsureGitignoreEntriesAsync(cancellationToken);
+        // 5. Delete legacy files. v4 keeps no tombstone sidecar, so tombstone files are simply
+        //    consumed (the issues they referenced were already absent from the live set).
+        foreach (var path in legacyIssueFiles)
+        {
+            _fileSystem.File.Delete(path);
+        }
+        foreach (var path in legacyTombFiles)
+        {
+            _fileSystem.File.Delete(path);
+        }
 
         return new MigrationResult
         {
             WasMigrationNeeded = true,
             LegacyIssueFilesConsumed = legacyIssueFiles.Length,
             LegacyTombstoneFilesConsumed = legacyTombFiles.Length,
-            IssuesWritten = issuesWritten,
-            TombstonesWritten = tombstonesWritten,
-            GitignoreEntriesAdded = gitignoreAdded,
+            IssuesWritten = leanIssues.Count,
+            TombstonesWritten = 0,
+            GitignoreEntriesAdded = [],
         };
-    }
-
-    private async Task NormalizeSnapshotAsync(CancellationToken cancellationToken)
-    {
-        if (!_fileSystem.File.Exists(SnapshotPath))
-        {
-            return;
-        }
-
-        var content = await _fileSystem.File.ReadAllTextAsync(SnapshotPath, cancellationToken);
-        if (!content.Contains("\"sortOrder\":"))
-        {
-            return;
-        }
-
-        // "sortOrder": only appears as a JSON property name in parentIssues entries.
-        // String values would be escaped as \"sortOrder\": in the raw text, so this
-        // replacement is safe to perform on the raw content.
-        var normalized = content.Replace("\"sortOrder\":", "\"lexOrder\":");
-        await _fileSystem.File.WriteAllTextAsync(SnapshotPath, normalized, cancellationToken);
-        await _replayCache.InvalidateAsync(cancellationToken);
     }
 
     private async Task<IReadOnlyList<LegacyIssue>> ReadLegacyIssuesAsync(string path, CancellationToken cancellationToken)
@@ -226,74 +149,17 @@ public sealed class MigrationService : IMigrationService
         return result;
     }
 
-    private async Task<IReadOnlyList<Tombstone>> ReadLegacyTombstonesAsync(string path, CancellationToken cancellationToken)
+    private static CreateEvent BuildCreateEvent(Issue issue, string? by)
     {
-        var content = await _fileSystem.File.ReadAllTextAsync(path, cancellationToken);
-        var result = new List<Tombstone>();
-        foreach (var rawLine in content.Split('\n'))
+        var json = JsonSerializer.Serialize(issue, EventSourcingJsonContext.Default.Issue);
+        var data = JsonDocument.Parse(json).RootElement.Clone();
+        return new CreateEvent
         {
-            var line = rawLine.TrimEnd('\r');
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-            var t = JsonSerializer.Deserialize(line, FleeceLegacyJsonContext.Default.Tombstone);
-            if (t is not null)
-            {
-                result.Add(t);
-            }
-        }
-        return result;
-    }
-
-    private async Task WriteSnapshotAsync(IReadOnlyList<Issue> issues, CancellationToken cancellationToken)
-    {
-        var sorted = issues.OrderBy(i => i.Id, StringComparer.Ordinal);
-        var lines = sorted.Select(i => JsonSerializer.Serialize(i, EventSourcingJsonContext.Default.Issue)).ToList();
-        var body = lines.Count == 0 ? string.Empty : string.Join('\n', lines) + "\n";
-        await _fileSystem.File.WriteAllTextAsync(SnapshotPath, body, cancellationToken);
-    }
-
-    private async Task WriteTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken)
-    {
-        var lines = tombstones.Select(t => JsonSerializer.Serialize(t, EventSourcingJsonContext.Default.Tombstone)).ToList();
-        var body = lines.Count == 0 ? string.Empty : string.Join('\n', lines) + "\n";
-        await _fileSystem.File.WriteAllTextAsync(TombstonesPath, body, cancellationToken);
-    }
-
-    private async Task<IReadOnlyList<string>> EnsureGitignoreEntriesAsync(CancellationToken cancellationToken)
-    {
-        var existing = _fileSystem.File.Exists(GitignorePath)
-            ? await _fileSystem.File.ReadAllTextAsync(GitignorePath, cancellationToken)
-            : string.Empty;
-
-        var lines = existing.Split('\n').Select(l => l.TrimEnd('\r').Trim()).ToList();
-        var added = new List<string>();
-        foreach (var entry in GitignoreEntries)
-        {
-            if (!lines.Any(l => string.Equals(l, entry, StringComparison.Ordinal)))
-            {
-                added.Add(entry);
-            }
-        }
-        if (added.Count == 0)
-        {
-            return [];
-        }
-
-        var sb = new System.Text.StringBuilder();
-        sb.Append(existing.TrimEnd('\n'));
-        if (sb.Length > 0)
-        {
-            sb.Append('\n');
-        }
-        foreach (var entry in added)
-        {
-            sb.Append(entry);
-            sb.Append('\n');
-        }
-        await _fileSystem.File.WriteAllTextAsync(GitignorePath, sb.ToString(), cancellationToken);
-        return added;
+            At = issue.CreatedAt,
+            By = by,
+            IssueId = issue.Id,
+            Data = data,
+        };
     }
 
     private static Issue ToLeanIssue(LegacyIssue legacy) => new()

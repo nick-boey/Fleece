@@ -36,8 +36,7 @@ public static class TableFormatter
                 IssueStatus.Progress => "blue",
                 IssueStatus.Review => "purple",
                 IssueStatus.Complete => "green",
-                IssueStatus.Draft => "dim",
-                IssueStatus.Archived => "dim",
+                IssueStatus.Promoted => "dim",
                 IssueStatus.Closed => "dim",
                 _ => "white"
             };

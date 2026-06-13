@@ -18,11 +18,11 @@ public sealed class EditSettings : FleeceCommandSettings
     public string? Description { get; init; }
 
     [CommandOption("-s|--status <STATUS>")]
-    [Description("New status: draft, open, progress, review, complete, archived, closed")]
+    [Description("New status: open, progress, review, complete, promoted, closed")]
     public string? Status { get; init; }
 
     [CommandOption("-y|--type <TYPE>")]
-    [Description("New type: task, bug, chore, feature, idea, verify")]
+    [Description("New type: task, bug, chore, feature, verify")]
     public string? Type { get; init; }
 
     [CommandOption("-p|--priority <PRIORITY>")]

@@ -18,13 +18,6 @@ public sealed class ListCommand(
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ListSettings settings)
     {
-        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
-        if (hasMultiple)
-        {
-            console.MarkupLine($"[red]Error:[/] {message}");
-            return 1;
-        }
-
         var isTree = settings.Tree || !string.IsNullOrWhiteSpace(settings.TreeRoot);
 
         if (isTree && settings.Next)
@@ -89,7 +82,7 @@ public sealed class ListCommand(
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out var parsedStatus))
             {
-                console.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: draft, open, progress, review, complete, archived, closed");
+                console.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, progress, review, complete, promoted, closed");
                 return 1;
             }
             status = parsedStatus;
@@ -100,7 +93,7 @@ public sealed class ListCommand(
         {
             if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var parsedType))
             {
-                console.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea, verify");
+                console.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, verify");
                 return 1;
             }
             type = parsedType;

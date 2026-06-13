@@ -8,10 +8,14 @@ using Spectre.Console.Cli;
 namespace Fleece.Cli.Commands;
 
 /// <summary>
-/// Bring fleece data up to the current schema. Today this converts the legacy hashed
-/// <c>.fleece/issues_*.jsonl</c> + <c>.fleece/tombstones_*.jsonl</c> layout into the
-/// event-sourced layout via <see cref="IMigrationService"/>. Future schema migrations
-/// extend the same pipeline rather than introducing new commands.
+/// One-time bring-forward of a legacy hashed-file repository into the current Fleece
+/// storage layout. Converts the legacy hashed <c>.fleece/issues_*.jsonl</c> +
+/// <c>.fleece/tombstones_*.jsonl</c> files via <see cref="IMigrationService"/>. All
+/// actively maintained repositories are already on the current layout, so this is a
+/// no-op there. It is idempotent: a second run reports "no migration needed".
+///
+/// This is NOT the path for moving long-running issues to GitHub Issues — use
+/// <c>fleece prime v4-migration</c> and <c>fleece promote</c> for that.
 /// </summary>
 public sealed class MigrateCommand(
     IMigrationService migration,

@@ -1,12 +1,12 @@
 namespace Fleece.Core.EventSourcing.Services.Interfaces;
 
 /// <summary>
-/// Schema-migration service for <c>fleece migrate</c>. Today it migrates the legacy
-/// hashed file layout (<c>.fleece/issues_{hash}.jsonl</c> +
-/// <c>.fleece/tombstones_{hash}.jsonl</c>) into the event-sourced layout
-/// (<c>.fleece/issues.jsonl</c> + <c>.fleece/tombstones.jsonl</c> +
-/// <c>.fleece/changes/</c>). Future schema migrations on the lean shape extend this
-/// pipeline rather than introducing new commands.
+/// Schema-migration service for <c>fleece migrate</c>. It is the one-time bring-forward of the
+/// pre-event-sourced legacy hashed file layout (<c>.fleece/issues_{hash}.jsonl</c> +
+/// <c>.fleece/tombstones_{hash}.jsonl</c>) into the v4 event-sourced layout: one append-only
+/// per-issue log per issue at <c>.fleece/issues/&lt;id&gt;.jsonl</c>. v4 keeps no tombstone sidecar
+/// and no <c>.fleece/changes/</c> directory. A legacy durable <c>.fleece/issues.jsonl</c> snapshot
+/// is NOT auto-migrated here — it routes the user to <c>fleece prime v4-migration</c> instead.
 /// </summary>
 public interface IMigrationService
 {

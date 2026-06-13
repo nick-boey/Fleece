@@ -12,13 +12,6 @@ public sealed class ValidateCommand(IFleeceService fleeceService, IAnsiConsole c
 {
     public override async Task<int> ExecuteAsync(CommandContext context, ValidateSettings settings)
     {
-        var (hasMultiple, message) = await fleeceService.HasMultipleUnmergedFilesAsync();
-        if (hasMultiple)
-        {
-            console.MarkupLine($"[red]Error:[/] {message}");
-            return 1;
-        }
-
         if (!settings.Json)
         {
             console.MarkupLine("[dim]Validating issue dependencies...[/]");

@@ -7,9 +7,8 @@ namespace Fleece.Core.EventSourcing;
 
 /// <summary>
 /// Source-generated JSON context for the event-sourced persistence layer.
-/// Covers the lean <see cref="Issue"/> projection shape, the <see cref="IssueEvent"/>
-/// hierarchy (polymorphic via the <c>kind</c> discriminator), and the active-change
-/// pointer file.
+/// Covers the lean <see cref="Issue"/> projection shape and the <see cref="IssueEvent"/>
+/// hierarchy (polymorphic via the <c>kind</c> discriminator) appended to per-issue logs.
 /// </summary>
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
@@ -24,13 +23,9 @@ namespace Fleece.Core.EventSourcing;
 [JsonSerializable(typeof(Tombstone))]
 [JsonSerializable(typeof(IReadOnlyList<Tombstone>))]
 [JsonSerializable(typeof(IssueEvent))]
-[JsonSerializable(typeof(MetaEvent))]
 [JsonSerializable(typeof(CreateEvent))]
 [JsonSerializable(typeof(SetEvent))]
 [JsonSerializable(typeof(AddEvent))]
 [JsonSerializable(typeof(RemoveEvent))]
-[JsonSerializable(typeof(HardDeleteEvent))]
 [JsonSerializable(typeof(JsonElement))]
-[JsonSerializable(typeof(ActiveChangePointer))]
-[JsonSerializable(typeof(ReplayCacheFile))]
 public partial class EventSourcingJsonContext : JsonSerializerContext;

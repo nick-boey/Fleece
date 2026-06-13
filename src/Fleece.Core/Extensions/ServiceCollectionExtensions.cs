@@ -33,62 +33,27 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISchemaValidator, SchemaValidator>();
         services.AddSingleton<IIdGenerator, GuidIdGenerator>();
 
-        // Event-sourced storage stack (snapshot + change files + replay).
-        services.AddSingleton<ISnapshotStore>(sp =>
-            new SnapshotStore(basePath, sp.GetRequiredService<IFileSystem>()));
-        services.AddSingleton<IEventGitContext>(sp =>
-        {
-            var git = sp.GetRequiredService<IGitService>();
-            return git.IsGitRepository() ? new GitEventContext(git) : NullEventGitContext.Instance;
-        });
+        // Event-sourced storage stack: per-issue append-only logs in .fleece/issues/.
         services.AddSingleton<IEventStore>(sp =>
-            new EventStore(
-                basePath,
-                sp.GetRequiredService<IFileSystem>(),
-                guidFactory: null,
-                gitContext: sp.GetRequiredService<IEventGitContext>()));
-        services.AddSingleton<IWarningSink>(ConsoleWarningSink.Instance);
+            new EventStore(basePath, sp.GetRequiredService<IFileSystem>()));
         services.AddSingleton<IReplayEngine>(sp =>
-            new ReplayEngine(
-                sp.GetRequiredService<IEventStore>(),
-                sp.GetRequiredService<IWarningSink>()));
-        services.AddSingleton<ILinkService>(sp =>
-            new LinkService(
-                basePath,
-                sp.GetRequiredService<IFileSystem>(),
-                sp.GetRequiredService<IEventStore>(),
-                sp.GetRequiredService<IGitService>()));
-        services.AddSingleton<IReplayCache>(sp =>
-            new ReplayCache(basePath, sp.GetRequiredService<IFileSystem>()));
+            new ReplayEngine(sp.GetRequiredService<IEventStore>()));
         services.AddSingleton<IEventSourcedStorageService>(sp =>
             new EventSourcedStorageService(
-                sp.GetRequiredService<ISnapshotStore>(),
                 sp.GetRequiredService<IEventStore>(),
-                sp.GetRequiredService<IReplayEngine>(),
-                sp.GetRequiredService<IReplayCache>(),
-                sp.GetRequiredService<IEventGitContext>()));
-        services.AddSingleton<IProjectionService>(sp =>
-            new ProjectionService(sp.GetRequiredService<IEventSourcedStorageService>()));
+                sp.GetRequiredService<IReplayEngine>()));
         services.AddSingleton<IMigrationService>(sp =>
             new EventSourcing.Services.Legacy.MigrationService(
                 basePath,
-                sp.GetRequiredService<IFileSystem>(),
-                sp.GetRequiredService<IReplayCache>()));
+                sp.GetRequiredService<IFileSystem>()));
 
         // Legacy IStorageService surface, satisfied by the event-sourced adapter.
-        // Reads come from snapshot+replay; writes are diffed and emitted as events.
+        // Reads replay every per-issue log; writes are diffed and emitted as events.
         services.AddSingleton<IStorageService>(sp =>
             new EventSourcedStorageAdapter(
                 sp.GetRequiredService<IEventSourcedStorageService>(),
-                sp.GetRequiredService<ISnapshotStore>(),
                 sp.GetRequiredService<IGitConfigService>(),
                 basePath,
-                sp.GetRequiredService<IFileSystem>()));
-
-        // DiffService (standalone utility for file comparison)
-        services.AddSingleton<IDiffService>(sp =>
-            new DiffService(
-                sp.GetRequiredService<IJsonlSerializer>(),
                 sp.GetRequiredService<IFileSystem>()));
 
         // SyncStatusService (internal, used by FleeceService)
@@ -107,6 +72,14 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<IGitConfigService>(),
                 sp.GetRequiredService<ISettingsService>(),
                 sp.GetRequiredService<SyncStatusService>()));
+
+        // Branch-lifecycle: seal archives the issue set and clears the live logs.
+        services.AddSingleton<ISealService>(sp =>
+            new SealService(
+                sp.GetRequiredService<IFleeceService>(),
+                sp.GetRequiredService<IEventStore>(),
+                basePath,
+                sp.GetRequiredService<IFileSystem>()));
 
         // Graph layout: generic engine + Fleece-specific issue adapter
         services.AddSingleton<IGraphLayoutService, GraphLayoutService>();

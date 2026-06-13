@@ -19,13 +19,6 @@ public sealed class EditCommand(IFleeceService fleeceService, ISettingsService s
             _fleece = FleeceService.ForFile(settings.IssuesFile, settingsService, gitConfigService);
         }
 
-        var (hasMultiple, message) = await _fleece.HasMultipleUnmergedFilesAsync();
-        if (hasMultiple)
-        {
-            console.MarkupLine($"[red]Error:[/] {message}");
-            return 1;
-        }
-
         var matches = await _fleece.ResolveByPartialIdAsync(settings.Id);
 
         if (matches.Count == 0)
@@ -58,7 +51,7 @@ public sealed class EditCommand(IFleeceService fleeceService, ISettingsService s
         {
             if (!Enum.TryParse<IssueStatus>(settings.Status, ignoreCase: true, out var parsedStatus))
             {
-                console.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: draft, open, progress, review, complete, archived, closed");
+                console.MarkupLine($"[red]Error:[/] Invalid status '{settings.Status}'. Use: open, progress, review, complete, promoted, closed");
                 return 1;
             }
             status = parsedStatus;
@@ -69,7 +62,7 @@ public sealed class EditCommand(IFleeceService fleeceService, ISettingsService s
         {
             if (!Enum.TryParse<IssueType>(settings.Type, ignoreCase: true, out var parsedType))
             {
-                console.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, idea, verify");
+                console.MarkupLine($"[red]Error:[/] Invalid type '{settings.Type}'. Use: task, bug, chore, feature, verify");
                 return 1;
             }
             type = parsedType;

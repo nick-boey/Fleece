@@ -4,9 +4,7 @@ namespace Fleece.Cli.E2E.Tests.Scenarios;
 [Category("validate")]
 [Category("next")]
 [Category("move")]
-[Category("merge")]
 [Category("prime")]
-[Category("diff")]
 [Category("commit")]
 [Category("install")]
 public class MiscCommandScenarios : CliScenarioTestBase
@@ -44,16 +42,6 @@ public class MiscCommandScenarios : CliScenarioTestBase
     }
 
     [Test]
-    public async Task Merge_with_no_duplicates_reports_success()
-    {
-        await RunAsync("create", "-t", "solo", "-y", "task", "-d", "b");
-
-        var exit = await RunAsync("merge");
-        exit.Should().Be(0);
-        Console.Output.Should().Contain("No duplicates");
-    }
-
-    [Test]
     public async Task Prime_without_fleece_dir_exits_cleanly()
     {
         var tmp = Path.Combine(Path.GetTempPath(), "fleece-prime-" + Guid.NewGuid().ToString("N"));
@@ -70,14 +58,6 @@ public class MiscCommandScenarios : CliScenarioTestBase
             Directory.SetCurrentDirectory(originalCwd);
             Directory.Delete(tmp, recursive: true);
         }
-    }
-
-    [Test]
-    public async Task Diff_missing_file_errors()
-    {
-        var exit = await RunAsync("diff", "/nonexistent-a.jsonl", "/nonexistent-b.jsonl");
-        exit.Should().Be(1);
-        Console.Output.Should().Contain("File not found");
     }
 
     [Test]

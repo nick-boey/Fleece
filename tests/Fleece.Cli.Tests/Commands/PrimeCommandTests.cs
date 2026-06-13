@@ -1,140 +1,125 @@
+using Fleece.Cli;
 using Fleece.Cli.Commands;
 using Fleece.Cli.Settings;
+using Fleece.Core.Models;
+using Fleece.Core.Services.Interfaces;
+using Fleece.Core.Tests.TestHelpers;
 using FluentAssertions;
 using NSubstitute;
 using NUnit.Framework;
 using Spectre.Console.Cli;
+using Spectre.Console.Testing;
+using Testably.Abstractions.Testing;
 
 namespace Fleece.Cli.Tests.Commands;
 
 [TestFixture]
-[NonParallelizable]
 public class PrimeCommandTests
 {
+    private MockFileSystem _fs = null!;
+    private IFleeceService _fleece = null!;
+    private TestConsole _console = null!;
     private PrimeCommand _command = null!;
     private CommandContext _context = null!;
-    private StringWriter _consoleOutput = null!;
-    private TextWriter _originalConsole = null!;
-    private string _originalCwd = null!;
-    private string _tempDir = null!;
+    private string _basePath = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _command = new PrimeCommand();
+        _fs = new MockFileSystem();
+        _basePath = _fs.Path.Combine(_fs.Directory.GetCurrentDirectory(), "repo");
+        _fs.Directory.CreateDirectory(_basePath);
+
+        _fleece = Substitute.For<IFleeceService>();
+        _fleece.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<Issue>>([]));
+
+        _console = new TestConsole();
+        _command = new PrimeCommand(_fleece, _fs, new BasePathProvider(_basePath), _console);
         _context = new CommandContext([], Substitute.For<IRemainingArguments>(), "prime", null);
-
-        _originalConsole = Console.Out;
-        _consoleOutput = new StringWriter();
-        Console.SetOut(_consoleOutput);
-
-        _originalCwd = Directory.GetCurrentDirectory();
-        _tempDir = Path.Combine(Path.GetTempPath(), $"fleece-prime-{Guid.NewGuid()}");
-        Directory.CreateDirectory(_tempDir);
-        Directory.SetCurrentDirectory(_tempDir);
     }
 
     [TearDown]
     public void TearDown()
     {
-        Console.SetOut(_originalConsole);
-        _consoleOutput.Dispose();
+        _console.Dispose();
+    }
 
-        Directory.SetCurrentDirectory(_originalCwd);
-        if (Directory.Exists(_tempDir))
-        {
-            Directory.Delete(_tempDir, recursive: true);
-        }
+    private void CreateFleeceDirectory()
+    {
+        _fs.Directory.CreateDirectory(_fs.Path.Combine(_basePath, ".fleece"));
     }
 
     [Test]
-    public void Execute_NoFleeceDirectory_NoTopic_ExitsSilentlyWithCodeZero()
+    public async Task Execute_NoFleeceDirectory_NoTopic_ExitsSilentlyWithCodeZero()
     {
-        var result = _command.Execute(_context, new PrimeSettings());
+        var result = await _command.ExecuteAsync(_context, new PrimeSettings());
 
         result.Should().Be(0);
-        _consoleOutput.ToString().Should().BeEmpty();
+        _console.Output.Should().BeEmpty();
     }
 
     [Test]
-    public void Execute_NoFleeceDirectory_WithTopic_ExitsSilentlyWithCodeZero()
+    public async Task Execute_NoFleeceDirectory_WithTopic_ExitsSilentlyWithCodeZero()
     {
-        var result = _command.Execute(_context, new PrimeSettings { Topic = "openspec" });
+        var result = await _command.ExecuteAsync(_context, new PrimeSettings { Topic = "commands" });
 
         result.Should().Be(0);
-        _consoleOutput.ToString().Should().BeEmpty();
+        _console.Output.Should().BeEmpty();
     }
 
     [Test]
-    public void Execute_FleecePresent_NoOpenSpec_NoTopic_OmitsOpenSpecSection()
+    public async Task Execute_FleecePresent_NoTopic_EmitsEphemeralMemoryOverview()
     {
-        Directory.CreateDirectory(Path.Combine(_tempDir, ".fleece"));
+        CreateFleeceDirectory();
 
-        var result = _command.Execute(_context, new PrimeSettings());
+        var result = await _command.ExecuteAsync(_context, new PrimeSettings());
 
         result.Should().Be(0);
-        var output = _consoleOutput.ToString();
-        output.Should().Contain("# Fleece Issue Tracking");
-        output.Should().Contain("## Detailed Help Topics");
-        output.Should().NotContain("# OpenSpec Integration");
+        var output = _console.Output;
+        output.Should().Contain("Ephemeral Agent Working Memory");
+        output.Should().Contain("active issue(s)");
     }
 
     [Test]
-    public void Execute_FleecePresent_OpenSpecPresent_NoTopic_IncludesOpenSpecSection()
+    public async Task Execute_FleecePresent_NoTopic_ReportsActiveIssueCount()
     {
-        Directory.CreateDirectory(Path.Combine(_tempDir, ".fleece"));
-        Directory.CreateDirectory(Path.Combine(_tempDir, "openspec"));
+        CreateFleeceDirectory();
+        _fleece.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<Issue>>(
+            [
+                new IssueBuilder().WithId("aaaaaa").WithTitle("Open work").WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build(),
+                new IssueBuilder().WithId("bbbbbb").WithTitle("In progress").WithStatus(IssueStatus.Progress).WithType(IssueType.Task).Build(),
+                new IssueBuilder().WithId("cccccc").WithTitle("Done").WithStatus(IssueStatus.Complete).WithType(IssueType.Task).Build()
+            ]));
 
-        var result = _command.Execute(_context, new PrimeSettings());
+        var result = await _command.ExecuteAsync(_context, new PrimeSettings());
 
         result.Should().Be(0);
-        var output = _consoleOutput.ToString();
-
-        output.Should().Contain("# Fleece Issue Tracking");
-        output.Should().Contain("# OpenSpec Integration");
-        output.Should().Contain("openspec=");
-        output.Should().Contain("+<id>");
-        output.Should().Contain("one issue per change");
-        output.Should().Contain("Never create issues per task");
+        _console.Output.Should().Contain("2 active issue(s)");
     }
 
     [Test]
-    public void Execute_FleecePresent_OpenSpecTopic_EmitsOpenSpecContent_WhenOpenSpecAbsent()
+    public async Task Execute_FleecePresent_KnownTopic_EmitsTopicContent()
     {
-        Directory.CreateDirectory(Path.Combine(_tempDir, ".fleece"));
+        CreateFleeceDirectory();
 
-        var result = _command.Execute(_context, new PrimeSettings { Topic = "openspec" });
+        var result = await _command.ExecuteAsync(_context, new PrimeSettings { Topic = "v4-migration" });
 
         result.Should().Be(0);
-        var output = _consoleOutput.ToString();
-        output.Should().Contain("# OpenSpec Integration");
-        output.Should().Contain("openspec={change-name}");
+        _console.Output.Should().NotBeEmpty();
     }
 
     [Test]
-    public void Execute_FleecePresent_OpenSpecTopic_EmitsOpenSpecContent_WhenOpenSpecPresent()
+    public async Task Execute_FleecePresent_UnknownTopic_ListsAvailableTopics()
     {
-        Directory.CreateDirectory(Path.Combine(_tempDir, ".fleece"));
-        Directory.CreateDirectory(Path.Combine(_tempDir, "openspec"));
+        CreateFleeceDirectory();
 
-        var result = _command.Execute(_context, new PrimeSettings { Topic = "openspec" });
-
-        result.Should().Be(0);
-        var output = _consoleOutput.ToString();
-        output.Should().Contain("# OpenSpec Integration");
-    }
-
-    [Test]
-    public void Execute_FleecePresent_UnknownTopic_ListsOpenSpecAmongAvailableTopics()
-    {
-        Directory.CreateDirectory(Path.Combine(_tempDir, ".fleece"));
-
-        var result = _command.Execute(_context, new PrimeSettings { Topic = "not-a-real-topic" });
+        var result = await _command.ExecuteAsync(_context, new PrimeSettings { Topic = "not-a-real-topic" });
 
         result.Should().NotBe(0);
-        var output = _consoleOutput.ToString();
+        var output = _console.Output;
         output.Should().Contain("Unknown topic: not-a-real-topic");
         output.Should().Contain("Available topics:");
-        output.Should().Contain("openspec");
     }
 }

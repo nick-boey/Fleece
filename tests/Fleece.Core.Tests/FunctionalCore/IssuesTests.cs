@@ -278,23 +278,22 @@ public class IssuesTests
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Draft, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
             new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
             new() { Id = "c", Title = "C", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
             new() { Id = "d", Title = "D", Status = IssueStatus.Progress, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
             new() { Id = "e", Title = "E", Status = IssueStatus.Review, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
             new() { Id = "f", Title = "F", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
-            new() { Id = "g", Title = "G", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
-            new() { Id = "h", Title = "H", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
-            new() { Id = "i", Title = "I", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
+            new() { Id = "g", Title = "G", Status = IssueStatus.Promoted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "h", Title = "H", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues);
 
-        // Draft is non-terminal, so it should be included
+        // Open is non-terminal, so it should be included
         result.Should().HaveCount(5);
         result.Select(i => i.Id).Should().Contain(["a", "b", "c", "d", "e"]);
-        result.Select(i => i.Id).Should().NotContain(["f", "g", "h", "i"]);
+        result.Select(i => i.Id).Should().NotContain(["f", "g", "h"]);
     }
 
     [Test]
@@ -304,15 +303,14 @@ public class IssuesTests
         {
             new() { Id = "a", Title = "A", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
             new() { Id = "b", Title = "B", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
-            new() { Id = "c", Title = "C", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
-            new() { Id = "d", Title = "D", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
-            new() { Id = "e", Title = "E", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
+            new() { Id = "c", Title = "C", Status = IssueStatus.Promoted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "d", Title = "D", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues, includeTerminal: true);
 
-        result.Should().HaveCount(5);
-        result.Select(i => i.Id).Should().Contain(["a", "b", "c", "d", "e"]);
+        result.Should().HaveCount(4);
+        result.Select(i => i.Id).Should().Contain(["a", "b", "c", "d"]);
     }
 
     [Test]
@@ -345,11 +343,11 @@ public class IssuesTests
     }
 
     [Test]
-    public void Filter_ExcludesAllTerminalStatuses_Archived()
+    public void Filter_ExcludesAllTerminalStatuses_Promoted()
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Archived, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
+            new() { Id = "a", Title = "A", Status = IssueStatus.Promoted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues);
@@ -363,19 +361,6 @@ public class IssuesTests
         var issues = new List<Issue>
         {
             new() { Id = "a", Title = "A", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
-        };
-
-        var result = Issues.Filter(issues);
-
-        result.Should().BeEmpty();
-    }
-
-    [Test]
-    public void Filter_ExcludesAllTerminalStatuses_Deleted()
-    {
-        var issues = new List<Issue>
-        {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Deleted, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
         var result = Issues.Filter(issues);
@@ -415,11 +400,11 @@ public class IssuesTests
     }
 
     [Test]
-    public void Filter_IncludesDraftStatus_ByDefault()
+    public void Filter_IncludesReviewStatus_ByDefault()
     {
         var issues = new List<Issue>
         {
-            new() { Id = "a", Title = "A", Status = IssueStatus.Draft, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
+            new() { Id = "a", Title = "A", Status = IssueStatus.Review, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow },
             new() { Id = "b", Title = "B", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow }
         };
 
@@ -795,10 +780,10 @@ public class IssuesTests
     }
 
     [Test]
-    public void GetNextIssues_WithDraftIssue_ReturnsEmptyList()
+    public void GetNextIssues_WithInProgressIssue_ReturnsEmptyList()
     {
-        // Draft issues are not actionable - they need to be fully specified first
-        var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Draft).Build();
+        // In-progress issues are already being worked on, so not surfaced as "next"
+        var issue = new IssueBuilder().WithId("issue1").WithStatus(IssueStatus.Progress).Build();
 
         var result = Issues.GetNextIssues([issue]);
 
@@ -1196,58 +1181,6 @@ public class IssuesTests
     }
 
     #endregion
-
-    #region Idea Type Exclusion Tests
-
-    [Test]
-    public void GetNextIssues_WithIdeaTypeIssue_ExcludesIdea()
-    {
-        var idea = new IssueBuilder().WithId("idea1").WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
-
-        var result = Issues.GetNextIssues([idea]);
-
-        result.Should().BeEmpty();
-    }
-
-    [Test]
-    public void GetNextIssues_WithMixedTypeIssues_ExcludesOnlyIdeas()
-    {
-        var task = new IssueBuilder().WithId("task1").WithStatus(IssueStatus.Open).WithType(IssueType.Task).Build();
-        var bug = new IssueBuilder().WithId("bug1").WithStatus(IssueStatus.Open).WithType(IssueType.Bug).Build();
-        var idea = new IssueBuilder().WithId("idea1").WithStatus(IssueStatus.Open).WithType(IssueType.Idea).Build();
-        var feature = new IssueBuilder().WithId("feature1").WithStatus(IssueStatus.Open).WithType(IssueType.Feature).Build();
-
-        var result = Issues.GetNextIssues([task, bug, idea, feature]);
-
-        result.Select(i => i.Id).Should().BeEquivalentTo(["task1", "bug1", "feature1"]);
-        result.Select(i => i.Id).Should().NotContain("idea1");
-    }
-
-    [Test]
-    public void GetNextIssues_WithIdeaInReviewStatus_StillExcludesIdea()
-    {
-        var idea = new IssueBuilder().WithId("idea1").WithStatus(IssueStatus.Review).WithType(IssueType.Idea).Build();
-        var task = new IssueBuilder().WithId("task1").WithStatus(IssueStatus.Review).WithType(IssueType.Task).Build();
-
-        var result = Issues.GetNextIssues([idea, task]);
-
-        result.Should().ContainSingle().Which.Id.Should().Be("task1");
-    }
-
-    [Test]
-    public void GetNextIssues_ParentWithIdeaChild_IdeaChildNotActionable()
-    {
-        var parent = new IssueBuilder().WithId("parent").WithStatus(IssueStatus.Open).WithExecutionMode(ExecutionMode.Parallel).Build();
-        var taskChild = new IssueBuilder().WithId("task-child").WithStatus(IssueStatus.Open).WithType(IssueType.Task).WithParentIssueIdAndOrder("parent", "aaa").Build();
-        var ideaChild = new IssueBuilder().WithId("idea-child").WithStatus(IssueStatus.Open).WithType(IssueType.Idea).WithParentIssueIdAndOrder("parent", "bbb").Build();
-
-        var result = Issues.GetNextIssues([parent, taskChild, ideaChild]);
-
-        result.Select(i => i.Id).Should().BeEquivalentTo(["task-child"]);
-    }
-
-    #endregion
-
 
 
 

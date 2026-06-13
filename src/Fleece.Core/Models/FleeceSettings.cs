@@ -8,12 +8,6 @@ namespace Fleece.Core.Models;
 public sealed record FleeceSettings
 {
     /// <summary>
-    /// When true, automatically run merge before operations that read issues.
-    /// Default: true
-    /// </summary>
-    public bool? AutoMerge { get; init; }
-
-    /// <summary>
     /// User identity for ModifiedBy fields. Overrides git config user.name when set.
     /// Default: null (falls back to git config)
     /// </summary>
@@ -24,10 +18,4 @@ public sealed record FleeceSettings
     /// Default: null (uses current branch)
     /// </summary>
     public string? SyncBranch { get; init; }
-
-    /// <summary>
-    /// Default branch name where <c>fleece project</c> is allowed to run.
-    /// Default: "main"
-    /// </summary>
-    public string? DefaultBranch { get; init; }
 }

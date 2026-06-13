@@ -394,7 +394,7 @@ public class SearchTests
         {
             CreateIssue(id: "1", status: IssueStatus.Open),
             CreateIssue(id: "2", status: IssueStatus.Complete),
-            CreateIssue(id: "3", status: IssueStatus.Archived)
+            CreateIssue(id: "3", status: IssueStatus.Promoted)
         };
 
         var query = SearchOps.ParseQuery("");
@@ -411,7 +411,7 @@ public class SearchTests
         {
             CreateIssue(id: "1", status: IssueStatus.Open),
             CreateIssue(id: "2", status: IssueStatus.Complete),
-            CreateIssue(id: "3", status: IssueStatus.Archived)
+            CreateIssue(id: "3", status: IssueStatus.Promoted)
         };
 
         var query = SearchOps.ParseQuery("");

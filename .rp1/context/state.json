@@ -1,0 +1,14 @@
+{
+  "strategy": "parallel-map-reduce",
+  "repo_type": "single-project",
+  "monorepo_projects": [],
+  "generated_at": "2026-06-04T00:00:00Z",
+  "git_commit": "a8432e47dd858d0cbba94222ebf316d5bb03fbc6",
+  "files_analyzed": 431,
+  "languages": ["C#", "Markdown", "YAML"],
+  "metrics": {
+    "total_files_scanned": 431,
+    "kb_files_written": 6,
+    "mode": "FULL"
+  }
+}
