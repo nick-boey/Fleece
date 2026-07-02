@@ -87,8 +87,10 @@ public class SettingsServiceTests
 
         result.Identity.Should().BeNull();
         result.SyncBranch.Should().BeNull();
+        result.Tracker.Should().Be("github");
         result.Sources.Identity.Should().Be(SettingSource.Default);
         result.Sources.SyncBranch.Should().Be(SettingSource.Default);
+        result.Sources.Tracker.Should().Be(SettingSource.Default);
     }
 
     [Test]
@@ -173,6 +175,60 @@ public class SettingsServiceTests
 
         act.Should().ThrowAsync<ArgumentException>()
             .WithMessage("*Unknown setting*unknownKey*");
+    }
+
+    [Test]
+    public async Task GetEffectiveSettingsAsync_TrackerDefaultsToGitHub_WhenUnset()
+    {
+        var result = await _sut.GetEffectiveSettingsAsync();
+
+        result.Tracker.Should().Be("github");
+        result.Sources.Tracker.Should().Be(SettingSource.Default);
+    }
+
+    [Test]
+    public async Task SetSettingAsync_Tracker_RoundTripsAndIsHonoured()
+    {
+        await _sut.SetSettingAsync("tracker", "linear", global: false);
+
+        var settings = await _sut.LoadLocalSettingsAsync();
+        settings!.Tracker.Should().Be("linear");
+
+        var effective = await _sut.GetEffectiveSettingsAsync();
+        effective.Tracker.Should().Be("linear");
+        effective.Sources.Tracker.Should().Be(SettingSource.Local);
+    }
+
+    [Test]
+    public async Task SetSettingAsync_Tracker_NormalizesCaseAndWhitespace()
+    {
+        await _sut.SetSettingAsync("tracker", "  LINEAR  ", global: false);
+
+        var settings = await _sut.LoadLocalSettingsAsync();
+        settings!.Tracker.Should().Be("linear");
+    }
+
+    [Test]
+    public async Task SetSettingAsync_Tracker_EmptyStringClearsToDefault()
+    {
+        await _sut.SetSettingAsync("tracker", "linear", global: false);
+        await _sut.SetSettingAsync("tracker", "", global: false);
+
+        var settings = await _sut.LoadLocalSettingsAsync();
+        settings!.Tracker.Should().BeNull();
+
+        var effective = await _sut.GetEffectiveSettingsAsync();
+        effective.Tracker.Should().Be("github");
+        effective.Sources.Tracker.Should().Be(SettingSource.Default);
+    }
+
+    [Test]
+    public void SetSettingAsync_Tracker_RejectsInvalidValue()
+    {
+        Func<Task> act = async () => await _sut.SetSettingAsync("tracker", "jira", global: false);
+
+        act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*Invalid tracker*jira*");
     }
 
     [Test]

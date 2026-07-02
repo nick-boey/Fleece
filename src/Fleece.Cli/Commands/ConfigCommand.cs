@@ -76,12 +76,13 @@ public sealed class ConfigCommand(ISettingsService settingsService, IAnsiConsole
             {
                 "identity" => (effective.Identity ?? "", effective.Sources.Identity),
                 "syncbranch" => (effective.SyncBranch ?? "", effective.Sources.SyncBranch),
+                "tracker" => (effective.Tracker, effective.Sources.Tracker),
                 _ => (null, SettingSource.Default)
             };
 
             if (value is null)
             {
-                console.MarkupLine($"[red]Error:[/] Unknown setting: {settings.Get}. Valid settings are: identity, syncBranch");
+                console.MarkupLine($"[red]Error:[/] Unknown setting: {settings.Get}. Valid settings are: identity, syncBranch, tracker");
                 return 1;
             }
 
@@ -110,6 +111,7 @@ public sealed class ConfigCommand(ISettingsService settingsService, IAnsiConsole
         console.MarkupLine("[bold]Available settings:[/]");
         console.MarkupLine("  identity    User identity for ModifiedBy fields");
         console.MarkupLine("  syncBranch  Branch for issue synchronization");
+        console.MarkupLine("  tracker     Durable issue tracker (github | linear)");
 
         return 0;
     }
@@ -131,6 +133,11 @@ public sealed class ConfigCommand(ISettingsService settingsService, IAnsiConsole
             effective.SyncBranch ?? "[dim](not set)[/]",
             FormatSource(effective.Sources.SyncBranch));
 
+        table.AddRow(
+            "tracker",
+            effective.Tracker,
+            FormatSource(effective.Sources.Tracker));
+
         console.Write(table);
     }
 
@@ -139,7 +146,8 @@ public sealed class ConfigCommand(ISettingsService settingsService, IAnsiConsole
         var output = new
         {
             identity = new { value = effective.Identity, source = effective.Sources.Identity.ToString().ToLowerInvariant() },
-            syncBranch = new { value = effective.SyncBranch, source = effective.Sources.SyncBranch.ToString().ToLowerInvariant() }
+            syncBranch = new { value = effective.SyncBranch, source = effective.Sources.SyncBranch.ToString().ToLowerInvariant() },
+            tracker = new { value = effective.Tracker, source = effective.Sources.Tracker.ToString().ToLowerInvariant() }
         };
 
         Console.WriteLine(JsonSerializer.Serialize(output, JsonOptions));

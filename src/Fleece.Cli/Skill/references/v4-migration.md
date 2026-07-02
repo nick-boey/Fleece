@@ -25,15 +25,16 @@ non-destructive warning pointing here.
 2. **Review** the converted issues: `fleece list --all` to see everything, including
    terminal statuses.
 
-3. **Promote** the long-running / still-relevant issues to GitHub Issues so they outlive
+3. **Promote** the long-running / still-relevant issues to {{TRACKER_TITLE}} so they outlive
    the repository's branches:
 
    ```
    fleece promote <id> [<id>...]
    ```
 
-   Bundle related issues into one GitHub issue where it makes sense. Confirm credentials
-   first with `fleece auth`.
+   Bundle related issues where it makes sense. See `references/{{TRACKER}}.md` for the exact
+   promote workflow for this repository's tracker (GitHub: confirm credentials first with
+   `fleece auth`; Linear: emit the payload, create the issue, then re-run with `--ref`).
 
 4. **Resolve or close** anything that is already done or no longer relevant
    (`fleece edit <id> -s complete` / `-s closed`).

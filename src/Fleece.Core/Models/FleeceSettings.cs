@@ -18,4 +18,10 @@ public sealed record FleeceSettings
     /// Default: null (uses current branch)
     /// </summary>
     public string? SyncBranch { get; init; }
+
+    /// <summary>
+    /// The repository's durable issue tracker (<c>github</c> or <c>linear</c>) that promoted work
+    /// escalates into. Default: null (resolves to <c>github</c> so existing repos are unchanged).
+    /// </summary>
+    public string? Tracker { get; init; }
 }

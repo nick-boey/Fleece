@@ -1,6 +1,9 @@
 using System.IO.Abstractions;
 using Fleece.Cli.Commands;
+using Fleece.Cli.Workflows;
 using Fleece.Core.Extensions;
+using Fleece.Core.Models;
+using Fleece.Core.Services.Interfaces;
 using Fleece.GitHub;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
@@ -49,6 +52,20 @@ public static class CliComposition
         var fs = fileSystem ?? new Testably.Abstractions.RealFileSystem();
         services.AddSingleton(new BasePathProvider(basePath ?? fs.Directory.GetCurrentDirectory()));
         services.AddSingleton<IAnsiConsole>(_ => AnsiConsole.Console);
+
+        // Resolve the durable-tracker workflow from the configured `tracker` setting. The factory is
+        // lazy, so it reads the effective setting (and resolves IGitHubService / the console) at
+        // command-execution time — after tests substitute their console or a fake IGitHubService.
+        // In Linear mode GitHubTrackerWorkflow is never constructed, so IGitHubService is never
+        // resolved and the path stays hermetic (no credential, no fake GitHub service required).
+        services.AddSingleton<ITrackerWorkflow>(sp =>
+        {
+            var settingsService = sp.GetRequiredService<ISettingsService>();
+            var effective = settingsService.GetEffectiveSettingsAsync().GetAwaiter().GetResult();
+            return string.Equals(effective.Tracker, Trackers.Linear, StringComparison.Ordinal)
+                ? ActivatorUtilities.CreateInstance<LinearTrackerWorkflow>(sp)
+                : ActivatorUtilities.CreateInstance<GitHubTrackerWorkflow>(sp);
+        });
 
         // Lets test composition substitute services (e.g. a fake IGitHubService) before the
         // provider is built. Registrations here win because DI resolves the last registration.

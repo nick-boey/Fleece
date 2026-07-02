@@ -98,7 +98,8 @@ public sealed class SettingsService : ISettingsService
         {
             "identity" => existing with { Identity = string.IsNullOrEmpty(value) ? null : value },
             "syncbranch" => existing with { SyncBranch = string.IsNullOrEmpty(value) ? null : value },
-            _ => throw new ArgumentException($"Unknown setting: {key}. Valid settings are: identity, syncBranch")
+            "tracker" => existing with { Tracker = Trackers.Normalize(value) },
+            _ => throw new ArgumentException($"Unknown setting: {key}. Valid settings are: identity, syncBranch, tracker")
         };
 
         await SaveSettingsToFileAsync(filePath, updated, cancellationToken);
@@ -113,15 +114,19 @@ public sealed class SettingsService : ISettingsService
             cli?.Identity, local?.Identity, global?.Identity, (string?)null);
         var (syncBranch, syncBranchSource) = ResolveValue(
             cli?.SyncBranch, local?.SyncBranch, global?.SyncBranch, (string?)null);
+        var (tracker, trackerSource) = ResolveValue(
+            cli?.Tracker, local?.Tracker, global?.Tracker, Trackers.Default);
 
         return new EffectiveSettings
         {
             Identity = identity,
             SyncBranch = syncBranch,
+            Tracker = tracker,
             Sources = new SettingsSources
             {
                 Identity = identitySource,
-                SyncBranch = syncBranchSource
+                SyncBranch = syncBranchSource,
+                Tracker = trackerSource
             }
         };
     }

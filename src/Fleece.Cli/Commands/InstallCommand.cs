@@ -3,6 +3,8 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Fleece.Cli.Settings;
+using Fleece.Core.Models;
+using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -27,28 +29,87 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
     internal const string SkillResourcePrefix = "fleece-skill/";
     internal const string SkillDirectoryName = "fleece";
 
+    // Skill files are templates: install substitutes the selected tracker into these tokens so the
+    // installed reference text is worded for the repository's durable tracker.
+    private const string TrackerToken = "{{TRACKER}}";
+    private const string TrackerTitleToken = "{{TRACKER_TITLE}}";
+
     private readonly IAnsiConsole _console;
     private readonly IFileSystem _fileSystem;
+    private readonly ISettingsService _settingsService;
     private readonly string _basePath;
 
-    public InstallCommand(IAnsiConsole console, IFileSystem fileSystem, BasePathProvider basePath)
+    public InstallCommand(IAnsiConsole console, IFileSystem fileSystem, ISettingsService settingsService, BasePathProvider basePath)
     {
         _console = console;
         _fileSystem = fileSystem;
+        _settingsService = settingsService;
         _basePath = basePath.BasePath;
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, InstallSettings settings)
     {
+        string tracker;
+        try
+        {
+            tracker = ResolveTracker(settings);
+        }
+        catch (ArgumentException ex)
+        {
+            _console.MarkupLine($"[red]Error:[/] {ex.Message}");
+            return 1;
+        }
+
+        await PersistTrackerAsync(tracker);
         await InstallClaudeHooksAsync();
-        await InstallClaudeMemoryBlockAsync();
-        await InstallClaudeSkillAsync();
+        await InstallClaudeMemoryBlockAsync(tracker);
+        await InstallClaudeSkillAsync(tracker);
         await InstallPreCommitHookAsync();
         await RemovePreMergeCommitHookAsync();
         await EnsureGitignoreEntriesAsync();
         await MaybeInstallGitHubWorkflowAsync();
         return 0;
     }
+
+    /// <summary>
+    /// Resolves the durable tracker to configure: an explicit <c>--tracker</c> flag wins; otherwise
+    /// an interactive (TTY) session prompts for a choice; a non-interactive session defaults to
+    /// <c>github</c> so scripted/CI installs stay deterministic and back-compatible.
+    /// </summary>
+    private string ResolveTracker(InstallSettings settings)
+    {
+        if (!string.IsNullOrWhiteSpace(settings.Tracker))
+        {
+            return Trackers.Normalize(settings.Tracker)!;
+        }
+
+        // Prompt only when stdin is a real TTY (the canonical interactive check) AND the console
+        // reports interactive capability. A redirected/piped stdin — CI, scripted installs, the test
+        // host — falls through to the deterministic, back-compatible default.
+        if (!System.Console.IsInputRedirected && _console.Profile.Capabilities.Interactive)
+        {
+            return _console.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("Which [green]durable issue tracker[/] should promoted work escalate into?")
+                    .AddChoices(Trackers.GitHub, Trackers.Linear));
+        }
+
+        return Trackers.Default;
+    }
+
+    private async Task PersistTrackerAsync(string tracker)
+    {
+        await _settingsService.SetSettingAsync("tracker", tracker, global: false);
+        _console.MarkupLine($"[green]Durable tracker set to[/] [bold]{tracker}[/] [dim](.fleece/settings.json)[/]");
+    }
+
+    private static string TrackerTitle(string tracker)
+        => string.Equals(tracker, Trackers.Linear, StringComparison.Ordinal) ? "Linear" : "GitHub";
+
+    private static string ApplyTrackerTokens(string content, string tracker)
+        => content
+            .Replace(TrackerToken, tracker)
+            .Replace(TrackerTitleToken, TrackerTitle(tracker));
 
     private async Task InstallClaudeHooksAsync()
     {
@@ -124,10 +185,10 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
     /// PR you resolve, promote durable work to GitHub Issues, then seal. The block is delimited by
     /// marker comments so re-running install updates it in place and never clobbers user content.
     /// </summary>
-    private async Task InstallClaudeMemoryBlockAsync()
+    private async Task InstallClaudeMemoryBlockAsync(string tracker)
     {
         var memoryPath = _fileSystem.Path.Combine(_basePath, ClaudeMemoryFileName);
-        var block = BuildClaudeMemoryBlock();
+        var block = BuildClaudeMemoryBlock(tracker);
 
         string newContent;
         if (_fileSystem.File.Exists(memoryPath))
@@ -144,13 +205,15 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
         _console.MarkupLine($"[green]Fleece memory block written:[/] {memoryPath}");
     }
 
-    internal static string BuildClaudeMemoryBlock()
+    internal static string BuildClaudeMemoryBlock(string tracker)
     {
         // Philosophy only — the "why". The full static reference (commands, statuses, hierarchy,
-        // GitHub round-trip, …) lives in the installed `fleece` skill, and the dynamic active-issue
-        // count comes from the `fleece prime` SessionStart hook. This block must not duplicate the
-        // skill; its job is to state the model and the where-does-this-work-go decision rule, and to
-        // point at the skill so a pull-based agent knows it exists.
+        // durable-tracker round-trip, …) lives in the installed `fleece` skill, and the dynamic
+        // active-issue count comes from the `fleece prime` SessionStart hook. This block must not
+        // duplicate the skill; its job is to state the model and the where-does-this-work-go decision
+        // rule, and to point at the skill so a pull-based agent knows it exists. The durable tracker
+        // is worded per the repository's configured `tracker` setting.
+        var title = TrackerTitle(tracker);
         return string.Join('\n', new[]
         {
             ClaudeMemoryBlockStart,
@@ -160,18 +223,20 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
             "a durable backlog. They track the work in flight and must be cleared before the branch",
             "merges.",
             "",
+            $"This repository's durable issue tracker is **{title}** — promoted work escalates there.",
+            "",
             "**Where does a piece of work go?**",
             "",
             "- **Blocks this branch / PR** → a Fleece issue (`fleece create`). Branch-local memory.",
             "- **Non-blocking follow-up, a new feature, or anything that must outlive this branch** → a",
-            "  **GitHub issue**, not Fleece. Use `fleece promote <id> [<id>...]` to escalate an existing",
+            $"  **{title} issue**, not Fleece. Use `fleece promote <id> [<id>...]` to escalate an existing",
             "  Fleece issue (it becomes `promoted`).",
             "",
             "**Before opening a PR**, every Fleece issue must reach an inactive status (`complete`,",
             "`closed`, or `promoted`), or be archived with `fleece seal`. A CI gate fails the PR while",
             "any live issue remains under `.fleece/issues/`.",
             "",
-            "For commands, hierarchy, statuses, JSON output, and the GitHub round-trip, use the",
+            $"For commands, hierarchy, statuses, JSON output, and the {title} round-trip, use the",
             "**`fleece` skill** (installed at `.claude/skills/fleece/`). The `fleece prime` SessionStart",
             "hook surfaces the live count of active issues when the branch is dirty.",
             ClaudeMemoryBlockEnd,
@@ -186,7 +251,7 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
     /// so reference content stays current with the installed Fleece version. Each file already
     /// carries a "managed by fleece install" header baked into the source.
     /// </summary>
-    private async Task InstallClaudeSkillAsync()
+    private async Task InstallClaudeSkillAsync(string tracker)
     {
         var assembly = typeof(InstallCommand).Assembly;
         var resourceNames = assembly.GetManifestResourceNames()
@@ -205,6 +270,19 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
         foreach (var resourceName in resourceNames)
         {
             var relativePath = resourceName[SkillResourcePrefix.Length..];
+            var outputPath = ResolveSkillOutputPath(skillRoot, relativePath);
+
+            // Ship exactly one tracker-specific reference: github.md XOR linear.md. The non-selected
+            // tracker's reference is not written (less noise for the agent); a stale copy left by a
+            // previous install of the other tracker is removed so the XOR guarantee holds on re-install.
+            if (IsNonSelectedTrackerReference(relativePath, tracker))
+            {
+                if (_fileSystem.File.Exists(outputPath))
+                {
+                    _fileSystem.File.Delete(outputPath);
+                }
+                continue;
+            }
 
             await using var stream = assembly.GetManifestResourceStream(resourceName);
             if (stream is null)
@@ -212,13 +290,7 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
                 continue;
             }
             using var reader = new StreamReader(stream);
-            var content = await reader.ReadToEndAsync();
-
-            // The LogicalName uses '/'; rebuild the output path segment-by-segment so the native
-            // path separator is applied regardless of the host OS.
-            var parts = new List<string> { skillRoot };
-            parts.AddRange(relativePath.Split('/'));
-            var outputPath = _fileSystem.Path.Combine(parts.ToArray());
+            var content = ApplyTrackerTokens(await reader.ReadToEndAsync(), tracker);
 
             var outputDir = _fileSystem.Path.GetDirectoryName(outputPath);
             if (!string.IsNullOrEmpty(outputDir))
@@ -231,7 +303,38 @@ public sealed class InstallCommand : AsyncCommand<InstallSettings>
             written++;
         }
 
-        _console.MarkupLine($"[green]Fleece skill installed:[/] {skillRoot} [dim]({written} file(s))[/]");
+        _console.MarkupLine($"[green]Fleece skill installed:[/] {skillRoot} [dim]({written} file(s), tracker: {tracker})[/]");
+    }
+
+    /// <summary>
+    /// Rebuilds the on-disk output path for a skill resource. The LogicalName uses '/'; segments are
+    /// recombined so the native path separator is applied regardless of the host OS.
+    /// </summary>
+    private string ResolveSkillOutputPath(string skillRoot, string relativePath)
+    {
+        var parts = new List<string> { skillRoot };
+        parts.AddRange(relativePath.Split('/'));
+        return _fileSystem.Path.Combine(parts.ToArray());
+    }
+
+    /// <summary>
+    /// True when the resource is the tracker-specific reference for the tracker that was NOT chosen
+    /// (so install ships github.md XOR linear.md, never both).
+    /// </summary>
+    private static bool IsNonSelectedTrackerReference(string relativePath, string tracker)
+    {
+        var normalized = relativePath.Replace('\\', '/');
+        var github = string.Equals(normalized, "references/github.md", StringComparison.Ordinal);
+        var linear = string.Equals(normalized, "references/linear.md", StringComparison.Ordinal);
+        if (!github && !linear)
+        {
+            return false;
+        }
+
+        var selected = string.Equals(tracker, Trackers.Linear, StringComparison.Ordinal)
+            ? "references/linear.md"
+            : "references/github.md";
+        return !string.Equals(normalized, selected, StringComparison.Ordinal);
     }
 
     private async Task InstallPreCommitHookAsync()

@@ -62,10 +62,12 @@ public class TreeCommandTests
             {
                 Identity = "testuser",
                 SyncBranch = null,
+                Tracker = "github",
                 Sources = new SettingsSources
                 {
                     Identity = SettingSource.Default,
-                    SyncBranch = SettingSource.Default
+                    SyncBranch = SettingSource.Default,
+                    Tracker = SettingSource.Default
                 }
             });
 

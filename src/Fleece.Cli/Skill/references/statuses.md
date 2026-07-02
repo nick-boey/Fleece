@@ -10,7 +10,7 @@ Active (block PR merge / `fleece seal`):
 Inactive (terminal, do not block):
 - **complete**: Work finished and verified
 - **closed**: Abandoned or won't fix
-- **promoted**: Escalated into a GitHub issue (carries a `promoted=<#>` keyed tag)
+- **promoted**: Escalated into a {{TRACKER_TITLE}} issue (carries a `promoted=<ref>` keyed tag)
 
 ## Usage
 

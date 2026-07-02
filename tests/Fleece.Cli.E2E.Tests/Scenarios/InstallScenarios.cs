@@ -212,21 +212,110 @@ public class InstallScenarios : CliScenarioTestBase
         content.Should().Contain("managed by `fleece install`");
     }
 
-    [Test]
-    public async Task Install_writes_all_nine_skill_reference_topics()
+    // The eight tracker-agnostic references are always installed; the ninth is the tracker-specific
+    // reference (github.md XOR linear.md). The tenth embedded reference is the non-selected tracker's,
+    // which is deliberately NOT written.
+    private static readonly string[] CoreReferenceTopics =
     {
-        await RunAsync("install");
+        "hierarchy", "commands", "statuses", "sync", "json", "next", "tree", "v4-migration"
+    };
 
-        var referencesDir = Path.Combine(BasePath, ".claude", "skills", "fleece", "references");
-        foreach (var topic in new[]
-                 {
-                     "hierarchy", "commands", "statuses", "sync", "json",
-                     "next", "tree", "github", "v4-migration"
-                 })
+    private static string ReferencesDir =>
+        Path.Combine(BasePath, ".claude", "skills", "fleece", "references");
+
+    [Test]
+    public async Task Install_writes_the_eight_core_reference_topics_regardless_of_tracker()
+    {
+        await RunAsync("install", "--tracker", "linear");
+
+        foreach (var topic in CoreReferenceTopics)
         {
-            var path = Path.Combine(referencesDir, topic + ".md");
-            Fs.File.Exists(path).Should().BeTrue(because: $"the '{topic}' reference should be installed");
+            var path = Path.Combine(ReferencesDir, topic + ".md");
+            Fs.File.Exists(path).Should().BeTrue(because: $"the core '{topic}' reference should always be installed");
         }
+    }
+
+    [Test]
+    public async Task Install_default_is_github_ships_github_reference_only_and_persists_setting()
+    {
+        var exit = await RunAsync("install");
+        exit.Should().Be(0);
+
+        Fs.File.Exists(Path.Combine(ReferencesDir, "github.md")).Should().BeTrue();
+        Fs.File.Exists(Path.Combine(ReferencesDir, "linear.md")).Should().BeFalse();
+
+        var settingsPath = Path.Combine(BasePath, ".fleece", "settings.json");
+        Fs.File.Exists(settingsPath).Should().BeTrue();
+        (await Fs.File.ReadAllTextAsync(settingsPath)).Should().Contain("\"tracker\": \"github\"");
+    }
+
+    [Test]
+    public async Task Install_tracker_github_words_claude_block_and_skill_for_github()
+    {
+        var exit = await RunAsync("install", "--tracker", "github");
+        exit.Should().Be(0);
+
+        Fs.File.Exists(Path.Combine(ReferencesDir, "github.md")).Should().BeTrue();
+        Fs.File.Exists(Path.Combine(ReferencesDir, "linear.md")).Should().BeFalse();
+
+        var memory = await Fs.File.ReadAllTextAsync(Path.Combine(BasePath, "CLAUDE.md"));
+        memory.Should().Contain("GitHub");
+        memory.Should().NotContain("{{TRACKER");
+
+        var skill = await Fs.File.ReadAllTextAsync(Path.Combine(BasePath, ".claude", "skills", "fleece", "SKILL.md"));
+        skill.Should().Contain("GitHub");
+        skill.Should().Contain("references/github.md");
+        skill.Should().NotContain("{{TRACKER");
+    }
+
+    [Test]
+    public async Task Install_tracker_linear_ships_linear_reference_and_words_block_and_skill_for_linear()
+    {
+        var exit = await RunAsync("install", "--tracker", "linear");
+        exit.Should().Be(0);
+
+        Fs.File.Exists(Path.Combine(ReferencesDir, "linear.md")).Should().BeTrue();
+        Fs.File.Exists(Path.Combine(ReferencesDir, "github.md")).Should().BeFalse();
+
+        var memory = await Fs.File.ReadAllTextAsync(Path.Combine(BasePath, "CLAUDE.md"));
+        memory.Should().Contain("Linear");
+        memory.Should().NotContain("GitHub");
+        memory.Should().NotContain("{{TRACKER");
+
+        var skill = await Fs.File.ReadAllTextAsync(Path.Combine(BasePath, ".claude", "skills", "fleece", "SKILL.md"));
+        skill.Should().Contain("Linear");
+        skill.Should().Contain("references/linear.md");
+        skill.Should().NotContain("{{TRACKER");
+
+        var settingsPath = Path.Combine(BasePath, ".fleece", "settings.json");
+        (await Fs.File.ReadAllTextAsync(settingsPath)).Should().Contain("\"tracker\": \"linear\"");
+    }
+
+    [Test]
+    public async Task Install_reinstall_with_other_tracker_swaps_the_reference_file()
+    {
+        (await RunAsync("install", "--tracker", "linear")).Should().Be(0);
+        Fs.File.Exists(Path.Combine(ReferencesDir, "linear.md")).Should().BeTrue();
+
+        (await RunAsync("install", "--tracker", "github")).Should().Be(0);
+
+        // The XOR guarantee must hold on re-install: the stale linear.md is removed.
+        Fs.File.Exists(Path.Combine(ReferencesDir, "github.md")).Should().BeTrue();
+        Fs.File.Exists(Path.Combine(ReferencesDir, "linear.md")).Should().BeFalse();
+
+        var settingsPath = Path.Combine(BasePath, ".fleece", "settings.json");
+        (await Fs.File.ReadAllTextAsync(settingsPath)).Should().Contain("\"tracker\": \"github\"");
+    }
+
+    [Test]
+    public async Task Install_rejects_an_invalid_tracker_value()
+    {
+        var exit = await RunAsync("install", "--tracker", "jira");
+
+        exit.Should().Be(1);
+        Console.Output.Should().Contain("Invalid tracker");
+        // A rejected tracker must not write the skill.
+        Fs.File.Exists(Path.Combine(BasePath, ".claude", "skills", "fleece", "SKILL.md")).Should().BeFalse();
     }
 
     [Test]

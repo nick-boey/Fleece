@@ -1,6 +1,6 @@
 ---
 name: fleece
-description: Reference for the Fleece CLI — branch-local ephemeral working-memory issue tracker. Use when creating, editing, listing, or sealing Fleece issues; breaking work into a parent/child hierarchy; filtering or getting JSON output; or moving work between Fleece and GitHub via promote/absorb. Covers commands, issue types, statuses, the next/tree task graph, and the branch-clean-before-PR workflow.
+description: Reference for the Fleece CLI — branch-local ephemeral working-memory issue tracker. Use when creating, editing, listing, or sealing Fleece issues; breaking work into a parent/child hierarchy; filtering or getting JSON output; or moving work between Fleece and {{TRACKER_TITLE}} via promote/absorb. Covers commands, issue types, statuses, the next/tree task graph, and the branch-clean-before-PR workflow.
 ---
 <!-- This file is managed by `fleece install`. Manual edits will be overwritten on the next install. -->
 
@@ -9,14 +9,15 @@ description: Reference for the Fleece CLI — branch-local ephemeral working-mem
 Fleece is **branch-local, ephemeral working memory for the current change** — NOT a
 durable issue tracker. Issues live in per-issue logs under `.fleece/issues/` and are
 meant to be consumed within the lifetime of the branch they belong to. Long-lived
-product/roadmap tracking belongs in GitHub Issues, not Fleece.
+product/roadmap tracking belongs in this repository's durable tracker
+(**{{TRACKER_TITLE}}**), not Fleece.
 
 ## The branch must be clean before a PR merges
 
 Before a PR merges, every Fleece issue on the branch must be either:
 
 1. **Resolved** — set to `complete` or `closed`, OR
-2. **Promoted** — escalated into a GitHub issue with `fleece promote <id> [<id>...]`
+2. **Promoted** — escalated into a {{TRACKER_TITLE}} issue with `fleece promote <id> [<id>...]`
    (the Fleece issue becomes `promoted`), OR
 3. **Sealed** — archived and cleared from the live directory with `fleece seal`.
 
@@ -67,14 +68,18 @@ open → progress → review → complete
                          ↘ promoted (escalated to a GitHub issue)
 ```
 
-## GitHub round-trip
+## Durable round-trip ({{TRACKER_TITLE}})
 
-- `fleece promote <id> [<id>...]` - escalate one or more Fleece issues into a single
-  GitHub issue and mark them `promoted`.
-- `fleece absorb #<number>` - pull a GitHub issue into Fleece as a new issue.
-- `fleece auth` - check resolved GitHub login and token source.
+Promoted work escalates into this repository's durable tracker, **{{TRACKER_TITLE}}**.
 
-See `references/github.md` for the full round-trip workflow.
+- `fleece promote <id> [<id>...]` - escalate one or more Fleece issues into {{TRACKER_TITLE}}
+  and mark them `promoted`.
+- `fleece absorb <ref>` - bring a {{TRACKER_TITLE}} issue into Fleece as a new issue (see the
+  reference for the exact form).
+- `fleece auth` - report the durable tracker's authentication status.
+
+See `references/{{TRACKER}}.md` for the full promote / absorb / auth workflow for this
+repository's tracker.
 
 ## Filtering
 
@@ -96,7 +101,7 @@ This skill's `references/` directory holds detailed guidance on each topic:
 - `references/json.md` — programmatic / machine-readable usage
 - `references/next.md` — finding the next actionable issue
 - `references/tree.md` — tree and task-graph views
-- `references/github.md` — the promote / absorb / auth round-trip
+- `references/{{TRACKER}}.md` — the promote / absorb / auth round-trip for {{TRACKER_TITLE}}
 - `references/v4-migration.md` — bringing a legacy durable repository forward
 
 Any command run with `-h` provides additional usage information.

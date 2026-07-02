@@ -17,6 +17,12 @@ public sealed record EffectiveSettings
     public required string? SyncBranch { get; init; }
 
     /// <summary>
+    /// The active durable issue tracker (<c>github</c> or <c>linear</c>). Always concrete —
+    /// defaults to <c>github</c> when unset.
+    /// </summary>
+    public required string Tracker { get; init; }
+
+    /// <summary>
     /// Source of each setting for debugging/display purposes.
     /// </summary>
     public required SettingsSources Sources { get; init; }
@@ -29,6 +35,7 @@ public sealed record SettingsSources
 {
     public required SettingSource Identity { get; init; }
     public required SettingSource SyncBranch { get; init; }
+    public required SettingSource Tracker { get; init; }
 }
 
 /// <summary>

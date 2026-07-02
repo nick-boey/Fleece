@@ -50,11 +50,15 @@ The `--tag` option can be specified multiple times (OR logic).
 - `fleece seal` - Archive all issues and clear the live directory. Refuses while any issue
   is active ({open, progress, review}).
 
-## GitHub
+## Durable tracker ({{TRACKER_TITLE}})
 
-- `fleece auth` - Report GitHub authentication status (login + token source)
-- `fleece promote <id> [<id>...]` - Escalate Fleece issues into one GitHub issue
-- `fleece absorb #<number>` - Create a Fleece issue from a GitHub issue
+Promoted work escalates into this repository's durable tracker, {{TRACKER_TITLE}}. See
+`references/{{TRACKER}}.md` for the full workflow.
+
+- `fleece auth` - Report durable-tracker auth status (GitHub: login + token source; Linear: not applicable)
+- `fleece promote <id> [<id>...]` - Escalate Fleece issues into {{TRACKER_TITLE}}
+- `fleece promote <id> [<id>...] --ref <ref>` - Record an externally-created reference (used by Linear: create the issue, then record it)
+- `fleece absorb <ref>` - Bring a {{TRACKER_TITLE}} issue into Fleece (GitHub: `#<number>`; Linear: guided `fleece create --tag absorbed-from=<ref>`)
 
 ## OpenSpec
 

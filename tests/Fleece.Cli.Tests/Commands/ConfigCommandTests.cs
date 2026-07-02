@@ -75,10 +75,12 @@ public class ConfigCommandTests
         {
             Identity = "Test User",
             SyncBranch = null,
+            Tracker = "github",
             Sources = new SettingsSources
             {
                 Identity = SettingSource.Global,
-                SyncBranch = SettingSource.Default
+                SyncBranch = SettingSource.Default,
+                Tracker = SettingSource.Default
             }
         };
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
@@ -100,10 +102,12 @@ public class ConfigCommandTests
         {
             Identity = "Test User",
             SyncBranch = "sync-branch",
+            Tracker = "github",
             Sources = new SettingsSources
             {
                 Identity = SettingSource.Local,
-                SyncBranch = SettingSource.Global
+                SyncBranch = SettingSource.Global,
+                Tracker = SettingSource.Default
             }
         };
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
@@ -126,10 +130,12 @@ public class ConfigCommandTests
         {
             Identity = null,
             SyncBranch = "fleece-sync",
+            Tracker = "github",
             Sources = new SettingsSources
             {
                 Identity = SettingSource.Default,
-                SyncBranch = SettingSource.Local
+                SyncBranch = SettingSource.Local,
+                Tracker = SettingSource.Default
             }
         };
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
@@ -149,10 +155,12 @@ public class ConfigCommandTests
         {
             Identity = "John Doe",
             SyncBranch = null,
+            Tracker = "github",
             Sources = new SettingsSources
             {
                 Identity = SettingSource.Global,
-                SyncBranch = SettingSource.Default
+                SyncBranch = SettingSource.Default,
+                Tracker = SettingSource.Default
             }
         };
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())
@@ -172,10 +180,12 @@ public class ConfigCommandTests
         {
             Identity = null,
             SyncBranch = null,
+            Tracker = "github",
             Sources = new SettingsSources
             {
                 Identity = SettingSource.Default,
-                SyncBranch = SettingSource.Default
+                SyncBranch = SettingSource.Default,
+                Tracker = SettingSource.Default
             }
         };
         _settingsService.GetEffectiveSettingsAsync(Arg.Any<FleeceSettings?>(), Arg.Any<CancellationToken>())

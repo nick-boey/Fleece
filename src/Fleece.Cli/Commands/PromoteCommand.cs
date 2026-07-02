@@ -1,6 +1,6 @@
 using System.Text;
-using System.Text.Json;
 using Fleece.Cli.Settings;
+using Fleece.Cli.Workflows;
 using Fleece.Core.Models;
 using Fleece.Core.Services.Interfaces;
 using Spectre.Console;
@@ -9,17 +9,16 @@ using Spectre.Console.Cli;
 namespace Fleece.Cli.Commands;
 
 /// <summary>
-/// Escalates one or more Fleece issues into a single GitHub issue and marks them <c>Promoted</c>
-/// with a <c>promoted=&lt;github-#&gt;</c> tag. Idempotent: an issue already carrying a
-/// <c>promoted=</c> tag is skipped with a warning.
+/// Escalates one or more Fleece issues into the repository's durable tracker and marks them
+/// <c>Promoted</c> with a <c>promoted=&lt;ref&gt;</c> tag. The command resolves and filters the
+/// bundle (already-promoted issues are skipped with a warning), formats the shared issue body, then
+/// hands the tracker-specific escalation to the configured <see cref="ITrackerWorkflow"/>.
 /// </summary>
 public sealed class PromoteCommand(
     IFleeceService fleeceService,
-    IGitHubService gitHubService,
+    ITrackerWorkflow trackerWorkflow,
     IAnsiConsole console) : AsyncCommand<PromoteSettings>
 {
-    private const string PromotedTagKey = "promoted";
-
     public override async Task<int> ExecuteAsync(CommandContext context, PromoteSettings settings)
     {
         if (settings.Ids.Length == 0)
@@ -28,14 +27,8 @@ public sealed class PromoteCommand(
             return 1;
         }
 
-        var auth = await gitHubService.ResolveAuthAsync();
-        if (!auth.Authenticated)
-        {
-            console.MarkupLine("[red]Error:[/] Not authenticated with GitHub. Run 'fleece auth' for guidance.");
-            return 1;
-        }
-
-        // Resolve every supplied ID up front so a typo fails the whole command before any GitHub call.
+        // Resolve every supplied ID up front so a typo fails the whole command before any tracker
+        // work. (No auth check here — that is a GitHub-only concern owned by the workflow.)
         var resolved = new List<Issue>();
         foreach (var id in settings.Ids)
         {
@@ -59,9 +52,9 @@ public sealed class PromoteCommand(
         var toPromote = new List<Issue>();
         foreach (var issue in resolved)
         {
-            if (KeyedTag.HasKey(issue.Tags, PromotedTagKey))
+            if (KeyedTag.HasKey(issue.Tags, TrackerWorkflow.PromotedTagKey))
             {
-                var existing = KeyedTag.GetValues(issue.Tags, PromotedTagKey).FirstOrDefault() ?? "?";
+                var existing = KeyedTag.GetValues(issue.Tags, TrackerWorkflow.PromotedTagKey).FirstOrDefault() ?? "?";
                 console.MarkupLine($"[yellow]Warning:[/] Issue '{issue.Id}' is already promoted (promoted={existing.EscapeMarkup()}); skipping");
             }
             else
@@ -76,41 +69,15 @@ public sealed class PromoteCommand(
             return 0;
         }
 
-        var root = toPromote[0];
         var body = BuildIssueBody(toPromote);
-        var issueRef = await gitHubService.CreateIssueAsync(root.Title, body);
-
-        var promotedIds = new List<string>();
-        foreach (var issue in toPromote)
-        {
-            var tags = KeyedTag.AddValue(issue.Tags, PromotedTagKey, issueRef.Number.ToString());
-            await fleeceService.UpdateAsync(
-                id: issue.Id,
-                status: IssueStatus.Promoted,
-                tags: tags);
-            promotedIds.Add(issue.Id);
-        }
-
-        if (settings.Json)
-        {
-            console.WriteLine(JsonSerializer.Serialize(new
-            {
-                githubIssue = new { number = issueRef.Number, url = issueRef.Url },
-                promoted = promotedIds,
-            }));
-            return 0;
-        }
-
-        console.MarkupLine($"[green]Created GitHub issue[/] [bold]#{issueRef.Number}[/] [dim]{issueRef.Url.EscapeMarkup()}[/]");
-        console.MarkupLine($"[green]Promoted {promotedIds.Count} issue(s):[/] {string.Join(", ", promotedIds).EscapeMarkup()}");
-        return 0;
+        return await trackerWorkflow.PromoteAsync(new PromoteContext(toPromote, body, settings.Ref, settings.Json));
     }
 
     /// <summary>
-    /// Composes the GitHub issue body from the promoted bundle. Each issue is rendered as a
+    /// Composes the durable issue body from the promoted bundle. Each issue is rendered as a
     /// task-list item (id + title + type/priority) followed by its full description, indented so it
     /// nests under the checklist item. Issues without a description get an explicit placeholder so
-    /// the GitHub issue is never an empty stub.
+    /// the created issue is never an empty stub.
     /// </summary>
     private static string BuildIssueBody(IReadOnlyList<Issue> issues)
     {

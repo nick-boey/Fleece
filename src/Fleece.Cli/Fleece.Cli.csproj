@@ -32,6 +32,7 @@
     <EmbeddedResource Include="Skill\references\next.md" LogicalName="fleece-skill/references/next.md" />
     <EmbeddedResource Include="Skill\references\tree.md" LogicalName="fleece-skill/references/tree.md" />
     <EmbeddedResource Include="Skill\references\github.md" LogicalName="fleece-skill/references/github.md" />
+    <EmbeddedResource Include="Skill\references\linear.md" LogicalName="fleece-skill/references/linear.md" />
     <EmbeddedResource Include="Skill\references\v4-migration.md" LogicalName="fleece-skill/references/v4-migration.md" />
   </ItemGroup>
 

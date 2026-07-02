@@ -2,8 +2,9 @@
 
 # GitHub Round-trip
 
-Fleece is ephemeral branch memory; GitHub Issues are the durable home for long-running
-work. Three commands move work across that boundary.
+This reference is installed because the repository's durable tracker is **GitHub**
+(`fleece config --get tracker` → `github`). Fleece is ephemeral branch memory; GitHub Issues
+are the durable home for long-running work. Three commands move work across that boundary.
 
 ## Authentication
 
@@ -24,8 +25,8 @@ a token before using `promote`/`absorb`.
 Escalates one or more Fleece issues into a SINGLE GitHub issue. The GitHub issue takes the
 first (root) issue's title; its body is a task list where each bundled issue contributes a
 checklist item (id + title + type/priority) followed by that issue's FULL description. Each
-promoted Fleece issue is set to `promoted` and tagged `promoted=<github-#>`. Already-promoted
-issues are skipped with a warning.
+promoted Fleece issue is set to `promoted` and tagged `promoted=<github-#>` (the issue number
+as a string). Already-promoted issues are skipped with a warning.
 
 ### Write a complete description BEFORE you promote
 
