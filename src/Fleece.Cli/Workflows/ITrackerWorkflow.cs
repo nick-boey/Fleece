@@ -13,6 +13,15 @@ namespace Fleece.Cli.Workflows;
 /// </summary>
 public interface ITrackerWorkflow
 {
+    /// <summary>
+    /// Tracker-specific promote preflight, run <em>before</em> the command resolves issue IDs.
+    /// Returns <c>null</c> to proceed, or a process exit code to short-circuit (after printing an
+    /// error). GitHub uses this to reject an unsupported <c>--ref</c> and to fail fast when
+    /// unauthenticated — preserving the pre-tracker ordering where auth is checked before ID
+    /// resolution. Linear accepts <c>--ref</c> and needs no auth, so it always proceeds.
+    /// </summary>
+    Task<int?> PreparePromoteAsync(PromotePreflight preflight, CancellationToken cancellationToken = default);
+
     /// <summary>Escalates a pre-resolved bundle of Fleece issues into the durable tracker.</summary>
     Task<int> PromoteAsync(PromoteContext context, CancellationToken cancellationToken = default);
 
@@ -34,6 +43,9 @@ public sealed record PromoteContext(
     string Body,
     string? Ref,
     bool Json);
+
+/// <summary>Inputs available before ID resolution: the optional <c>--ref</c> and JSON flag.</summary>
+public sealed record PromotePreflight(string? Ref, bool Json);
 
 /// <summary>The raw reference argument to <c>absorb</c> (e.g. <c>#123</c> or <c>ENG-42</c>).</summary>
 public sealed record AbsorbContext(string Reference, bool Json);

@@ -114,8 +114,14 @@ public sealed class SettingsService : ISettingsService
             cli?.Identity, local?.Identity, global?.Identity, (string?)null);
         var (syncBranch, syncBranchSource) = ResolveValue(
             cli?.SyncBranch, local?.SyncBranch, global?.SyncBranch, (string?)null);
+        // Normalize each layer case-insensitively and drop unrecognized values so the effective
+        // tracker is always a canonical, valid value — never a raw persisted string that would make
+        // `config --get tracker` disagree with how the durable commands actually route.
         var (tracker, trackerSource) = ResolveValue(
-            cli?.Tracker, local?.Tracker, global?.Tracker, Trackers.Default);
+            Trackers.TryNormalize(cli?.Tracker),
+            Trackers.TryNormalize(local?.Tracker),
+            Trackers.TryNormalize(global?.Tracker),
+            Trackers.Default);
 
         return new EffectiveSettings
         {

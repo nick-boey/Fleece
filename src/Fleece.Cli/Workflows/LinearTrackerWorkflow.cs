@@ -15,6 +15,11 @@ public sealed class LinearTrackerWorkflow(
     IFleeceService fleeceService,
     IAnsiConsole console) : ITrackerWorkflow
 {
+    // Linear accepts both bare (emit) and --ref (record) promote, and never authenticates, so there
+    // is nothing to gate before ID resolution.
+    public Task<int?> PreparePromoteAsync(PromotePreflight preflight, CancellationToken cancellationToken = default)
+        => Task.FromResult<int?>(null);
+
     public async Task<int> PromoteAsync(PromoteContext context, CancellationToken cancellationToken = default)
     {
         var root = context.Bundle[0];

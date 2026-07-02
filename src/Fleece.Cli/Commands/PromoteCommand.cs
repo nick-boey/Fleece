@@ -27,8 +27,15 @@ public sealed class PromoteCommand(
             return 1;
         }
 
-        // Resolve every supplied ID up front so a typo fails the whole command before any tracker
-        // work. (No auth check here — that is a GitHub-only concern owned by the workflow.)
+        // Tracker-specific preflight runs before ID resolution: GitHub rejects --ref and fails fast
+        // when unauthenticated (so a typo'd ID can't mask an auth failure); Linear is a no-op.
+        var preflight = await trackerWorkflow.PreparePromoteAsync(new PromotePreflight(settings.Ref, settings.Json));
+        if (preflight is int exitCode)
+        {
+            return exitCode;
+        }
+
+        // Resolve every supplied ID up front so a typo fails the whole command before any tracker work.
         var resolved = new List<Issue>();
         foreach (var id in settings.Ids)
         {

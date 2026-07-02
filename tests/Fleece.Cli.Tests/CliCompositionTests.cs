@@ -1,3 +1,4 @@
+using Fleece.Cli.Workflows;
 using Fleece.Core.Services.Interfaces;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,6 +41,27 @@ public class CliCompositionTests
     [Test]
     public void IFleeceInMemoryService_resolves()
         => _provider.GetService<IFleeceInMemoryService>().Should().NotBeNull();
+
+    [Test]
+    public void ITrackerWorkflow_resolves_to_github_by_default()
+        => _provider.GetService<ITrackerWorkflow>().Should().BeOfType<GitHubTrackerWorkflow>();
+
+    [Test]
+    public void ITrackerWorkflow_resolves_to_linear_when_configured()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "fleece-ci-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, ".fleece"));
+        File.WriteAllText(Path.Combine(dir, ".fleece", "settings.json"), "{ \"tracker\": \"linear\" }");
+        try
+        {
+            using var provider = CliComposition.BuildServices(dir).BuildServiceProvider();
+            provider.GetService<ITrackerWorkflow>().Should().BeOfType<LinearTrackerWorkflow>();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 
     [TestCaseSource(nameof(AllCommandTypes))]
     public void Every_command_can_be_constructed_from_DI(Type commandType)

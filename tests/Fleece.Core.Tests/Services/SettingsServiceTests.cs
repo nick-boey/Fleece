@@ -232,6 +232,32 @@ public class SettingsServiceTests
     }
 
     [Test]
+    public async Task GetEffectiveSettingsAsync_Tracker_NormalizesCaseFromPersistedFile()
+    {
+        // A hand-edited settings file (bypassing SetSettingAsync's validation) with a case variant
+        // is still honoured as the canonical lowercase tracker.
+        await _sut.SaveLocalSettingsAsync(new FleeceSettings { Tracker = "LINEAR" });
+
+        var effective = await _sut.GetEffectiveSettingsAsync();
+
+        effective.Tracker.Should().Be("linear");
+        effective.Sources.Tracker.Should().Be(SettingSource.Local);
+    }
+
+    [Test]
+    public async Task GetEffectiveSettingsAsync_Tracker_IgnoresUnrecognizedPersistedValue()
+    {
+        // A garbage persisted value falls back to the default rather than silently routing to a
+        // different tracker than the effective settings report.
+        await _sut.SaveLocalSettingsAsync(new FleeceSettings { Tracker = "jira" });
+
+        var effective = await _sut.GetEffectiveSettingsAsync();
+
+        effective.Tracker.Should().Be("github");
+        effective.Sources.Tracker.Should().Be(SettingSource.Default);
+    }
+
+    [Test]
     public void GetLocalSettingsPath_ReturnsExpectedPath()
     {
         var path = _sut.GetLocalSettingsPath();

@@ -19,8 +19,18 @@ public sealed class GitHubTrackerWorkflow(
 {
     private const string AbsorbedFromTagKey = "absorbed-from";
 
-    public async Task<int> PromoteAsync(PromoteContext context, CancellationToken cancellationToken = default)
+    public async Task<int?> PreparePromoteAsync(PromotePreflight preflight, CancellationToken cancellationToken = default)
     {
+        // GitHub promote creates a new issue; recording an externally-created reference is out of
+        // scope, so --ref is rejected rather than silently ignored.
+        if (!string.IsNullOrWhiteSpace(preflight.Ref))
+        {
+            console.MarkupLine("[red]Error:[/] --ref is not supported when the durable tracker is github; 'fleece promote' creates a new GitHub issue.");
+            return 1;
+        }
+
+        // Verify authentication before the command resolves any IDs, so an unauthenticated user is
+        // told to authenticate rather than seeing an unrelated "issue not found" from a typo.
         var auth = await gitHubService.ResolveAuthAsync(cancellationToken);
         if (!auth.Authenticated)
         {
@@ -28,6 +38,12 @@ public sealed class GitHubTrackerWorkflow(
             return 1;
         }
 
+        return null;
+    }
+
+    public async Task<int> PromoteAsync(PromoteContext context, CancellationToken cancellationToken = default)
+    {
+        // Auth was verified in PreparePromoteAsync, which the command runs before ID resolution.
         var root = context.Bundle[0];
         var issueRef = await gitHubService.CreateIssueAsync(root.Title, context.Body, cancellationToken);
 

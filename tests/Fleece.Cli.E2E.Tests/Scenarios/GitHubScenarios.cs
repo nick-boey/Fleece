@@ -114,6 +114,33 @@ public class GitHubScenarios : CliScenarioTestBase
     }
 
     [Test]
+    public async Task Promote_unauthenticated_reports_auth_before_resolving_ids()
+    {
+        GitHub.AuthResult = new GitHubAuthResult { Authenticated = false };
+
+        // A nonexistent id must NOT mask the auth failure — auth is checked before ID resolution.
+        var exit = await RunWithGitHubAsync("promote", "nope123");
+
+        exit.Should().Be(1);
+        Console.Output.Should().Contain("Not authenticated");
+        Console.Output.Should().NotContain("not found");
+        GitHub.CreatedIssues.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task Promote_ref_is_rejected_when_tracker_is_github()
+    {
+        var a = await CreateIssueAsync("Has ref");
+
+        var exit = await RunWithGitHubAsync("promote", a, "--ref", "#123");
+
+        exit.Should().Be(1);
+        Console.Output.Should().Contain("--ref is not supported");
+        GitHub.CreatedIssues.Should().BeEmpty();
+        LoadIssues().Single(i => i.Id == a).Status.Should().NotBe(IssueStatus.Promoted);
+    }
+
+    [Test]
     public async Task Absorb_creates_fleece_issue_and_comments_and_assigns_without_closing()
     {
         GitHub.AuthResult = new GitHubAuthResult

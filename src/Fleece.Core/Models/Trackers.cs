@@ -18,6 +18,7 @@ public static class Trackers
     /// <summary>
     /// Normalizes and validates a tracker value. Returns <c>null</c> for an empty value (clears the
     /// setting); throws <see cref="System.ArgumentException"/> for any value that is not a known tracker.
+    /// Used at write time (<c>config --set</c>, <c>install --tracker</c>) where invalid input must fail loudly.
     /// </summary>
     public static string? Normalize(string? value)
     {
@@ -33,5 +34,23 @@ public static class Trackers
         }
 
         return normalized;
+    }
+
+    /// <summary>
+    /// Normalizes a tracker value case-insensitively for READ paths (settings merge). Returns the
+    /// canonical lowercase tracker for a recognized value, or <c>null</c> for an empty/whitespace or
+    /// unrecognized value — so a hand-edited <c>.fleece/settings.json</c> carrying <c>"LINEAR"</c> is
+    /// honoured as <c>linear</c>, while a garbage value (<c>"jira"</c>) is treated as unset rather than
+    /// silently routing to a different tracker than the effective settings report.
+    /// </summary>
+    public static string? TryNormalize(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized == GitHub || normalized == Linear ? normalized : null;
     }
 }
